@@ -23,14 +23,14 @@ export class LoginCommand extends CommandRunner {
     this.openBrowser(url);
 
     console.log('Waiting for authentication...');
-    const token = await Promise.race([
+    const { token, apiUrl } = await Promise.race([
       waitForToken,
       new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error('Timeout waiting for auth')), TIMEOUT_MS),
       ),
     ]).finally(close);
 
-    this.credentials.write({ token, api_url: DEFAULT_API_URL });
+    this.credentials.write({ token, api_url: apiUrl });
     console.log('✓ Authenticated. Credentials saved to .fabrick/credentials.yaml');
     process.exit(0);
   }
@@ -38,18 +38,19 @@ export class LoginCommand extends CommandRunner {
   private startCallbackServer(): Promise<{
     port: number;
     close: () => void;
-    waitForToken: Promise<string>;
+    waitForToken: Promise<{ token: string; apiUrl: string }>;
   }> {
     return new Promise((resolve) => {
-      let resolveToken!: (t: string) => void;
-      const waitForToken = new Promise<string>((res) => { resolveToken = res; });
+      let resolveToken!: (t: { token: string; apiUrl: string }) => void;
+      const waitForToken = new Promise<{ token: string; apiUrl: string }>((res) => { resolveToken = res; });
 
       const server = createServer((req, res) => {
         const parsed = parseUrl(req.url || '', true);
         const token = parsed.query['token'] as string | undefined;
+        const apiUrl = parsed.query['api_url'] as string | undefined;
         res.writeHead(200, { 'Content-Type': 'text/html' });
         res.end('<html><body><h2>Authenticated! You can close this tab.</h2></body></html>');
-        if (token) resolveToken(token);
+        if (token) resolveToken({ token, apiUrl: apiUrl || DEFAULT_API_URL });
       });
 
       server.listen(0, '127.0.0.1', () => {

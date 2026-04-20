@@ -12,6 +12,7 @@ import { HealthController } from './health/health.controller';
 import { OrgsModule } from './orgs/orgs.module';
 import { ReposModule } from './repos/repos.module';
 import { SkillsModule } from './skills/skills.module';
+import { SynthesisModule } from './synthesis/synthesis.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { SkillsModule } from './skills/skills.module';
     OrgsModule,
     ReposModule,
     SkillsModule,
+    SynthesisModule,
   ],
   controllers: [HealthController],
 })

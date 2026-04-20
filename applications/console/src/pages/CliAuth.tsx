@@ -25,7 +25,8 @@ export default function CliAuth() {
     }
 
     api.cliToken().then(({ token: cliToken }) => {
-      window.location.href = `http://localhost:${port}/callback?token=${encodeURIComponent(cliToken)}`;
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+      window.location.href = `http://localhost:${port}/callback?token=${encodeURIComponent(cliToken)}&api_url=${encodeURIComponent(apiUrl)}`;
       setStatus('done');
     }).catch((err) => {
       setStatus('error');

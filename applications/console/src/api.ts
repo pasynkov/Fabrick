@@ -72,4 +72,13 @@ export const api = {
         `/projects/${projectId}/repos`,
       ),
   },
+
+  synthesis: {
+    trigger: (projectId: string) =>
+      request<void>(`/projects/${projectId}/synthesis`, { method: 'POST' }),
+    status: (projectId: string) =>
+      request<{ status: string; error?: string }>(`/projects/${projectId}/synthesis/status`),
+    files: (projectId: string) =>
+      request<Record<string, string>>(`/projects/${projectId}/synthesis`),
+  },
 };

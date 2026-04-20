@@ -87,6 +87,24 @@ export class InitCommand extends CommandRunner {
     console.log(`✓ Initialized. Repo: ${result.name} (${result.gitRemote})`);
     console.log('✓ Written .fabrick/config.yaml');
 
+    // Write .mcp.json for Claude Code MCP integration
+    const mcpUrl = creds.api_url.replace(/:(\d+)/, (_, port) => `:${parseInt(port, 10) + 1}`);
+    const mcpConfig = {
+      mcpServers: {
+        fabrick: {
+          type: 'http',
+          url: `${mcpUrl}/mcp`,
+          headers: {
+            Authorization: `Bearer ${creds.token}`,
+            'X-Fabrick-Org': org.slug,
+            'X-Fabrick-Project': project.slug,
+          },
+        },
+      },
+    };
+    writeFileSync('.mcp.json', JSON.stringify(mcpConfig, null, 2));
+    console.log('✓ Written .mcp.json (Fabrick MCP server configured)');
+
     // Download and install skills
     try {
       const zipBuffer = await this.api.download(creds.api_url, `/skills/${aiTool}`, creds.token);

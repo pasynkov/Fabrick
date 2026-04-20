@@ -33,7 +33,7 @@ services:
       retries: 10
 
   api:
-    build: ./api
+    build: api
     ports:
       - "3000:3000"
     environment:
@@ -47,6 +47,28 @@ services:
       DB_USER: fabrick
       DB_PASS: fabrick
       JWT_SECRET: change-me-in-production
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    depends_on:
+      minio:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+
+  mcp:
+    build: mcp
+    ports:
+      - "3001:3001"
+    environment:
+      PORT: "3001"
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: "9000"
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: fabrick
+      DB_USER: fabrick
+      DB_PASS: fabrick
     depends_on:
       minio:
         condition: service_healthy

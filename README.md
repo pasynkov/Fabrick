@@ -133,6 +133,7 @@ fabrick init
 - Links the current git repository
 - Selects your AI tool (Claude)
 - Installs Fabrick skills into `.claude/skills/`
+- Writes `.mcp.json` to configure the Fabrick MCP server for Claude Code
 
 ### Analyze your codebase
 

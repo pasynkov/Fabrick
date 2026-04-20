@@ -14,7 +14,7 @@ fabrick --version
 If the command is not found, install it first:
 
 ```bash
-npm install -g fabrick
+npm install -g @fabrick/cli
 ```
 
 ## Step 2: Push context

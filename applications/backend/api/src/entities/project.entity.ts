@@ -19,6 +19,12 @@ export class Project {
   @ManyToOne(() => Organization, { onDelete: 'CASCADE' })
   org: Organization;
 
+  @Column({ default: 'idle' })
+  synthStatus: string;
+
+  @Column({ nullable: true, type: 'text' })
+  synthError: string | null;
+
   @CreateDateColumn()
   createdAt: Date;
 }

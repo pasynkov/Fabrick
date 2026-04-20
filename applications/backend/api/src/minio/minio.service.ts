@@ -26,6 +26,16 @@ export class MinioService {
     await this.client.putObject(bucket, key, buffer, buffer.length);
   }
 
+  async getObject(bucket: string, key: string): Promise<Buffer> {
+    const stream = await this.client.getObject(bucket, key);
+    return new Promise((resolve, reject) => {
+      const chunks: Buffer[] = [];
+      stream.on('data', (chunk: Buffer) => chunks.push(chunk));
+      stream.on('end', () => resolve(Buffer.concat(chunks)));
+      stream.on('error', reject);
+    });
+  }
+
   async listObjects(bucket: string, prefix: string): Promise<string[]> {
     return new Promise((resolve, reject) => {
       const keys: string[] = [];

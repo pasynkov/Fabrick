@@ -1,0 +1,15 @@
+runId: 2026-04-17-003
+date: '2026-04-17T12:03:47.224Z'
+repos:
+  - name: saleor
+    url: https://github.com/saleor/saleor
+    status: error
+    error: .fabrick/context not found after analysis
+  - name: fastapi-realworld-example-app
+    url: https://github.com/nsidnev/fastapi-realworld-example-app
+    status: error
+    error: .fabrick/context not found after analysis
+  - name: superset
+    url: https://github.com/apache/superset
+    status: error
+    error: .fabrick/context not found after analysis

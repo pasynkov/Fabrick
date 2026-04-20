@@ -1,0 +1,21 @@
+{
+  "name": "fabrick-analyze-loop",
+  "version": "1.0.0",
+  "description": "Self-improving loop for fabrick-analyze skill",
+  "type": "module",
+  "bin": {
+    "loop": "./scripts/loop.js"
+  },
+  "scripts": {
+    "loop": "node scripts/loop.js",
+    "run-corpus": "node scripts/run.js",
+    "evaluate": "node scripts/evaluate.js",
+    "improve": "node scripts/improve.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "commander": "^12.0.0",
+    "js-yaml": "^4.1.0",
+    "simple-git": "^3.27.0"
+  }
+}

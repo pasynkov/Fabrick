@@ -1,0 +1,8 @@
+dependencies:
+  - "@nestjs/common"
+  - "@nestjs/core"
+  - "@nestjs/platform-express"
+  - minio
+  - reflect-metadata
+  - rxjs
+  - unzipper

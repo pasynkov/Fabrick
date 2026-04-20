@@ -1,0 +1,10 @@
+endpoints:
+  - method: GET
+    path: /health
+    file: src/health/health.controller.ts
+  - method: POST
+    path: /context/:repo
+    file: src/context/context.controller.ts
+  - method: GET
+    path: /context/:repo
+    file: src/context/context.controller.ts

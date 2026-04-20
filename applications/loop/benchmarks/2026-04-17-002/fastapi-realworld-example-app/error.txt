@@ -1,0 +1,3 @@
+exit 1
+
+You've hit your limit · resets 3pm (Europe/Vilnius)

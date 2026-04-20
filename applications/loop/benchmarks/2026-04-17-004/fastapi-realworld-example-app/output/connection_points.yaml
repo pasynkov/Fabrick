@@ -1,0 +1,304 @@
+connection_points:
+  inbound:
+    - type: http
+      method: POST
+      path: /api/users/login
+      description: Authenticate user by email/password, return JWT token
+      schema:
+        request:
+          body:
+            user:
+              email: string   # EmailStr
+              password: string
+        response:
+          body:
+            user:
+              username: string
+              email: string
+              bio: string
+              image: string | null
+              token: string   # JWT
+      file: app/api/routes/authentication.py
+
+    - type: http
+      method: POST
+      path: /api/users
+      description: Register new user, return JWT token
+      schema:
+        request:
+          body:
+            user:
+              email: string   # EmailStr
+              password: string
+              username: string
+        response:
+          body:
+            user:
+              username: string
+              email: string
+              bio: string
+              image: string | null
+              token: string   # JWT
+      file: app/api/routes/authentication.py
+
+    - type: http
+      method: GET
+      path: /api/user
+      description: Retrieve authenticated user's profile
+      schema:
+        response:
+          body:
+            user:
+              username: string
+              email: string
+              bio: string
+              image: string | null
+              token: string
+      file: app/api/routes/users.py
+
+    - type: http
+      method: PUT
+      path: /api/user
+      description: Update authenticated user's profile fields
+      schema:
+        request:
+          body:
+            user:
+              username: string | null
+              email: string | null
+              password: string | null
+              bio: string | null
+              image: string | null   # HttpUrl
+        response:
+          body:
+            user:
+              username: string
+              email: string
+              bio: string
+              image: string | null
+              token: string
+      file: app/api/routes/users.py
+
+    - type: http
+      method: GET
+      path: /api/profiles/{username}
+      description: Get public profile of a user by username
+      schema:
+        request:
+          params:
+            username: string
+        response:
+          body:
+            profile:
+              username: string
+              bio: string
+              image: string | null
+              following: boolean
+      file: app/api/routes/profiles.py
+
+    - type: http
+      method: POST
+      path: /api/profiles/{username}/follow
+      description: Follow a user by username
+      schema:
+        request:
+          params:
+            username: string
+        response:
+          body:
+            profile:
+              username: string
+              bio: string
+              image: string | null
+              following: boolean
+      file: app/api/routes/profiles.py
+
+    - type: http
+      method: DELETE
+      path: /api/profiles/{username}/follow
+      description: Unfollow a user by username
+      schema:
+        request:
+          params:
+            username: string
+        response:
+          body:
+            profile:
+              username: string
+              bio: string
+              image: string | null
+              following: boolean
+      file: app/api/routes/profiles.py
+
+    - type: http
+      method: GET
+      path: /api/articles
+      description: List articles with optional filtering by tag, author, or favorited user
+      schema:
+        request:
+          query:
+            tag: string | null
+            author: string | null
+            favorited: string | null
+            limit: integer   # default 20
+            offset: integer  # default 0
+        response:
+          body:
+            articles: array
+            articles_count: integer
+      file: app/api/routes/articles/articles_resource.py
+
+    - type: http
+      method: POST
+      path: /api/articles
+      description: Create new article (auth required)
+      schema:
+        request:
+          body:
+            article:
+              title: string
+              description: string
+              body: string
+              tagList: array   # List[str]
+        response:
+          body:
+            article:
+              slug: string
+              title: string
+              description: string
+              body: string
+              tagList: array
+              author: object
+              favorited: boolean
+              favoritesCount: integer
+      file: app/api/routes/articles/articles_resource.py
+
+    - type: http
+      method: GET
+      path: /api/articles/{slug}
+      description: Retrieve single article by slug
+      schema:
+        request:
+          params:
+            slug: string
+        response:
+          body:
+            article: object
+      file: app/api/routes/articles/articles_resource.py
+
+    - type: http
+      method: PUT
+      path: /api/articles/{slug}
+      description: Update article fields by slug (author only)
+      schema:
+        request:
+          params:
+            slug: string
+          body:
+            article:
+              title: string | null
+              description: string | null
+              body: string | null
+        response:
+          body:
+            article: object
+      file: app/api/routes/articles/articles_resource.py
+
+    - type: http
+      method: DELETE
+      path: /api/articles/{slug}
+      description: Delete article by slug (author only), returns 204
+      schema:
+        request:
+          params:
+            slug: string
+      file: app/api/routes/articles/articles_resource.py
+
+    - type: http
+      method: GET
+      path: /api/articles/feed
+      description: Get articles from followed authors (auth required)
+      schema:
+        response:
+          body:
+            articles: array
+            articles_count: integer
+      file: app/api/routes/articles/articles_common.py
+
+    - type: http
+      method: POST
+      path: /api/articles/{slug}/favorite
+      description: Favorite an article (auth required)
+      schema:
+        request:
+          params:
+            slug: string
+        response:
+          body:
+            article: object
+      file: app/api/routes/articles/articles_common.py
+
+    - type: http
+      method: DELETE
+      path: /api/articles/{slug}/favorite
+      description: Remove article from favorites
+      schema:
+        request:
+          params:
+            slug: string
+        response:
+          body:
+            article: object
+      file: app/api/routes/articles/articles_common.py
+
+    - type: http
+      method: GET
+      path: /api/articles/{slug}/comments
+      description: List all comments on an article
+      schema:
+        request:
+          params:
+            slug: string
+        response:
+          body:
+            comments: array
+      file: app/api/routes/comments.py
+
+    - type: http
+      method: POST
+      path: /api/articles/{slug}/comments
+      description: Post a comment on an article (auth required)
+      schema:
+        request:
+          params:
+            slug: string
+          body:
+            comment:
+              body: string
+        response:
+          body:
+            comment: object
+      file: app/api/routes/comments.py
+
+    - type: http
+      method: DELETE
+      path: /api/articles/{slug}/comments/{comment_id}
+      description: Delete a comment from an article (author only)
+      schema:
+        request:
+          params:
+            slug: string
+            comment_id: integer
+      file: app/api/routes/comments.py
+
+    - type: http
+      method: GET
+      path: /api/tags
+      description: Get all tags used in published articles
+      schema:
+        response:
+          body:
+            tags: array   # List[str]
+      file: app/api/routes/tags.py
+
+  outbound: []

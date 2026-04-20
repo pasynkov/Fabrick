@@ -1,0 +1,51 @@
+envVars:
+  - name: DATABASE_URL
+    type: url
+    safe_to_share: false
+    description: asyncpg-compatible PostgreSQL DSN used to create the connection pool at startup (app/db/events.py)
+
+  - name: SECRET_KEY
+    type: secret
+    safe_to_share: false
+    description: HMAC secret used to sign and verify JWT access tokens (app/services/jwt.py, ALGORITHM=HS256)
+
+  - name: APP_ENV
+    type: enum
+    values: [prod, dev, test]
+    safe_to_share: true
+    description: Selects settings class at startup — prod, dev, or test (app/core/settings/base.py)
+
+  - name: MAX_CONNECTION_COUNT
+    type: number
+    safe_to_share: true
+    description: Maximum asyncpg connection pool size (default 10, app/core/settings/app.py)
+
+  - name: MIN_CONNECTION_COUNT
+    type: number
+    safe_to_share: true
+    description: Minimum asyncpg connection pool size (default 10, app/core/settings/app.py)
+
+  - name: API_PREFIX
+    type: string
+    safe_to_share: true
+    description: URL prefix for all routes (default "/api", app/core/settings/app.py)
+
+  - name: JWT_TOKEN_PREFIX
+    type: string
+    safe_to_share: true
+    description: Authorization header token prefix expected by the auth dependency (default "Token", app/core/settings/app.py)
+
+  - name: ALLOWED_HOSTS
+    type: string
+    safe_to_share: true
+    description: CORS allowed origins list passed to CORSMiddleware (default ["*"], app/core/settings/app.py)
+
+  - name: LOGGING_LEVEL
+    type: number
+    safe_to_share: true
+    description: Loguru/stdlib logging level integer (default logging.INFO, app/core/settings/app.py)
+
+  - name: DEBUG
+    type: boolean
+    safe_to_share: true
+    description: FastAPI debug mode flag (default false, app/core/settings/app.py)

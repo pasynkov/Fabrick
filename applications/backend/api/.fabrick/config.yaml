@@ -1,0 +1,3 @@
+project: api
+repo: api
+backendUrl: http://localhost:3000

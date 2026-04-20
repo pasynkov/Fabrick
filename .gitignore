@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+.next/
+
+.env
+
+# Test artifacts
+coverage/
+src/app/e2e/.auth.json
+
+# Misc
+*.log
+.DS_Store
+.idea

@@ -1,0 +1,4 @@
+language: TypeScript
+framework: NestJS
+version: "0.0.1"
+packageManager: npm

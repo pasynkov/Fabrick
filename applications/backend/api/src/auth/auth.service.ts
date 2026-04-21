@@ -12,7 +12,6 @@ import { Repository } from 'typeorm';
 import { OrgMember } from '../entities/org-member.entity';
 import { Organization } from '../entities/organization.entity';
 import { User } from '../entities/user.entity';
-import { MinioService } from '../minio/minio.service';
 
 @Injectable()
 export class AuthService {
@@ -24,7 +23,6 @@ export class AuthService {
     @InjectRepository(OrgMember)
     private readonly orgMemberRepo: Repository<OrgMember>,
     private readonly jwtService: JwtService,
-    private readonly minioService: MinioService,
   ) {}
 
   async register(email: string, password: string) {
@@ -44,8 +42,6 @@ export class AuthService {
     await this.orgMemberRepo.save(
       this.orgMemberRepo.create({ orgId: org.id, userId: user.id, role: 'admin' }),
     );
-    await this.minioService.ensureBucket(uniqueSlug);
-
     const access_token = this.signJwt(user);
     return { access_token, user: { id: user.id, email: user.email } };
   }

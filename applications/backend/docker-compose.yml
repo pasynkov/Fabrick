@@ -15,22 +15,10 @@ services:
       timeout: 5s
       retries: 10
 
-  minio:
-    image: minio/minio:latest
-    command: server /data --console-address ":9001"
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite
     ports:
-      - "9000:9000"
-      - "9001:9001"
-    environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
-    volumes:
-      - minio_data:/data
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
+      - "10000:10000"
 
   nats:
     image: nats:2-alpine
@@ -45,10 +33,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      MINIO_ENDPOINT: minio
-      MINIO_PORT: "9000"
-      MINIO_ACCESS_KEY: minioadmin
-      MINIO_SECRET_KEY: minioadmin
+      AZURE_STORAGE_CONNECTION_STRING: "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;"
       DB_HOST: postgres
       DB_PORT: "5432"
       DB_NAME: fabrick
@@ -58,8 +43,8 @@ services:
       QUEUE_DRIVER: nats
       NATS_URL: nats://nats:4222
     depends_on:
-      minio:
-        condition: service_healthy
+      azurite:
+        condition: service_started
       postgres:
         condition: service_healthy
       nats:
@@ -70,10 +55,7 @@ services:
     environment:
       QUEUE_DRIVER: nats
       NATS_URL: nats://nats:4222
-      MINIO_ENDPOINT: minio
-      MINIO_PORT: "9000"
-      MINIO_ACCESS_KEY: minioadmin
-      MINIO_SECRET_KEY: minioadmin
+      AZURE_STORAGE_CONNECTION_STRING: "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;"
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       API_BASE_URL: http://api:3000
     depends_on:
@@ -81,10 +63,9 @@ services:
         condition: service_started
       postgres:
         condition: service_healthy
-      minio:
-        condition: service_healthy
+      azurite:
+        condition: service_started
 
 volumes:
-  minio_data:
   postgres_data:
   nats_data:

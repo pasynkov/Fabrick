@@ -5,7 +5,7 @@ import { OrgMember } from '../entities/org-member.entity';
 import { Organization } from '../entities/organization.entity';
 import { Project } from '../entities/project.entity';
 import { Repository } from '../entities/repository.entity';
-import { MinioModule } from '../minio/minio.module';
+import { StorageModule } from '../storage/storage.module';
 import { QueueModule } from '../queue/queue.module';
 import { SynthesisController } from './synthesis.controller';
 import { SynthesisService } from './synthesis.service';
@@ -13,7 +13,7 @@ import { SynthesisService } from './synthesis.service';
 @Module({
   imports: [
     TypeOrmModule.forFeature([Project, Organization, OrgMember, Repository]),
-    MinioModule,
+    StorageModule,
     QueueModule,
     AuthModule,
   ],

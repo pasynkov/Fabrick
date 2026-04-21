@@ -11,8 +11,6 @@ import { Repository } from 'typeorm';
 import { OrgMember } from '../entities/org-member.entity';
 import { Organization } from '../entities/organization.entity';
 import { User } from '../entities/user.entity';
-import { MinioService } from '../minio/minio.service';
-
 @Injectable()
 export class OrgsService {
   constructor(
@@ -22,7 +20,6 @@ export class OrgsService {
     private readonly memberRepo: Repository<OrgMember>,
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
-    private readonly minioService: MinioService,
   ) {}
 
   async createOrg(userId: string, name: string) {
@@ -33,7 +30,6 @@ export class OrgsService {
     await this.memberRepo.save(
       this.memberRepo.create({ orgId: org.id, userId, role: 'admin' }),
     );
-    await this.minioService.ensureBucket(slug);
     return { id: org.id, name: org.name, slug: org.slug };
   }
 

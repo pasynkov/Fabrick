@@ -28,6 +28,7 @@ import { SynthesisModule } from './synthesis/synthesis.module';
         synchronize: false,
         migrationsRun: true,
         migrations,
+        extra: { max: 2 },
       }),
     }),
     AuthModule,

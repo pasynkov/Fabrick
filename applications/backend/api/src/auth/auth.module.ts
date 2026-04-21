@@ -5,7 +5,6 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { OrgMember } from '../entities/org-member.entity';
 import { Organization } from '../entities/organization.entity';
 import { User } from '../entities/user.entity';
-import { MinioModule } from '../minio/minio.module';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { FabrickAuthGuard } from './fabrick-auth.guard';
@@ -20,7 +19,6 @@ import { JwtStrategy } from './jwt.strategy';
       secret: process.env.JWT_SECRET || 'change-me-in-production',
       signOptions: { expiresIn: '1h' },
     }),
-    MinioModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy, JwtAuthGuard, FabrickAuthGuard],

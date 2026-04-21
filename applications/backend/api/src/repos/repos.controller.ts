@@ -15,14 +15,14 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import * as unzipper from 'unzipper';
 import { FabrickAuthGuard } from '../auth/fabrick-auth.guard';
-import { MinioService } from '../minio/minio.service';
+import { StorageService } from '../storage/storage.service';
 import { ReposService } from './repos.service';
 
 @Controller()
 export class ReposController {
   constructor(
     private readonly reposService: ReposService,
-    private readonly minioService: MinioService,
+    private readonly storageService: StorageService,
   ) {}
 
   @Post('orgs/:orgId/projects')
@@ -97,7 +97,7 @@ export class ReposController {
     for (const entry of directory.files) {
       if (entry.type === 'File') {
         const content = await entry.buffer();
-        await this.minioService.putObject(
+        await this.storageService.putObject(
           orgSlug,
           `${projectSlug}/${repo.slug}/context/${entry.path}`,
           content,

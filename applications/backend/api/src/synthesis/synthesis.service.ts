@@ -8,7 +8,7 @@ import { OrgMember } from '../entities/org-member.entity';
 import { Organization } from '../entities/organization.entity';
 import { Project } from '../entities/project.entity';
 import { Repository } from '../entities/repository.entity';
-import { MinioService } from '../minio/minio.service';
+import { StorageService } from '../storage/storage.service';
 
 @Injectable()
 export class SynthesisService {
@@ -24,7 +24,7 @@ export class SynthesisService {
     @InjectRepository(Repository)
     private readonly repoRepo: TypeOrmRepository<Repository>,
     @Inject(QUEUE_SERVICE) private readonly queueService: QueueService,
-    private readonly minioService: MinioService,
+    private readonly storageService: StorageService,
     private readonly jwtService: JwtService,
   ) {}
 
@@ -100,11 +100,11 @@ export class SynthesisService {
 
     const orgSlug = (project as any).org.slug;
     const prefix = `${project.slug}/synthesis/`;
-    const keys = await this.minioService.listObjects(orgSlug, prefix);
+    const keys = await this.storageService.listObjects(orgSlug, prefix);
 
     const files: Record<string, string> = {};
     for (const key of keys) {
-      const buf = await this.minioService.getObject(orgSlug, key);
+      const buf = await this.storageService.getObject(orgSlug, key);
       const relativePath = key.slice(prefix.length);
       files[relativePath] = buf.toString('utf-8');
     }
@@ -121,7 +121,7 @@ export class SynthesisService {
     if (!project) throw new NotFoundException('Project not found');
 
     const key = `${project.slug}/synthesis/${filePath}`;
-    const buf = await this.minioService.getObject(orgSlug, key);
+    const buf = await this.storageService.getObject(orgSlug, key);
     return buf.toString('utf-8');
   }
 

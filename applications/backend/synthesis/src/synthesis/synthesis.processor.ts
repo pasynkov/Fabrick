@@ -4,7 +4,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { QUEUE_SERVICE } from '../queue/queue.module';
 import { QueueService } from '../queue/queue.interface';
-import { MinioService } from '../minio/minio.service';
+import { StorageService } from '../storage/storage.service';
 
 interface SynthesisJob {
   projectId: string;
@@ -23,7 +23,7 @@ export class SynthesisProcessor implements OnModuleInit {
 
   constructor(
     @Inject(QUEUE_SERVICE) private readonly queueService: QueueService,
-    private readonly minioService: MinioService,
+    private readonly storageService: StorageService,
   ) {
     this.systemPrompt = readFileSync(
       join(__dirname, '..', 'assets', 'synthesis-prompt.txt'),
@@ -48,14 +48,14 @@ export class SynthesisProcessor implements OnModuleInit {
       for (const repo of repos) {
         const prefix = `${projectSlug}/${repo.slug}/context/`;
         this.logger.log(`[${projectSlug}] listing context at ${orgSlug}/${prefix}`);
-        const keys = await this.minioService.listObjects(orgSlug, prefix);
+        const keys = await this.storageService.listObjects(orgSlug, prefix);
         this.logger.log(`[${projectSlug}/${repo.slug}] ${keys.length} context files`);
         if (keys.length === 0) continue;
 
         let block = `=== REPO: ${repo.slug} ===\n`;
         for (const key of keys) {
           const fileName = key.slice(prefix.length);
-          const content = await this.minioService.getObject(orgSlug, key);
+          const content = await this.storageService.getObject(orgSlug, key);
           block += `--- ${fileName} ---\n${content.toString('utf-8')}\n`;
         }
         contextBlocks.push(block);
@@ -99,7 +99,7 @@ export class SynthesisProcessor implements OnModuleInit {
 
       const synthPrefix = `${projectSlug}/synthesis/`;
       for (const [path, content] of Object.entries(parsed.files)) {
-        await this.minioService.putObject(
+        await this.storageService.putObject(
           orgSlug,
           `${synthPrefix}${path}`,
           Buffer.from(content, 'utf-8'),

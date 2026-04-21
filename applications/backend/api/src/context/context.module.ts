@@ -1,10 +1,10 @@
 import { Module } from '@nestjs/common';
-import { MinioModule } from '../minio/minio.module';
+import { StorageModule } from '../storage/storage.module';
 import { ContextController } from './context.controller';
 import { ContextService } from './context.service';
 
 @Module({
-  imports: [MinioModule],
+  imports: [StorageModule],
   controllers: [ContextController],
   providers: [ContextService],
 })

@@ -37,9 +37,9 @@ export class PushCommand extends CommandRunner {
     const apiUrl = config.api_url || creds.api_url;
     const url = `${apiUrl}/repos/${config.repo_id}/context`;
 
-    const { FormData, Blob } = await import('node:buffer') as any;
+    const { Blob } = await import('node:buffer');
     const form = new FormData();
-    form.append('file', new Blob([zipBuffer], { type: 'application/zip' }), 'context.zip');
+    form.append('file', new Blob([zipBuffer], { type: 'application/zip' }) as globalThis.Blob, 'context.zip');
 
     const res = await fetch(url, {
       method: 'POST',

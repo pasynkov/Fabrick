@@ -1,6 +1,6 @@
 {
   "name": "@fabrick/cli",
-  "version": "0.4.1",
+  "version": "0.6.0",
   "description": "Fabrick CLI — bootstrap and push repository context",
   "bin": {
     "fabrick": "./bin/fabrick.js"

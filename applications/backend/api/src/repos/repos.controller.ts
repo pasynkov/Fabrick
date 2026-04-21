@@ -14,8 +14,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import * as unzipper from 'unzipper';
-import { AnyAuthGuard } from '../auth/any-auth.guard';
-import { CliTokenGuard } from '../auth/cli-token.guard';
+import { FabrickAuthGuard } from '../auth/fabrick-auth.guard';
 import { MinioService } from '../minio/minio.service';
 import { ReposService } from './repos.service';
 
@@ -28,7 +27,7 @@ export class ReposController {
 
   @Post('orgs/:orgId/projects')
   @HttpCode(201)
-  @UseGuards(AnyAuthGuard)
+  @UseGuards(FabrickAuthGuard)
   createProject(
     @Request() req: { user: { id: string } },
     @Param('orgId') orgId: string,
@@ -38,7 +37,7 @@ export class ReposController {
   }
 
   @Get('orgs/:orgId/projects')
-  @UseGuards(AnyAuthGuard)
+  @UseGuards(FabrickAuthGuard)
   listProjects(
     @Request() req: { user: { id: string } },
     @Param('orgId') orgId: string,
@@ -48,7 +47,7 @@ export class ReposController {
 
   @Post('projects/:projectId/repos')
   @HttpCode(201)
-  @UseGuards(AnyAuthGuard)
+  @UseGuards(FabrickAuthGuard)
   createRepo(
     @Request() req: { user: { id: string } },
     @Param('projectId') projectId: string,
@@ -58,7 +57,7 @@ export class ReposController {
   }
 
   @Get('projects/:projectId/repos')
-  @UseGuards(AnyAuthGuard)
+  @UseGuards(FabrickAuthGuard)
   listRepos(
     @Request() req: { user: { id: string } },
     @Param('projectId') projectId: string,
@@ -67,7 +66,7 @@ export class ReposController {
   }
 
   @Post('repos/find-or-create')
-  @UseGuards(CliTokenGuard)
+  @UseGuards(FabrickAuthGuard)
   async findOrCreateRepo(
     @Request() req: { user: { id: string } },
     @Body() body: { gitRemote: string; projectId: string },
@@ -82,7 +81,7 @@ export class ReposController {
 
   @Post('repos/:repoId/context')
   @HttpCode(201)
-  @UseGuards(CliTokenGuard)
+  @UseGuards(FabrickAuthGuard)
   @UseInterceptors(FileInterceptor('file', { storage: memoryStorage() }))
   async uploadContext(
     @Request() req: { user: { id: string } },

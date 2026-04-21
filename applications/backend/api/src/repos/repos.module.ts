@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthModule } from '../auth/auth.module';
-import { CliToken } from '../entities/cli-token.entity';
 import { OrgMember } from '../entities/org-member.entity';
 import { Project } from '../entities/project.entity';
 import { Repository } from '../entities/repository.entity';
@@ -12,7 +11,7 @@ import { ReposService } from './repos.service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Project, Repository, OrgMember, CliToken, User]),
+    TypeOrmModule.forFeature([Project, Repository, OrgMember, User]),
     MinioModule,
     AuthModule,
   ],

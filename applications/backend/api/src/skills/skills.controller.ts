@@ -2,10 +2,10 @@ import { Controller, Get, NotFoundException, Param, Res, UseGuards } from '@nest
 import { Response } from 'express';
 import { existsSync } from 'fs';
 import { join } from 'path';
-import { CliTokenGuard } from '../auth/cli-token.guard';
+import { FabrickAuthGuard } from '../auth/fabrick-auth.guard';
 
 @Controller('skills')
-@UseGuards(CliTokenGuard)
+@UseGuards(FabrickAuthGuard)
 export class SkillsController {
   @Get(':tool')
   download(@Param('tool') tool: string, @Res() res: Response): void {

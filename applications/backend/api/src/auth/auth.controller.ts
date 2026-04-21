@@ -8,6 +8,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
+import { FabrickAuthGuard } from './fabrick-auth.guard';
 import { JwtAuthGuard } from './jwt-auth.guard';
 
 @Controller('auth')
@@ -34,5 +35,18 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   async cliToken(@Request() req: { user: { id: string } }) {
     return this.authService.issueCliToken(req.user.id);
+  }
+
+  @Post('mcp-token')
+  @HttpCode(201)
+  @UseGuards(FabrickAuthGuard)
+  async mcpToken(
+    @Request() req: { user: { id: string } },
+    @Body() body: { orgSlug: string; projectSlug: string; repoId: string },
+  ) {
+    if (!body.orgSlug || !body.projectSlug || !body.repoId) {
+      throw new BadRequestException('orgSlug, projectSlug, and repoId are required');
+    }
+    return this.authService.issueMcpToken(req.user.id, body.orgSlug, body.projectSlug, body.repoId);
   }
 }

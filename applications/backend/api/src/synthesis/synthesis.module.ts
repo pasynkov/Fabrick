@@ -6,13 +6,15 @@ import { Organization } from '../entities/organization.entity';
 import { Project } from '../entities/project.entity';
 import { Repository } from '../entities/repository.entity';
 import { MinioModule } from '../minio/minio.module';
+import { QueueModule } from '../queue/queue.module';
 import { SynthesisController } from './synthesis.controller';
 import { SynthesisService } from './synthesis.service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Project, Repository, Organization, OrgMember]),
+    TypeOrmModule.forFeature([Project, Organization, OrgMember, Repository]),
     MinioModule,
+    QueueModule,
     AuthModule,
   ],
   controllers: [SynthesisController],

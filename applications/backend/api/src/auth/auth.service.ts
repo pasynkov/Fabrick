@@ -1,14 +1,14 @@
 import {
   ConflictException,
+  ForbiddenException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
-import { createHash, randomBytes } from 'crypto';
+import { randomBytes } from 'crypto';
 import { Repository } from 'typeorm';
-import { CliToken } from '../entities/cli-token.entity';
 import { OrgMember } from '../entities/org-member.entity';
 import { Organization } from '../entities/organization.entity';
 import { User } from '../entities/user.entity';
@@ -23,8 +23,6 @@ export class AuthService {
     private readonly orgRepo: Repository<Organization>,
     @InjectRepository(OrgMember)
     private readonly orgMemberRepo: Repository<OrgMember>,
-    @InjectRepository(CliToken)
-    private readonly cliTokenRepo: Repository<CliToken>,
     private readonly jwtService: JwtService,
     private readonly minioService: MinioService,
   ) {}
@@ -61,13 +59,32 @@ export class AuthService {
   }
 
   async issueCliToken(userId: string) {
-    await this.cliTokenRepo.delete({ userId });
-    const plaintext = randomBytes(32).toString('hex');
-    const tokenHash = createHash('sha256').update(plaintext).digest('hex');
-    await this.cliTokenRepo.save(
-      this.cliTokenRepo.create({ userId, tokenHash }),
+    const user = await this.userRepo.findOne({ where: { id: userId } });
+    if (!user) throw new UnauthorizedException();
+    const jwt = this.jwtService.sign(
+      { sub: user.id, email: user.email, type: 'cli' },
+      { expiresIn: '1y' },
     );
-    return { token: plaintext };
+    return { token: `fbrk_${jwt}` };
+  }
+
+  async issueMcpToken(userId: string, orgSlug: string, projectSlug: string, repoId: string) {
+    const user = await this.userRepo.findOne({ where: { id: userId } });
+    if (!user) throw new UnauthorizedException();
+
+    const org = await this.orgRepo.findOne({ where: { slug: orgSlug } });
+    if (!org) throw new ForbiddenException('Organization not found');
+
+    const membership = await this.orgMemberRepo.findOne({
+      where: { orgId: org.id, userId },
+    });
+    if (!membership) throw new ForbiddenException('Not a member of this organization');
+
+    const jwt = this.jwtService.sign(
+      { sub: user.id, email: user.email, type: 'mcp', org: orgSlug, project: projectSlug, repo: repoId },
+      { expiresIn: '1y' },
+    );
+    return { token: `fbrk_${jwt}` };
   }
 
   private signJwt(user: User) {

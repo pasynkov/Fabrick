@@ -87,17 +87,24 @@ export class InitCommand extends CommandRunner {
     console.log(`✓ Initialized. Repo: ${result.name} (${result.gitRemote})`);
     console.log('✓ Written .fabrick/config.yaml');
 
+    // Get MCP token (embeds org/project/repo claims)
+    const mcpTokenRes = await this.api.post<{ token: string }>(
+      creds.api_url,
+      '/auth/mcp-token',
+      creds.token,
+      { orgSlug: org.slug, projectSlug: project.slug, repoId: result.id },
+    );
+
     // Write .mcp.json for Claude Code MCP integration
-    const mcpUrl = creds.api_url.replace(/:(\d+)/, (_, port) => `:${parseInt(port, 10) + 1}`);
     const mcpConfig = {
       mcpServers: {
         fabrick: {
-          type: 'http',
-          url: `${mcpUrl}/mcp`,
-          headers: {
-            Authorization: `Bearer ${creds.token}`,
-            'X-Fabrick-Org': org.slug,
-            'X-Fabrick-Project': project.slug,
+          type: 'stdio',
+          command: 'npx',
+          args: ['-y', '@fabrick/mcp'],
+          env: {
+            FABRICK_TOKEN: mcpTokenRes.token,
+            FABRICK_API_URL: creds.api_url,
           },
         },
       },

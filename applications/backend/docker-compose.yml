@@ -32,6 +32,14 @@ services:
       timeout: 5s
       retries: 10
 
+  nats:
+    image: nats:2-alpine
+    command: -js -sd /data
+    ports:
+      - "4222:4222"
+    volumes:
+      - nats_data:/data
+
   api:
     build: api
     ports:
@@ -47,34 +55,36 @@ services:
       DB_USER: fabrick
       DB_PASS: fabrick
       JWT_SECRET: change-me-in-production
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      QUEUE_DRIVER: nats
+      NATS_URL: nats://nats:4222
     depends_on:
       minio:
         condition: service_healthy
       postgres:
         condition: service_healthy
+      nats:
+        condition: service_started
 
-  mcp:
-    build: mcp
-    ports:
-      - "3001:3001"
+  synthesis:
+    build: synthesis
     environment:
-      PORT: "3001"
+      QUEUE_DRIVER: nats
+      NATS_URL: nats://nats:4222
       MINIO_ENDPOINT: minio
       MINIO_PORT: "9000"
       MINIO_ACCESS_KEY: minioadmin
       MINIO_SECRET_KEY: minioadmin
-      DB_HOST: postgres
-      DB_PORT: "5432"
-      DB_NAME: fabrick
-      DB_USER: fabrick
-      DB_PASS: fabrick
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      API_BASE_URL: http://api:3000
     depends_on:
-      minio:
-        condition: service_healthy
+      nats:
+        condition: service_started
       postgres:
+        condition: service_healthy
+      minio:
         condition: service_healthy
 
 volumes:
   minio_data:
   postgres_data:
+  nats_data:

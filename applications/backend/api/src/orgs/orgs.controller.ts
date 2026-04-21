@@ -8,11 +8,11 @@ import {
   Request,
   UseGuards,
 } from '@nestjs/common';
-import { AnyAuthGuard } from '../auth/any-auth.guard';
+import { FabrickAuthGuard } from '../auth/fabrick-auth.guard';
 import { OrgsService } from './orgs.service';
 
 @Controller('orgs')
-@UseGuards(AnyAuthGuard)
+@UseGuards(FabrickAuthGuard)
 export class OrgsController {
   constructor(private readonly orgsService: OrgsService) {}
 

@@ -1,9 +1,9 @@
-import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import Anthropic from '@anthropic-ai/sdk';
+import { ConflictException, Inject, Injectable, Logger, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
-import { readFileSync } from 'fs';
-import { join } from 'path';
 import { Repository as TypeOrmRepository } from 'typeorm';
+import { QUEUE_SERVICE } from '../queue/queue.module';
+import { QueueService } from '../queue/queue.interface';
 import { OrgMember } from '../entities/org-member.entity';
 import { Organization } from '../entities/organization.entity';
 import { Project } from '../entities/project.entity';
@@ -13,31 +13,23 @@ import { MinioService } from '../minio/minio.service';
 @Injectable()
 export class SynthesisService {
   private readonly logger = new Logger(SynthesisService.name);
-  private readonly anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-  private readonly systemPrompt: string;
 
   constructor(
     @InjectRepository(Project)
     private readonly projectRepo: TypeOrmRepository<Project>,
-    @InjectRepository(Repository)
-    private readonly repoRepo: TypeOrmRepository<Repository>,
     @InjectRepository(Organization)
     private readonly orgRepo: TypeOrmRepository<Organization>,
     @InjectRepository(OrgMember)
     private readonly memberRepo: TypeOrmRepository<OrgMember>,
+    @InjectRepository(Repository)
+    private readonly repoRepo: TypeOrmRepository<Repository>,
+    @Inject(QUEUE_SERVICE) private readonly queueService: QueueService,
     private readonly minioService: MinioService,
-  ) {
-    this.systemPrompt = readFileSync(
-      join(__dirname, '..', 'assets', 'synthesis-prompt.txt'),
-      'utf-8',
-    );
-  }
+    private readonly jwtService: JwtService,
+  ) {}
 
   async triggerForProject(projectId: string, userId: string): Promise<void> {
-    const project = await this.projectRepo.findOne({
-      where: { id: projectId },
-      relations: ['org'],
-    });
+    const project = await this.projectRepo.findOne({ where: { id: projectId } });
     if (!project) throw new NotFoundException('Project not found');
 
     await this.requireOrgMember(userId, project.orgId);
@@ -46,11 +38,47 @@ export class SynthesisService {
       throw new ConflictException('Synthesis already running');
     }
 
+    const org = await this.orgRepo.findOne({ where: { id: project.orgId } });
+    if (!org) throw new NotFoundException('Organization not found');
+
+    const repos = await this.repoRepo.find({ where: { projectId } });
+
+    const callbackToken = this.jwtService.sign(
+      { sub: projectId, scope: 'synth-callback' },
+      { expiresIn: '1h' },
+    );
+
     await this.projectRepo.update(projectId, { synthStatus: 'running', synthError: null });
     this.logger.log(`[${project.slug}] synthesis triggered by user ${userId}`);
 
-    const orgSlug = (project as any).org.slug;
-    this.runSynthesis(project, orgSlug).catch(() => {/* handled inside */});
+    await this.queueService.publish('synthesis-jobs', {
+      projectId,
+      orgSlug: org.slug,
+      projectSlug: project.slug,
+      repos: repos.map((r) => ({ id: r.id, slug: r.slug })),
+      callbackToken,
+    });
+  }
+
+  async updateStatusFromCallback(
+    token: string,
+    projectId: string,
+    status: string,
+    error?: string,
+  ): Promise<void> {
+    let payload: { sub: string; scope: string };
+    try {
+      payload = this.jwtService.verify(token);
+    } catch {
+      throw new UnauthorizedException('Invalid callback token');
+    }
+    if (payload.scope !== 'synth-callback' || payload.sub !== projectId) {
+      throw new UnauthorizedException('Invalid callback token');
+    }
+    await this.projectRepo.update(projectId, {
+      synthStatus: status,
+      synthError: error ?? null,
+    });
   }
 
   async getStatus(projectId: string, userId: string): Promise<{ status: string; error?: string }> {
@@ -83,87 +111,18 @@ export class SynthesisService {
     return files;
   }
 
-  async runSynthesis(project: Project, orgSlug: string): Promise<void> {
-    try {
-      this.logger.log(`[${project.slug}] loading repos`);
-      const repos = await this.repoRepo.find({ where: { projectId: project.id } });
-      this.logger.log(`[${project.slug}] found ${repos.length} repos`);
+  async getSynthesisFileBySlug(userId: string, orgSlug: string, projectSlug: string, filePath: string): Promise<string> {
+    const org = await this.orgRepo.findOne({ where: { slug: orgSlug } });
+    if (!org) throw new NotFoundException('Project not found');
 
-      const contextBlocks: string[] = [];
-      for (const repo of repos) {
-        const prefix = `${project.slug}/${repo.slug}/context/`;
-        this.logger.log(`[${project.slug}] listing context at ${orgSlug}/${prefix}`);
-        const keys = await this.minioService.listObjects(orgSlug, prefix);
-        this.logger.log(`[${project.slug}/${repo.slug}] ${keys.length} context files`);
-        if (keys.length === 0) continue;
+    await this.requireOrgMember(userId, org.id);
 
-        let block = `=== REPO: ${repo.slug} ===\n`;
-        for (const key of keys) {
-          const fileName = key.slice(prefix.length);
-          const content = await this.minioService.getObject(orgSlug, key);
-          block += `--- ${fileName} ---\n${content.toString('utf-8')}\n`;
-        }
-        contextBlocks.push(block);
-      }
+    const project = await this.projectRepo.findOne({ where: { orgId: org.id, slug: projectSlug } });
+    if (!project) throw new NotFoundException('Project not found');
 
-      if (contextBlocks.length === 0) {
-        this.logger.warn(`[${project.slug}] no context files found`);
-        await this.projectRepo.update(project.id, {
-          synthStatus: 'error',
-          synthError: 'No context files found for any repository',
-        });
-        return;
-      }
-
-      const userMessage = contextBlocks.join('\n\n');
-      this.logger.log(`[${project.slug}] calling Anthropic, input ~${userMessage.length} chars`);
-
-      const response = await this.anthropic.messages.create({
-        model: 'claude-opus-4-6',
-        max_tokens: 16000,
-        system: this.systemPrompt,
-        messages: [{ role: 'user', content: userMessage }],
-      });
-
-      const rawText = response.content.find((c) => c.type === 'text')?.text ?? '';
-      this.logger.log(`[${project.slug}] Anthropic response ${rawText.length} chars, stop_reason=${response.stop_reason}`);
-      if (response.stop_reason === 'max_tokens') {
-        throw new Error('Anthropic response truncated (max_tokens reached) — increase max_tokens or reduce context');
-      }
-
-      const text = rawText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
-
-      let parsed: { files: Record<string, string> };
-      try {
-        parsed = JSON.parse(text);
-      } catch (parseErr: any) {
-        this.logger.error(`[${project.slug}] JSON parse failed: ${parseErr.message}`);
-        this.logger.debug(`[${project.slug}] raw response (first 500): ${rawText.slice(0, 500)}`);
-        throw new Error(`Claude returned non-JSON: ${parseErr.message}`);
-      }
-
-      const fileCount = Object.keys(parsed.files).length;
-      this.logger.log(`[${project.slug}] parsed ${fileCount} synthesis files`);
-
-      const synthPrefix = `${project.slug}/synthesis/`;
-      for (const [path, content] of Object.entries(parsed.files)) {
-        await this.minioService.putObject(
-          orgSlug,
-          `${synthPrefix}${path}`,
-          Buffer.from(content, 'utf-8'),
-        );
-        this.logger.log(`[${project.slug}] stored ${path}`);
-      }
-
-      await this.projectRepo.update(project.id, { synthStatus: 'done', synthError: null });
-      this.logger.log(`[${project.slug}] synthesis done`);
-    } catch (err: any) {
-      this.logger.error(`[${project.slug}] synthesis failed: ${err?.message}`);
-      await this.projectRepo.update(project.id, {
-        synthStatus: 'error',
-        synthError: err?.message ?? 'Unknown error',
-      });
-    }
+    const key = `${project.slug}/synthesis/${filePath}`;
+    const buf = await this.minioService.getObject(orgSlug, key);
+    return buf.toString('utf-8');
   }
 
   private async requireOrgMember(userId: string, orgId: string): Promise<void> {

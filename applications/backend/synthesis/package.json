@@ -4,7 +4,8 @@
   "scripts": {
     "build": "nest build",
     "start": "node dist/main",
-    "start:dev": "nest start --watch"
+    "start:dev": "nest start --watch",
+    "test": "jest"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
@@ -22,7 +23,28 @@
   },
   "devDependencies": {
     "@nestjs/cli": "^10.0.0",
+    "@nestjs/testing": "^10.0.0",
+    "@types/jest": "^30.0.0",
     "@types/node": "^20.0.0",
+    "jest": "^30.3.0",
+    "ts-jest": "^29.4.9",
     "typescript": "^5.0.0"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "roots": ["<rootDir>/src"],
+    "testMatch": ["**/*.spec.ts"],
+    "transform": {
+      "^.+\\.ts$": ["ts-jest", {
+        "tsconfig": {
+          "module": "commonjs",
+          "emitDecoratorMetadata": true,
+          "experimentalDecorators": true,
+          "strictNullChecks": false,
+          "noImplicitAny": false,
+          "skipLibCheck": true
+        }
+      }]
+    }
   }
 }

@@ -47,4 +47,29 @@ describe('getSynthesisFile', () => {
       getSynthesisFile(apiUrl, 'myorg', 'myproject', 'missing.md', token),
     ).rejects.toThrow('API returned 404');
   });
+
+  it('throws on 500 response', async () => {
+    mockFetch.mockResolvedValue({ ok: false, status: 500 });
+
+    await expect(
+      getSynthesisFile(apiUrl, 'myorg', 'myproject', 'index.md', token),
+    ).rejects.toThrow('API returned 500');
+  });
+
+  it('forwards fbrk_ prefixed token as-is in header', async () => {
+    mockFetch.mockResolvedValue({ ok: true, text: async () => '' });
+    const prefixedToken = 'fbrk_some-jwt-token';
+
+    await getSynthesisFile(apiUrl, 'myorg', 'myproject', 'index.md', prefixedToken);
+
+    const calledOptions = mockFetch.mock.calls[0][1] as RequestInit;
+    expect((calledOptions.headers as Record<string, string>)['Authorization']).toBe(`Bearer ${prefixedToken}`);
+  });
+
+  it('returns empty string for empty 200 response', async () => {
+    mockFetch.mockResolvedValue({ ok: true, text: async () => '' });
+
+    const result = await getSynthesisFile(apiUrl, 'myorg', 'myproject', 'index.md', token);
+    expect(result).toBe('');
+  });
 });

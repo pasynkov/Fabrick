@@ -39,22 +39,6 @@ Participants can include:
 
 ---
 
-## 🔌 Works with your tools
-
-Fabrick integrates with the tools you already use.
-
-Examples include:
-
-- issue tracking (e.g. Jira)
-- knowledge bases (e.g. Confluence)
-- design tools
-- data and analytics systems
-- internal services
-
-Instead of syncing data between tools, Fabrick creates a shared layer of context across them.
-
----
-
 ## 🔒 Privacy-first by design
 
 Fabrick does not store your source code or sensitive data.
@@ -108,6 +92,10 @@ A system where:
 ---
 
 ## 🚀 Getting Started
+
+### Create an account
+
+Go to [console.fabrick.me/register](https://console.fabrick.me/register) and sign up.
 
 ### Install the CLI
 
@@ -186,8 +174,10 @@ Contributions, ideas, and discussions are welcome.
 
 ---
 
-## 🌱 Future
+## 🌱 Where we're going
 
-- Fabrick Cloud (hosted platform)
-- real-time multi-agent collaboration
-- cross-tool integrations (dev, design, data)
+Fabrick is building the layer where teams and AI agents operate together — not as separate workflows, but as participants in the same shared understanding.
+
+- context that updates automatically as code evolves
+- shared understanding across teams, repos, and disciplines
+- AI agents as first-class participants, not just tools

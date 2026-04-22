@@ -55,6 +55,12 @@ output "github_deploy_registry_login_server" {
   value       = azurerm_container_registry.main.login_server
 }
 
+output "app_insights_connection_string" {
+  description = "Application Insights connection string for the API"
+  value       = azurerm_application_insights.api.connection_string
+  sensitive   = true
+}
+
 output "dns_records_required" {
   description = "DNS records to create before custom domains activate"
   value = {

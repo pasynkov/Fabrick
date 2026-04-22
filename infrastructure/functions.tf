@@ -1,3 +1,12 @@
+resource "azurerm_application_insights" "api" {
+  name                = "fabrick-api-insights"
+  resource_group_name = local.rg
+  location            = local.location_web
+  application_type    = "web"
+
+  tags = local.tags
+}
+
 resource "azurerm_service_plan" "api" {
   name                = "fabrick-api-plan"
   resource_group_name = local.rg
@@ -28,9 +37,11 @@ resource "azurerm_linux_function_app" "api" {
   }
 
   app_settings = {
-    FUNCTIONS_WORKER_RUNTIME = "node"
-    # WEBSITE_RUN_FROM_PACKAGE managed by func publish (set to blob SAS URL on each deploy)
-    AzureWebJobsStorage      = "@Microsoft.KeyVault(VaultName=${azurerm_key_vault.main.name};SecretName=storage-connection)"
+    FUNCTIONS_WORKER_RUNTIME    = "node"
+    WEBSITE_RUN_FROM_PACKAGE    = "1"
+    AzureWebJobsStorage         = "@Microsoft.KeyVault(VaultName=${azurerm_key_vault.main.name};SecretName=storage-connection)"
+
+    APPLICATIONINSIGHTS_CONNECTION_STRING = azurerm_application_insights.api.connection_string
 
     # Database — host/port/name/user are not secrets
     DB_HOST = azurerm_postgresql_flexible_server.main.fqdn
@@ -53,7 +64,6 @@ resource "azurerm_linux_function_app" "api" {
   lifecycle {
     ignore_changes = [
       site_config[0].cors,
-      app_settings["WEBSITE_RUN_FROM_PACKAGE"], # managed by func publish
     ]
   }
 

@@ -36,4 +36,5 @@ jobs:
           DB_USER: fabrick
           DB_PASS: ${{ secrets.DB_PASS }}
           DB_TEST_NAME: fabrick_test
+          DB_SSL: 'false'
           JWT_SECRET: ${{ secrets.JWT_SECRET }}

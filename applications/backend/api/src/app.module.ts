@@ -28,7 +28,7 @@ import { SynthesisModule } from './synthesis/synthesis.module';
         synchronize: false,
         migrationsRun: true,
         migrations,
-        ssl: process.env.DB_HOST ? { rejectUnauthorized: false } : false,
+        ssl: process.env.DB_SSL === 'false' ? false : (process.env.DB_HOST ? { rejectUnauthorized: false } : false),
         extra: { max: 2 },
       }),
     }),

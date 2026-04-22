@@ -10,8 +10,8 @@
 
 ## 3. Configure branch protection
 
-- [ ] 3.1 Enable branch protection on `main`: require PR, require status checks `test-api` + `test-cli` + `test-mcp`, disallow direct push
-- [ ] 3.2 Enable branch protection on `develop`: require PR, require same status checks
+- [x] 3.1 Enable branch protection on `main`: require PR, require status checks `test-api` + `test-cli` + `test-mcp`, disallow direct push
+- [x] 3.2 Enable branch protection on `develop`: require PR, require same status checks
 - [ ] 3.3 Verify: attempt direct push to `main` → rejected
 
 ## 4. Verify full flow

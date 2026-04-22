@@ -18,38 +18,11 @@ jobs:
         working-directory: applications/backend/api
       - run: npm prune --omit=dev --legacy-peer-deps
         working-directory: applications/backend/api
-      - name: Create deployment zip with node_modules
-        run: |
-          cd applications/backend/api
-          zip -r /tmp/api.zip . \
-            --exclude "*.ts" \
-            --exclude "src/*" \
-            --exclude "test/*" \
-            --exclude ".git*" \
-            --exclude "*.js.map" \
-            --exclude "tsconfig*" \
-            --exclude "local.settings.json" \
-            -q
-          echo "Zip size: $(du -sh /tmp/api.zip | cut -f1)"
-      - name: Deploy via Kudu zip API
-        run: |
-          CREDS=$(echo '${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE }}' | \
-            python3 -c "
-          import sys, xml.etree.ElementTree as ET
-          tree = ET.parse(sys.stdin)
-          root = tree.getroot()
-          for p in root.iter('publishProfile'):
-              if p.get('publishMethod') == 'ZipDeploy':
-                  print(p.get('userName') + ':' + p.get('userPWD'))
-                  break
-          ")
-          curl -X POST \
-            "https://${{ secrets.AZURE_FUNCTION_APP_NAME }}.scm.azurewebsites.net/api/zipdeploy" \
-            -u "$CREDS" \
-            --data-binary @/tmp/api.zip \
-            -H "Content-Type: application/zip" \
-            -w "\nHTTP %{http_code}" \
-            --max-time 120
+      - uses: Azure/functions-action@v1
+        with:
+          app-name: ${{ secrets.AZURE_FUNCTION_APP_NAME }}
+          package: applications/backend/api
+          publish-profile: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE }}
 
   deploy-synthesis:
     runs-on: ubuntu-latest

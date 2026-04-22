@@ -39,6 +39,22 @@ output "console_deploy_token" {
   sensitive   = true
 }
 
+output "github_deploy_azure_credentials" {
+  description = "Value for AZURE_CREDENTIALS GitHub Actions secret"
+  sensitive   = true
+  value = jsonencode({
+    clientId       = azuread_application.github_deploy.client_id
+    clientSecret   = azuread_service_principal_password.github_deploy.value
+    subscriptionId = var.subscription_id
+    tenantId       = data.azurerm_client_config.current.tenant_id
+  })
+}
+
+output "github_deploy_registry_login_server" {
+  description = "Value for REGISTRY_LOGIN_SERVER GitHub Actions secret"
+  value       = azurerm_container_registry.main.login_server
+}
+
 output "dns_records_required" {
   description = "DNS records to create before custom domains activate"
   value = {

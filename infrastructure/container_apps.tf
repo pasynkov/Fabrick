@@ -28,7 +28,7 @@ resource "azurerm_container_app" "synthesis" {
   }
 
   registry {
-    server   = azurerm_container_registry.acr.login_server
+    server   = azurerm_container_registry.main.login_server
     identity = "system"
   }
 
@@ -54,7 +54,7 @@ resource "azurerm_container_app" "synthesis" {
 
     container {
       name  = "synthesis"
-      image = "${azurerm_container_registry.acr.login_server}/synthesis:latest"
+      image = "${azurerm_container_registry.main.login_server}/synthesis:latest"
       cpu    = 0.5
       memory = "1Gi"
 

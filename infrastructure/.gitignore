@@ -1,0 +1,13 @@
+# Secrets
+*.tfvars
+!*.tfvars.example
+
+# Local state — keep local, remote backend (blob storage) planned for CI/CD
+terraform.tfstate
+terraform.tfstate.backup
+
+# Terraform internals
+.terraform/
+.terraform.lock.hcl
+*.tfplan
+crash.log

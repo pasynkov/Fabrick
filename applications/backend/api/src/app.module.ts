@@ -28,6 +28,7 @@ import { SynthesisModule } from './synthesis/synthesis.module';
         synchronize: false,
         migrationsRun: true,
         migrations,
+        ssl: process.env.DB_HOST ? { rejectUnauthorized: false } : false,
         extra: { max: 2 },
       }),
     }),

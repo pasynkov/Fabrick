@@ -14,10 +14,17 @@ export class ApiService {
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
     const base = apiUrl.trim().replace(/\/$/, '');
-    const res = await fetch(`${base}${path}`, {
-      ...options,
-      headers: { ...headers, ...(options.headers || {}) },
-    });
+    const url = `${base}${path}`;
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        ...options,
+        headers: { ...headers, ...(options.headers || {}) },
+      });
+    } catch (err: any) {
+      const cause = err?.cause?.message || err?.cause?.code || err?.message || 'unknown';
+      throw new Error(`Cannot reach API at ${url}: ${cause}`);
+    }
 
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
@@ -33,9 +40,16 @@ export class ApiService {
 
   async download(apiUrl: string, path: string, token: string): Promise<Buffer> {
     const base = apiUrl.trim().replace(/\/$/, '');
-    const res = await fetch(`${base}${path}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const url = `${base}${path}`;
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    } catch (err: any) {
+      const cause = err?.cause?.message || err?.cause?.code || err?.message || 'unknown';
+      throw new Error(`Cannot reach API at ${url}: ${cause}`);
+    }
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
       throw new Error((body as any).message || `HTTP ${res.status}`);

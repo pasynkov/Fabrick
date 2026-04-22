@@ -1,11 +1,11 @@
 ## 1. Create develop branch
 
-- [ ] 1.1 Create `develop` branch from current `main`
-- [ ] 1.2 Push `develop` to origin
+- [x] 1.1 Create `develop` branch from current `main`
+- [x] 1.2 Push `develop` to origin
 
 ## 2. Update ci-unit.yml triggers
 
-- [ ] 2.1 Update `.github/workflows/ci-unit.yml` — add `pull_request` trigger and `push: branches: [main, develop]`
+- [x] 2.1 Update `.github/workflows/ci-unit.yml` — add `pull_request` trigger and `push: branches: [main, develop]`
 - [ ] 2.2 Push to `develop` → verify ci-unit triggers
 
 ## 3. Configure branch protection

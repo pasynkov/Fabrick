@@ -18,12 +18,11 @@ resource "azurerm_service_plan" "api" {
 }
 
 resource "azurerm_linux_function_app" "api" {
-  name                       = "fabrick-api-${random_id.suffix.hex}"
-  resource_group_name        = local.rg
-  location                   = local.location_web
-  service_plan_id            = azurerm_service_plan.api.id
-  storage_account_name       = azurerm_storage_account.main.name
-  storage_account_access_key = azurerm_storage_account.main.primary_access_key
+  name                        = "fabrick-api-${random_id.suffix.hex}"
+  resource_group_name         = local.rg
+  location                    = local.location_web
+  service_plan_id             = azurerm_service_plan.api.id
+  storage_key_vault_secret_id = azurerm_key_vault_secret.storage_connection.versionless_id
 
   identity {
     type = "SystemAssigned"
@@ -33,15 +32,13 @@ resource "azurerm_linux_function_app" "api" {
     application_stack {
       node_version = "20"
     }
+    application_insights_connection_string = azurerm_application_insights.api.connection_string
     # CORS configured post-deploy via az functionapp cors add (provider 4.x bug with cors block)
   }
 
   app_settings = {
-    FUNCTIONS_WORKER_RUNTIME    = "node"
-    WEBSITE_RUN_FROM_PACKAGE    = "1"
-    AzureWebJobsStorage         = "@Microsoft.KeyVault(VaultName=${azurerm_key_vault.main.name};SecretName=storage-connection)"
-
-    APPLICATIONINSIGHTS_CONNECTION_STRING = azurerm_application_insights.api.connection_string
+    FUNCTIONS_WORKER_RUNTIME = "node"
+    WEBSITE_RUN_FROM_PACKAGE = "1"
 
     # Database — host/port/name/user are not secrets
     DB_HOST = azurerm_postgresql_flexible_server.main.fqdn
@@ -53,10 +50,10 @@ resource "azurerm_linux_function_app" "api" {
     QUEUE_DRIVER = "service-bus"
 
     # Secrets via Key Vault references
-    DB_PASS                          = "@Microsoft.KeyVault(VaultName=${azurerm_key_vault.main.name};SecretName=db-password)"
-    JWT_SECRET                       = "@Microsoft.KeyVault(VaultName=${azurerm_key_vault.main.name};SecretName=jwt-secret)"
-    AZURE_STORAGE_CONNECTION_STRING  = "@Microsoft.KeyVault(VaultName=${azurerm_key_vault.main.name};SecretName=storage-connection)"
-    SERVICE_BUS_CONNECTION           = "@Microsoft.KeyVault(VaultName=${azurerm_key_vault.main.name};SecretName=servicebus-connection)"
+    DB_PASS                         = "@Microsoft.KeyVault(VaultName=${azurerm_key_vault.main.name};SecretName=db-password)"
+    JWT_SECRET                      = "@Microsoft.KeyVault(VaultName=${azurerm_key_vault.main.name};SecretName=jwt-secret)"
+    AZURE_STORAGE_CONNECTION_STRING = "@Microsoft.KeyVault(VaultName=${azurerm_key_vault.main.name};SecretName=storage-connection)"
+    SERVICE_BUS_CONNECTION          = "@Microsoft.KeyVault(VaultName=${azurerm_key_vault.main.name};SecretName=servicebus-connection)"
   }
 
   tags = local.tags

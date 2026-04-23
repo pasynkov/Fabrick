@@ -6,6 +6,13 @@ resource "azurerm_static_web_app" "console" {
   sku_size            = "Free"
 
   tags = local.tags
+
+  lifecycle {
+    ignore_changes = [
+      repository_branch,
+      repository_url,
+    ]
+  }
 }
 
 # Landing already exists in fabrick-landing RG — managed separately

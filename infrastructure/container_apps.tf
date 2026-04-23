@@ -95,6 +95,12 @@ resource "azurerm_container_app" "synthesis" {
   }
 
   tags = local.tags
+
+  lifecycle {
+    ignore_changes = [
+      template[0].container[0].image,
+    ]
+  }
 }
 
 # AcrPull: synthesis managed identity → ACR

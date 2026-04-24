@@ -76,7 +76,7 @@ resource "azurerm_container_app" "synthesis" {
       }
       env {
         name  = "API_BASE_URL"
-        value = "https://${azurerm_linux_function_app.api.default_hostname}"
+        value = "https://${azurerm_function_app_flex_consumption.api.default_hostname}"
       }
     }
 

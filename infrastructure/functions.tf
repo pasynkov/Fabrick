@@ -12,34 +12,39 @@ resource "azurerm_service_plan" "api" {
   resource_group_name = local.rg
   location            = local.location_web
   os_type             = "Linux"
-  sku_name            = "Y1" # Consumption
+  sku_name            = "FC1" # Flex Consumption — supports Node 24+
 
   tags = local.tags
 }
 
-resource "azurerm_linux_function_app" "api" {
-  name                        = "fabrick-api-${random_id.suffix.hex}"
-  resource_group_name         = local.rg
-  location                    = local.location_web
-  service_plan_id             = azurerm_service_plan.api.id
-  storage_key_vault_secret_id = azurerm_key_vault_secret.storage_connection.versionless_id
+resource "azurerm_storage_container" "api_flex" {
+  name               = "api-flex"
+  storage_account_id = azurerm_storage_account.main.id
+}
+
+resource "azurerm_function_app_flex_consumption" "api" {
+  name                = "fabrick-api-${random_id.suffix.hex}"
+  resource_group_name = local.rg
+  location            = local.location_web
+  service_plan_id     = azurerm_service_plan.api.id
+
+  storage_container_type      = "blobContainer"
+  storage_container_endpoint  = "${azurerm_storage_account.main.primary_blob_endpoint}${azurerm_storage_container.api_flex.name}"
+  storage_authentication_type = "StorageAccountConnectionString"
+  storage_access_key          = azurerm_storage_account.main.primary_access_key
+
+  runtime_name    = "node"
+  runtime_version = "24"
 
   identity {
     type = "SystemAssigned"
   }
 
   site_config {
-    application_stack {
-      node_version = "24"
-    }
     application_insights_connection_string = azurerm_application_insights.api.connection_string
-    # CORS configured post-deploy via az functionapp cors add (provider 4.x bug with cors block)
   }
 
   app_settings = {
-    FUNCTIONS_WORKER_RUNTIME = "node"
-    WEBSITE_RUN_FROM_PACKAGE = "1"
-
     # Database — host/port/name/user are not secrets
     DB_HOST = azurerm_postgresql_flexible_server.main.fqdn
     DB_PORT = "5432"
@@ -58,12 +63,6 @@ resource "azurerm_linux_function_app" "api" {
 
   tags = local.tags
 
-  lifecycle {
-    ignore_changes = [
-      site_config[0].cors,
-    ]
-  }
-
   depends_on = [
     azurerm_key_vault_secret.db_password,
     azurerm_key_vault_secret.jwt_secret,
@@ -75,14 +74,14 @@ resource "azurerm_linux_function_app" "api" {
 # CORS — configured via CLI due to azurerm provider 4.x bug with cors block in site_config
 resource "null_resource" "api_cors" {
   triggers = {
-    function_app = azurerm_linux_function_app.api.id
+    function_app = azurerm_function_app_flex_consumption.api.id
     origins      = "https://console.fabrick.me,https://${azurerm_static_web_app.console.default_host_name}"
   }
 
   provisioner "local-exec" {
     command = <<-CMD
       az functionapp cors add \
-        --name ${azurerm_linux_function_app.api.name} \
+        --name ${azurerm_function_app_flex_consumption.api.name} \
         --resource-group ${local.rg} \
         --allowed-origins https://console.fabrick.me https://${azurerm_static_web_app.console.default_host_name}
     CMD

@@ -8,19 +8,13 @@
 
 resource "azurerm_app_service_custom_hostname_binding" "api" {
   hostname            = "api.fabrick.me"
-  app_service_name    = azurerm_linux_function_app.api.name
+  app_service_name    = azurerm_function_app_flex_consumption.api.name
   resource_group_name = local.rg
 }
 
-resource "azurerm_app_service_managed_certificate" "api" {
-  custom_hostname_binding_id = azurerm_app_service_custom_hostname_binding.api.id
-}
-
-resource "azurerm_app_service_certificate_binding" "api" {
-  hostname_binding_id = azurerm_app_service_custom_hostname_binding.api.id
-  certificate_id      = azurerm_app_service_managed_certificate.api.id
-  ssl_state           = "SniEnabled"
-}
+# NOTE: azurerm_app_service_managed_certificate is not supported for Flex Consumption plans.
+# SSL cert is managed via Cloudflare proxy (api.fabrick.me → CNAME → azurewebsites.net).
+# If self-managed cert needed, use: az webapp config ssl bind / az functionapp config ssl
 
 # --- console.fabrick.me ------------------------------------------------------
 

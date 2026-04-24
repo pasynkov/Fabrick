@@ -1,6 +1,6 @@
 output "api_default_hostname" {
   description = "Function App default hostname (before custom domain)"
-  value       = "https://${azurerm_linux_function_app.api.default_hostname}"
+  value       = "https://${azurerm_function_app_flex_consumption.api.default_hostname}"
 }
 
 output "api_custom_domain" {
@@ -64,7 +64,7 @@ output "app_insights_connection_string" {
 output "dns_records_required" {
   description = "DNS records to create before custom domains activate"
   value = {
-    "api.fabrick.me"     = "CNAME → ${azurerm_linux_function_app.api.default_hostname}"
+    "api.fabrick.me"     = "CNAME → ${azurerm_function_app_flex_consumption.api.default_hostname}"
     "console.fabrick.me" = "CNAME → ${azurerm_static_web_app.console.default_host_name}"
   }
 }

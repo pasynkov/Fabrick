@@ -46,6 +46,8 @@ jobs:
 
       - name: Run explore dialogue
         uses: anthropics/claude-code-base-action@beta
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           model: claude-haiku-4-5-20251001

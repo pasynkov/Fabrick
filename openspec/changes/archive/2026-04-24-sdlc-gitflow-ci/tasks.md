@@ -32,9 +32,9 @@
 
 ## 6. Test
 
-- [ ] 6.1 Push to `feature/test-sdlc` → verify unit tests run + PR to `develop` opens
-- [ ] 6.2 Push second commit to same feature branch → verify no duplicate PR opens
-- [ ] 6.3 Merge feature PR to `develop` → verify e2e runs on `develop`
-- [ ] 6.4 Create `release/v0.0.1` branch manually and push → verify e2e runs on release branch
-- [ ] 6.5 Run `cd-deploy` workflow_dispatch on `release/v0.0.1` → verify: bump commits appear, all 4 apps deploy, PR to `main` opens
-- [ ] 6.6 Merge release PR to `main` → verify tag `v0.0.1` created and PR `main → develop` opens
+- [x] 6.1 Push to `feature/test-sdlc` → verify unit tests run + PR to `develop` opens
+- [x] 6.2 Push second commit to same feature branch → verify no duplicate PR opens
+- [x] 6.3 Merge feature PR to `develop` → verify e2e runs on `develop`
+- [x] 6.4 Create `release/v0.0.1` branch manually and push → verify e2e runs on release branch
+- [x] 6.5 Run `cd-deploy` workflow_dispatch on `release/v0.0.1` → verify: bump commits appear, all 4 apps deploy, PR to `main` opens
+- [x] 6.6 Merge release PR to `main` → verify tag `v0.0.1` created and PR `main → develop` opens

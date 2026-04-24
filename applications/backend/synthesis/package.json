@@ -1,6 +1,6 @@
 {
   "name": "fabrick-synthesis",
-  "version": "0.6.4",
+  "version": "0.6.5",
   "scripts": {
     "build": "nest build",
     "start": "node dist/main",

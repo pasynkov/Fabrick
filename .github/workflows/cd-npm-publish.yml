@@ -72,11 +72,15 @@ jobs:
         working-directory: applications/${{ matrix.package }}
 
       - name: Bump version
-        run: npm version ${{ inputs.version_bump }}
+        run: npm version ${{ inputs.version_bump }} --no-git-tag-version
         working-directory: applications/${{ matrix.package }}
 
-      - name: Push version commit
-        run: git push origin HEAD:refs/heads/${{ github.ref_name }}
+      - name: Commit and push version bump
+        run: |
+          NEW_VERSION=$(node -p "require('./applications/${{ matrix.package }}/package.json').version")
+          git add applications/${{ matrix.package }}/package.json
+          git commit -m "chore(release): bump @fabrick/${{ matrix.package }} to ${NEW_VERSION}"
+          git push origin HEAD:refs/heads/${{ github.ref_name }}
 
       - name: Publish to npm
         run: npm publish

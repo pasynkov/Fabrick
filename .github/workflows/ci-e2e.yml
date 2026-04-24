@@ -2,7 +2,7 @@ name: CI E2E Tests
 
 on:
   push:
-    branches: ['release/**']
+    branches: [develop]
 
 jobs:
   e2e-api:

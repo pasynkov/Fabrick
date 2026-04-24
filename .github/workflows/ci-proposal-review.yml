@@ -16,11 +16,11 @@ jobs:
           NAME="${BRANCH#proposal/}"
           echo "name=$NAME" >> $GITHUB_OUTPUT
       - name: Review proposal
-        uses: anthropics/claude-code-action@v1
+        uses: anthropics/claude-code-base-action@beta
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          settings: |
-            { "model": "claude-haiku-4-5-20251001" }
+          model: claude-haiku-4-5-20251001
+          allowed_tools: "Bash,Read,Glob,LS"
           prompt: |
             Use the Skill tool to invoke the "review-proposal" skill
             with args "${{ steps.name.outputs.name }}".

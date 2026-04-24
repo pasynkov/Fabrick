@@ -13,4 +13,10 @@ resource "azurerm_storage_account" "main" {
   }
 
   tags = local.tags
+
+  lifecycle {
+    ignore_changes = [
+      network_rules # todo wtf
+    ]
+  }
 }

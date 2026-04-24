@@ -20,7 +20,16 @@ jobs:
           BRANCH="${GITHUB_REF#refs/heads/}"
           NAME="${BRANCH#implementation/}"
           echo "name=$NAME" >> $GITHUB_OUTPUT
+      - name: Check if change needs archiving
+        id: check
+        run: |
+          if [ -d "openspec/changes/${{ steps.name.outputs.name }}" ]; then
+            echo "needs_archive=true" >> $GITHUB_OUTPUT
+          else
+            echo "needs_archive=false" >> $GITHUB_OUTPUT
+          fi
       - name: Archive OpenSpec change
+        if: steps.check.outputs.needs_archive == 'true'
         uses: anthropics/claude-code-base-action@beta
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -31,6 +40,7 @@ jobs:
             with args "${{ steps.name.outputs.name }}".
             Do NOT run any git commands. Only perform the file operations.
       - name: Commit archive
+        if: steps.check.outputs.needs_archive == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"

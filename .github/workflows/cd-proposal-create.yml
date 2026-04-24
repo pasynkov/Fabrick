@@ -1,0 +1,73 @@
+name: CD Proposal Create
+
+on:
+  issues:
+    types: [labeled]
+
+jobs:
+  create:
+    if: github.event.label.name == 'proposal:ready'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch issue thread
+        id: thread
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          THREAD=$(gh issue view ${{ github.event.issue.number }} \
+            --json title,body,comments \
+            --repo "$GITHUB_REPOSITORY")
+          echo "thread<<EOF" >> $GITHUB_OUTPUT
+          echo "$THREAD" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Install openspec
+        run: npm install -g @fission-ai/openspec
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Generate proposal artifacts
+        uses: anthropics/claude-code-base-action@beta
+        env:
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          model: claude-haiku-4-5-20251001
+          allowed_tools: "Bash,Read,Write,Glob,LS,Skill"
+          prompt: |
+            You are generating an OpenSpec proposal from a GitHub issue.
+
+            Full issue thread (JSON):
+            ${{ steps.thread.outputs.thread }}
+
+            Issue number: ${{ github.event.issue.number }}
+
+            Steps:
+            1. Read the issue thread and derive a concise kebab-case change name that accurately
+               reflects the final agreed scope (not just a slug of the title).
+            2. Use the Skill tool to invoke the "openspec-propose" skill with that name as the argument.
+               This will generate proposal.md, design.md, specs/, and tasks.md artifacts.
+            3. After artifacts are generated, create and push the branch:
+               ```
+               CHANGE_NAME=<the-name-you-derived>
+               git checkout -b "proposal/$CHANGE_NAME"
+               git add openspec/changes/$CHANGE_NAME/
+               git commit -m "proposal: $CHANGE_NAME
+
+               refs #${{ github.event.issue.number }}"
+               git push origin "proposal/$CHANGE_NAME"
+               ```
+            4. Post a comment on the issue:
+               ```
+               gh issue comment ${{ github.event.issue.number }} --body "Proposal branch created: \`proposal/$CHANGE_NAME\`. The CI review workflow will run automatically."
+               ```

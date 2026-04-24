@@ -1,0 +1,48 @@
+name: AI Proposal Review
+
+on:
+  push:
+    branches: ['proposal/**']
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract change name
+        id: name
+        run: |
+          BRANCH="${GITHUB_REF#refs/heads/}"
+          NAME="${BRANCH#proposal/}"
+          echo "name=$NAME" >> $GITHUB_OUTPUT
+      - name: Review proposal
+        uses: anthropics/claude-code-base-action@beta
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          model: claude-haiku-4-5-20251001
+          allowed_tools: "Bash,Read,Glob,LS"
+          prompt: |
+            Use the Skill tool to invoke the "review-proposal" skill
+            with args "${{ steps.name.outputs.name }}".
+
+  open-pr:
+    needs: [review]
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Open PR to develop
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="${GITHUB_REF#refs/heads/}"
+          NAME="${BRANCH#proposal/}"
+          existing=$(gh pr list --repo "$GITHUB_REPOSITORY" --base develop --head "$BRANCH" --json number --jq '.[0].number')
+          if [ -z "$existing" ]; then
+            gh pr create \
+              --repo "$GITHUB_REPOSITORY" \
+              --base develop \
+              --head "$BRANCH" \
+              --title "proposal: $NAME" \
+              --body "AI review passed. Ready to merge into develop."
+          fi

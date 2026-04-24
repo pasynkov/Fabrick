@@ -1,0 +1,76 @@
+name: CI Implementation Archive
+
+on:
+  push:
+    branches: ['implementation/**']
+
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+      - name: Extract change name
+        id: name
+        run: |
+          BRANCH="${GITHUB_REF#refs/heads/}"
+          NAME="${BRANCH#implementation/}"
+          echo "name=$NAME" >> $GITHUB_OUTPUT
+      - name: Check if change needs archiving
+        id: check
+        run: |
+          if [ -d "openspec/changes/${{ steps.name.outputs.name }}" ]; then
+            echo "needs_archive=true" >> $GITHUB_OUTPUT
+          else
+            echo "needs_archive=false" >> $GITHUB_OUTPUT
+          fi
+      - name: Archive OpenSpec change
+        if: steps.check.outputs.needs_archive == 'true'
+        uses: anthropics/claude-code-base-action@beta
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          model: claude-sonnet-4-6
+          allowed_tools: "Bash,Read,Write,Edit,Glob"
+          prompt: |
+            Use the Skill tool to invoke the "openspec-archive-change" skill
+            with args "${{ steps.name.outputs.name }}".
+            Do NOT run any git commands. Only perform the file operations.
+      - name: Commit archive
+        if: steps.check.outputs.needs_archive == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --staged --quiet || git commit -m "chore(openspec): archive ${{ steps.name.outputs.name }}"
+          git push
+
+  promote:
+    needs: [archive]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 0
+      - name: Promote to feature branch
+        id: promote
+        run: |
+          BRANCH="${GITHUB_REF#refs/heads/}"
+          NAME="${BRANCH#implementation/}"
+          git pull origin "$BRANCH"
+          git checkout -b "feature/$NAME"
+          git push origin "feature/$NAME"
+          git push origin --delete "$BRANCH"
+          echo "name=$NAME" >> $GITHUB_OUTPUT
+      - name: Trigger unit tests
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh workflow run ci-unit.yml --ref "feature/${{ steps.promote.outputs.name }}"

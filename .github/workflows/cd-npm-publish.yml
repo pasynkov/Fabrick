@@ -76,8 +76,7 @@ jobs:
         working-directory: applications/${{ matrix.package }}
 
       - name: Push version commit
-        run: git push origin HEAD
-        working-directory: applications/${{ matrix.package }}
+        run: git push origin HEAD:refs/heads/${{ github.ref_name }}
 
       - name: Publish to npm
         run: npm publish

@@ -3,6 +3,11 @@ name: AI Proposal Review
 on:
   push:
     branches: ['proposal/**']
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to review (e.g. proposal/my-change)'
+        required: true
 
 jobs:
   review:

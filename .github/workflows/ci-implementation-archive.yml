@@ -43,12 +43,14 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: write
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.ref }}
           fetch-depth: 0
       - name: Promote to feature branch
+        id: promote
         run: |
           BRANCH="${GITHUB_REF#refs/heads/}"
           NAME="${BRANCH#implementation/}"
@@ -56,3 +58,9 @@ jobs:
           git checkout -b "feature/$NAME"
           git push origin "feature/$NAME"
           git push origin --delete "$BRANCH"
+          echo "name=$NAME" >> $GITHUB_OUTPUT
+      - name: Trigger unit tests
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh workflow run ci-unit.yml --ref "feature/${{ steps.promote.outputs.name }}"

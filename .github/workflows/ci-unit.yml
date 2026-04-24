@@ -2,9 +2,10 @@ name: CI Unit Tests
 
 on:
   push:
-    branches: [develop, 'feature/**']
+    branches: [main, develop, 'feature/**']
   pull_request:
-    branches: [develop]
+    branches: [main, develop]
+  workflow_dispatch:
 
 jobs:
   test-api:

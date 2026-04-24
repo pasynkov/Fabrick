@@ -39,6 +39,7 @@ jobs:
       - name: Generate proposal artifacts
         uses: anthropics/claude-code-base-action@beta
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}

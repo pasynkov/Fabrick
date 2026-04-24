@@ -1,0 +1,68 @@
+name: CI Proposal Explore
+
+on:
+  issues:
+    types: [labeled]
+  issue_comment:
+    types: [created]
+
+jobs:
+  explore:
+    if: |
+      (github.event_name == 'issues' && github.event.label.name == 'proposal') ||
+      (github.event_name == 'issue_comment' && github.actor != 'github-actions[bot]' && github.actor != 'claude[bot]')
+    runs-on: ubuntu-latest
+    concurrency:
+      group: proposal-explore-${{ github.event.issue.number }}
+      cancel-in-progress: true
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Apply proposal:exploring label
+        if: github.event_name == 'issues'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue edit ${{ github.event.issue.number }} \
+            --add-label "proposal:exploring" \
+            --repo "$GITHUB_REPOSITORY"
+
+      - name: Fetch issue thread
+        id: thread
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          THREAD=$(gh issue view ${{ github.event.issue.number }} \
+            --json title,body,comments \
+            --repo "$GITHUB_REPOSITORY")
+          echo "thread<<EOF" >> $GITHUB_OUTPUT
+          echo "$THREAD" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Install openspec
+        run: npm install -g @fission-ai/openspec
+
+      - name: Run explore dialogue
+        uses: anthropics/claude-code-base-action@beta
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          model: claude-haiku-4-5-20251001
+          allowed_tools: "Bash,Read,Glob,LS,Skill"
+          prompt: |
+            You are helping explore a GitHub proposal issue via AI-assisted dialogue.
+
+            Full issue thread (JSON):
+            ${{ steps.thread.outputs.thread }}
+
+            Issue number: ${{ github.event.issue.number }}
+
+            Use the Skill tool to invoke the "openspec-explore" skill.
+            After exploring, post a comment on the issue (using `gh issue comment`) summarizing
+            your analysis and asking clarifying questions. If the proposal seems sufficiently
+            explored and ready for implementation planning, include a suggestion to add the
+            `proposal:ready` label to trigger artifact generation.
+
+            Post the comment using:
+            gh issue comment ${{ github.event.issue.number }} --body "<your comment>"

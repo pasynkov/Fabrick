@@ -16,3 +16,4 @@ src/app/e2e/.auth.json
 *.log
 .DS_Store
 .idea
+output.txt

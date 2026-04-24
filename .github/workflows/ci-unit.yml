@@ -2,7 +2,7 @@ name: CI Unit Tests
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, develop, 'feature/**']
   pull_request:
     branches: [main, develop]
 
@@ -42,3 +42,23 @@ jobs:
         working-directory: applications/mcp
       - run: npm test
         working-directory: applications/mcp
+
+  open-pr:
+    needs: [test-api, test-cli, test-mcp]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/heads/feature/')
+    steps:
+      - name: Open PR to develop
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="${GITHUB_REF#refs/heads/}"
+          existing=$(gh pr list --repo "$GITHUB_REPOSITORY" --base develop --head "$BRANCH" --json number --jq '.[0].number')
+          if [ -z "$existing" ]; then
+            gh pr create \
+              --repo "$GITHUB_REPOSITORY" \
+              --base develop \
+              --head "$BRANCH" \
+              --title "${BRANCH#feature/}" \
+              --body "Automated PR from \`$BRANCH\`."
+          fi

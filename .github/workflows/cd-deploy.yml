@@ -1,14 +1,50 @@
 name: CD Deploy
 
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:
 
 jobs:
+  version-bump:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.extract.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Extract version from branch name
+        id: extract
+        run: |
+          BRANCH="${GITHUB_REF#refs/heads/}"
+          VERSION="${BRANCH#release/v}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Bump package versions
+        run: |
+          for dir in applications/backend/api applications/backend/synthesis applications/console applications/landing; do
+            npm --prefix "$dir" version "${{ steps.extract.outputs.version }}" --no-git-tag-version
+          done
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add \
+            applications/backend/api/package.json \
+            applications/backend/synthesis/package.json \
+            applications/console/package.json \
+            applications/landing/package.json
+          git commit -m "chore: bump version to ${{ steps.extract.outputs.version }}"
+          git push
+
   deploy-api:
+    needs: [version-bump]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -39,9 +75,12 @@ jobs:
           publish-profile: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE }}
 
   deploy-synthesis:
+    needs: [version-bump]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
       - uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
@@ -50,9 +89,9 @@ jobs:
       - name: Build and push synthesis image
         run: |
           docker buildx build --platform linux/amd64 \
-            -t ${{ secrets.REGISTRY_LOGIN_SERVER }}/synthesis:${{ github.sha }} \
+            -t ${{ secrets.REGISTRY_LOGIN_SERVER }}/synthesis:${{ needs.version-bump.outputs.version }} \
             applications/backend/synthesis
-          docker push ${{ secrets.REGISTRY_LOGIN_SERVER }}/synthesis:${{ github.sha }}
+          docker push ${{ secrets.REGISTRY_LOGIN_SERVER }}/synthesis:${{ needs.version-bump.outputs.version }}
         env:
           DOCKER_BUILDKIT: 1
       - name: Update Container App
@@ -60,12 +99,15 @@ jobs:
           az containerapp update \
             --name fabrick-synthesis \
             --resource-group fabrick-prod \
-            --image ${{ secrets.REGISTRY_LOGIN_SERVER }}/synthesis:${{ github.sha }}
+            --image ${{ secrets.REGISTRY_LOGIN_SERVER }}/synthesis:${{ needs.version-bump.outputs.version }}
 
   deploy-console:
+    needs: [version-bump]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -87,9 +129,12 @@ jobs:
           output_location: ""
 
   deploy-landing:
+    needs: [version-bump]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -107,3 +152,19 @@ jobs:
           app_location: applications/landing/dist
           skip_app_build: true
           output_location: ""
+
+  open-pr-to-main:
+    needs: [deploy-api, deploy-synthesis, deploy-console, deploy-landing]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Open PR to main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="${GITHUB_REF#refs/heads/}"
+          gh pr create \
+            --repo "$GITHUB_REPOSITORY" \
+            --base main \
+            --head "$BRANCH" \
+            --title "release: ${BRANCH#release/}" \
+            --body "Automated release PR from \`$BRANCH\`. All deploy jobs passed."

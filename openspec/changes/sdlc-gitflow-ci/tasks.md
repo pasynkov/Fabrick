@@ -1,34 +1,34 @@
 ## 1. Modify ci-unit.yml
 
-- [ ] 1.1 Add `'feature/**'` to `push.branches`
-- [ ] 1.2 Add `open-pr` job: `needs: [test-api, test-cli, test-mcp]`, `if: startsWith(github.ref, 'refs/heads/feature/')`
-- [ ] 1.3 `open-pr` checks for existing PR before creating (idempotent)
+- [x] 1.1 Add `'feature/**'` to `push.branches`
+- [x] 1.2 Add `open-pr` job: `needs: [test-api, test-cli, test-mcp]`, `if: startsWith(github.ref, 'refs/heads/feature/')`
+- [x] 1.3 `open-pr` checks for existing PR before creating (idempotent)
 
 ## 2. Create ci-pr-check.yml
 
-- [ ] 2.1 Trigger: `pull_request` to `develop`, types `[opened, synchronize, reopened]`
-- [ ] 2.2 Single job `pr-check`: `run: exit 0`
+- [x] 2.1 Trigger: `pull_request` to `develop`, types `[opened, synchronize, reopened]`
+- [x] 2.2 Single job `pr-check`: `run: exit 0`
 
 ## 3. Modify ci-e2e.yml
 
-- [ ] 3.1 Add `develop` to `push.branches` alongside `'release/**'`
+- [x] 3.1 Add `develop` to `push.branches` alongside `'release/**'`
 
 ## 4. Rework cd-deploy.yml
 
-- [ ] 4.1 Change trigger from `push: branches: [main]` to `workflow_dispatch`
-- [ ] 4.2 Add `version-bump` job: extract version from branch name (`release/vX.X.X` → `X.X.X`)
-- [ ] 4.3 Bump `package.json` in api, synthesis, console, landing via `npm --prefix <dir> version <ver> --no-git-tag-version`
-- [ ] 4.4 Commit and push bump to release branch with bot identity
-- [ ] 4.5 Add `needs: [version-bump]` to all existing deploy jobs
-- [ ] 4.6 Add `open-pr-to-main` job: `needs: [deploy-api, deploy-synthesis, deploy-console, deploy-landing]`, opens PR `release/* → main`
+- [x] 4.1 Change trigger from `push: branches: [main]` to `workflow_dispatch`
+- [x] 4.2 Add `version-bump` job: extract version from branch name (`release/vX.X.X` → `X.X.X`)
+- [x] 4.3 Bump `package.json` in api, synthesis, console, landing via `npm --prefix <dir> version <ver> --no-git-tag-version`
+- [x] 4.4 Commit and push bump to release branch with bot identity
+- [x] 4.5 Add `needs: [version-bump]` to all existing deploy jobs
+- [x] 4.6 Add `open-pr-to-main` job: `needs: [deploy-api, deploy-synthesis, deploy-console, deploy-landing]`, opens PR `release/* → main`
 
 ## 5. Create cd-release-finalize.yml
 
-- [ ] 5.1 Trigger: `pull_request` to `main`, types `[closed]`
-- [ ] 5.2 Condition: `merged == true && head.ref starts with release/`
-- [ ] 5.3 Extract version from `head.ref`
-- [ ] 5.4 Create and push git tag `vX.X.X`
-- [ ] 5.5 Open PR `main → develop`
+- [x] 5.1 Trigger: `pull_request` to `main`, types `[closed]`
+- [x] 5.2 Condition: `merged == true && head.ref starts with release/`
+- [x] 5.3 Extract version from `head.ref`
+- [x] 5.4 Create and push git tag `vX.X.X`
+- [x] 5.5 Open PR `main → develop`
 
 ## 6. Test
 

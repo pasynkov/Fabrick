@@ -25,7 +25,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
       - run: npm ci --legacy-peer-deps
         working-directory: applications/backend/api
       - run: npm run test:e2e
@@ -65,7 +65,7 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
       - name: Bump package versions
         run: |
           for dir in applications/backend/api applications/backend/synthesis applications/console applications/landing; do
@@ -92,7 +92,7 @@ jobs:
           ref: ${{ github.ref }}
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
       - run: npm ci --legacy-peer-deps
         working-directory: applications/backend/api
       - run: npm run build
@@ -155,7 +155,7 @@ jobs:
           ref: ${{ github.ref }}
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
           cache: npm
           cache-dependency-path: applications/console/package-lock.json
       - run: npm ci

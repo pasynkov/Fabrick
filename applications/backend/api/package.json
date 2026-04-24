@@ -40,7 +40,7 @@
     "@types/bcrypt": "^6.0.0",
     "@types/jest": "^30.0.0",
     "@types/multer": "^1.4.11",
-    "@types/node": "^20.0.0",
+    "@types/node": "^24.0.0",
     "@types/passport-jwt": "^4.0.1",
     "@types/unzipper": "^0.10.9",
     "jest": "^30.3.0",

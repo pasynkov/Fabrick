@@ -30,7 +30,7 @@ resource "azurerm_linux_function_app" "api" {
 
   site_config {
     application_stack {
-      node_version = "20"
+      node_version = "24"
     }
     application_insights_connection_string = azurerm_application_insights.api.connection_string
     # CORS configured post-deploy via az functionapp cors add (provider 4.x bug with cors block)

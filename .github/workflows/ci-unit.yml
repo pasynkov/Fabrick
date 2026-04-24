@@ -47,6 +47,8 @@ jobs:
     needs: [test-api, test-cli, test-mcp]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/heads/feature/')
+    permissions:
+      pull-requests: write
     steps:
       - name: Open PR to develop
         env:

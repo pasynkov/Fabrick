@@ -6,6 +6,8 @@ on:
 jobs:
   version-bump:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     outputs:
       version: ${{ steps.extract.outputs.version }}
     steps:
@@ -156,6 +158,8 @@ jobs:
   open-pr-to-main:
     needs: [deploy-api, deploy-synthesis, deploy-console, deploy-landing]
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
     steps:
       - name: Open PR to main
         env:

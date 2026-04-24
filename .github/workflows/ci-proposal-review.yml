@@ -25,19 +25,24 @@ jobs:
             Use the Skill tool to invoke the "review-proposal" skill
             with args "${{ steps.name.outputs.name }}".
 
-  promote:
+  open-pr:
     needs: [review]
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      pull-requests: write
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Promote to implementation branch
+      - name: Open PR to develop
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           BRANCH="${GITHUB_REF#refs/heads/}"
           NAME="${BRANCH#proposal/}"
-          git checkout -b "implementation/$NAME"
-          git push origin "implementation/$NAME"
-          git push origin --delete "proposal/$NAME"
+          existing=$(gh pr list --repo "$GITHUB_REPOSITORY" --base develop --head "$BRANCH" --json number --jq '.[0].number')
+          if [ -z "$existing" ]; then
+            gh pr create \
+              --repo "$GITHUB_REPOSITORY" \
+              --base develop \
+              --head "$BRANCH" \
+              --title "proposal: $NAME" \
+              --body "AI review passed. Ready to merge into develop."
+          fi

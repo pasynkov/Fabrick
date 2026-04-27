@@ -14,6 +14,6 @@ export class HealthController {
   @Get()
   @HttpCode(200)
   check() {
-    return { status: 'ok', 'app-version': this.version };
+    return { status: 'ok', version: this.version };
   }
 }

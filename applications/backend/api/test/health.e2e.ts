@@ -31,7 +31,7 @@ describe('Health E2E', () => {
     const res = await request(app.getHttpServer()).get('/health');
     expect(res.status).toBe(200);
     expect(res.body.status).toBe('ok');
-    expect(typeof res.body['app-version']).toBe('string');
-    expect(res.body['app-version']).toMatch(/^\d+\.\d+\.\d+/);
+    expect(typeof res.body['version']).toBe('string');
+    expect(res.body['version']).toMatch(/^\d+\.\d+\.\d+/);
   });
 });

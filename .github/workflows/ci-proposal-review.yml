@@ -27,7 +27,7 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           model: claude-haiku-4-5-20251001
-          allowed_tools: "Bash,Read,Glob,LS"
+          allowed_tools: "Bash,Read,Glob,LS,Skill"
           prompt: |
             Use the Skill tool to invoke the "review-proposal" skill
             with args "${{ steps.name.outputs.name }}".

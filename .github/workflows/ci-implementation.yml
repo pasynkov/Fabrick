@@ -1,11 +1,59 @@
-name: CI Implementation Archive
+name: CI Implementation
 
 on:
   push:
     branches: ['implementation/**']
+  workflow_dispatch:
 
 jobs:
+  apply:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+      - name: Extract change name
+        id: name
+        run: |
+          BRANCH="${GITHUB_REF#refs/heads/}"
+          NAME="${BRANCH#implementation/}"
+          echo "name=$NAME" >> $GITHUB_OUTPUT
+      - name: Check if change needs applying
+        id: check
+        run: |
+          if [ -d "openspec/changes/${{ steps.name.outputs.name }}" ]; then
+            echo "needs_apply=true" >> $GITHUB_OUTPUT
+          else
+            echo "needs_apply=false" >> $GITHUB_OUTPUT
+          fi
+      - name: Apply OpenSpec change
+        if: steps.check.outputs.needs_apply == 'true'
+        uses: anthropics/claude-code-base-action@beta
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          model: claude-sonnet-4-6
+          allowed_tools: "Bash,Read,Write,Edit,Glob,Skill"
+          prompt: |
+            Use the Skill tool to invoke the "openspec-apply-change" skill
+            with args "${{ steps.name.outputs.name }}".
+            Important:
+            - Stay on the current branch. Do NOT create or switch branches.
+            - Do NOT run any git commands.
+            - Best effort: implement as many tasks as possible, skip only if truly blocked.
+      - name: Commit implementation
+        if: steps.check.outputs.needs_apply == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --staged --quiet || git commit -m "feat: implement ${{ steps.name.outputs.name }}"
+          git push
+
   archive:
+    needs: [apply]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -34,7 +82,7 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           model: claude-sonnet-4-6
-          allowed_tools: "Bash,Read,Write,Edit,Glob"
+          allowed_tools: "Bash,Read,Write,Edit,Glob,Skill"
           prompt: |
             Use the Skill tool to invoke the "openspec-archive-change" skill
             with args "${{ steps.name.outputs.name }}".

@@ -61,10 +61,13 @@ jobs:
             Issue number: ${{ github.event.issue.number }}
 
             Use the Skill tool to invoke the "openspec-explore" skill.
-            After exploring, post a comment on the issue (using `gh issue comment`) summarizing
-            your analysis and asking clarifying questions. If the proposal seems sufficiently
-            explored and ready for implementation planning, include a suggestion to add the
-            `proposal:ready` label to trigger artifact generation.
+            After exploring, post EXACTLY ONE comment on the issue summarizing your analysis
+            and asking clarifying questions. If the proposal seems sufficiently explored and
+            ready for implementation planning, include a suggestion to add the `proposal:ready`
+            label to trigger artifact generation.
+
+            IMPORTANT: Post the comment exactly once at the very end, after all analysis is complete.
+            Do NOT post intermediate or draft comments. Do NOT post more than one comment.
 
             Post the comment using:
             gh issue comment ${{ github.event.issue.number }} --body "<your comment>"

@@ -1,10 +1,10 @@
-import { defineConfig } from 'vite'
+import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { readFileSync } from 'fs'
 import { resolve } from 'path'
 
-function healthJsonPlugin() {
+function healthJsonPlugin(): Plugin {
   return {
     name: 'health-json',
     generateBundle() {

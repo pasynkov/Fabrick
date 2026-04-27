@@ -42,6 +42,14 @@ resource "azurerm_function_app_flex_consumption" "api" {
 
   site_config {
     application_insights_connection_string = azurerm_application_insights.api.connection_string
+
+    cors {
+      allowed_origins = [
+        "https://calm-sea-02f823503.7.azurestaticapps.net", # todo envs
+        "https://console.fabrick.me", # todo envs
+      ]
+      support_credentials = false
+    }
   }
 
   app_settings = {

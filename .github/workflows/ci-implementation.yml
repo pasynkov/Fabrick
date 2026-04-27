@@ -35,7 +35,7 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           model: claude-sonnet-4-6
-          allowed_tools: "Bash,Read,Write,Edit,Glob"
+          allowed_tools: "Bash,Read,Write,Edit,Glob,Skill"
           prompt: |
             Use the Skill tool to invoke the "openspec-apply-change" skill
             with args "${{ steps.name.outputs.name }}".
@@ -82,7 +82,7 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           model: claude-sonnet-4-6
-          allowed_tools: "Bash,Read,Write,Edit,Glob"
+          allowed_tools: "Bash,Read,Write,Edit,Glob,Skill"
           prompt: |
             Use the Skill tool to invoke the "openspec-archive-change" skill
             with args "${{ steps.name.outputs.name }}".

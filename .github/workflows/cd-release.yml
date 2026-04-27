@@ -202,8 +202,41 @@ jobs:
           skip_app_build: true
           output_location: ""
 
+  validate-versions:
+    needs: [version-bump, deploy-api, deploy-console, deploy-landing]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate deployed versions
+        run: |
+          VERSION="${{ needs.version-bump.outputs.version }}"
+          echo "Expected version: $VERSION"
+
+          check_version() {
+            local app="$1"
+            local url="$2"
+            local field="$3"
+            for attempt in 1 2 3; do
+              actual=$(curl -sf --max-time 10 "$url" | jq -r ".$field" 2>/dev/null || true)
+              if [ "$actual" = "$VERSION" ]; then
+                echo "$app: ok ($actual)"
+                return 0
+              fi
+              echo "$app: attempt $attempt failed (got '$actual', expected '$VERSION')"
+              [ $attempt -lt 3 ] && sleep 10
+            done
+            echo "$app version mismatch (expected $VERSION, got $actual)"
+            return 1
+          }
+
+          failed=0
+          check_version "api"     "https://api.fabrick.me/health"      "app-version" || failed=1
+          check_version "console" "https://console.fabrick.me/health.json" "version" || failed=1
+          check_version "landing" "https://fabrick.me/health.json"         "version" || failed=1
+
+          exit $failed
+
   open-pr-to-main:
-    needs: [deploy-api, deploy-synthesis, deploy-console, deploy-landing]
+    needs: [validate-versions]
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write

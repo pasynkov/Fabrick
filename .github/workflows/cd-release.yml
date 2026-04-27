@@ -216,7 +216,7 @@ jobs:
             local url="$2"
             local field="$3"
             for attempt in 1 2 3; do
-              actual=$(curl -sf --max-time 10 "$url" | jq -r ".$field" 2>/dev/null || true)
+              actual=$(curl -sf --max-time 10 "$url" | jq -r --arg f "$field" '.[$f]' 2>/dev/null || true)
               if [ "$actual" = "$VERSION" ]; then
                 echo "$app: ok ($actual)"
                 return 0

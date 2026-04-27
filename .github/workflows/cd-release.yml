@@ -80,7 +80,7 @@ jobs:
             applications/backend/synthesis/package.json \
             applications/console/package.json \
             applications/landing/package.json
-          git commit -m "chore: bump version to ${{ steps.extract.outputs.version }}"
+          git diff --staged --quiet || git commit -m "chore: bump version to ${{ steps.extract.outputs.version }}"
           git push
 
   deploy-api:

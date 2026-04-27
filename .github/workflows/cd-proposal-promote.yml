@@ -11,6 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -22,3 +23,12 @@ jobs:
           NAME="${NAME#proposal/}"
           git checkout -b "implementation/$NAME"
           git push origin "implementation/$NAME"
+      - name: Trigger implementation
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          NAME="${{ github.event.pull_request.head.ref }}"
+          NAME="${NAME#proposal/}"
+          gh workflow run ci-implementation.yml \
+            --ref "implementation/$NAME" \
+            --repo "$GITHUB_REPOSITORY"

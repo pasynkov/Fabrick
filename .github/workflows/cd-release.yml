@@ -69,7 +69,7 @@ jobs:
       - name: Bump package versions
         run: |
           for dir in applications/backend/api applications/backend/synthesis applications/console applications/landing; do
-            npm --prefix "$dir" version "${{ steps.extract.outputs.version }}" --no-git-tag-version
+            npm --prefix "$dir" version "${{ steps.extract.outputs.version }}" --no-git-tag-version --allow-same-version
           done
       - name: Commit and push
         run: |

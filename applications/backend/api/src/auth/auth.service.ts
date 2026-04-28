@@ -118,7 +118,7 @@ export class AuthService {
 
   private signRefreshJwt(user: User) {
     return this.jwtService.sign(
-      { sub: user.id, email: user.email, type: 'refresh' },
+      { sub: user.id, email: user.email, type: 'refresh', jti: randomBytes(16).toString('hex') },
       { secret: REFRESH_SECRET(), expiresIn: REFRESH_EXPIRY },
     );
   }

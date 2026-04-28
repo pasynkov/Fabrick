@@ -80,11 +80,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     sessionStorage.setItem('token', t);
     sessionStorage.setItem('user', JSON.stringify(u));
     
-    if (persistent) {
-      // Cookie is set by server, just track the type
+    if (persistent && refreshToken) {
+      // Frontend manages cookie — set via document.cookie
+      setRefreshCookie(refreshToken);
       setStorageType('persistent');
     } else {
-      sessionStorage.setItem('refresh_token', refreshToken || '');
       setStorageType('session');
     }
     
@@ -95,13 +95,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Enhanced logout to handle both storage types
   function logout() {
     sessionStorage.removeItem('token');
-    sessionStorage.removeUser('user');
-    sessionStorage.removeItem('refresh_token');
+    sessionStorage.removeItem('user');
+    clearRefreshCookie(); // Frontend clears cookie via document.cookie
     setToken(null);
     setUser(null);
     
-    // Clear cookies by calling logout endpoint
-    api.logout(); // This will clear httpOnly cookies
+    api.logout(); // Notify backend (optional, for server-side session cleanup)
     
     if (intervalRef.current) clearInterval(intervalRef.current);
   }
@@ -115,14 +114,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setRefreshing(true);
     try {
       let result;
-      if (storageType === 'session') {
-        const refreshToken = sessionStorage.getItem('refresh_token');
-        if (!refreshToken) throw new Error('No refresh token');
+      if (storageType === 'persistent') {
+        const refreshToken = getRefreshCookie();
+        if (!refreshToken) throw new Error('No refresh token cookie');
         result = await doRefresh(refreshToken);
-        sessionStorage.setItem('refresh_token', result.refresh_token);
+        setRefreshCookie(result.refresh_token); // Update cookie with rotated token
       } else {
-        // Cookie-based refresh - no refresh token in body
-        result = await doRefresh();
+        throw new Error('No persistent session');
       }
       
       sessionStorage.setItem('token', result.access_token);
@@ -148,16 +146,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
       
-      // Check for persistent cookies by trying to refresh
-      try {
-        setRefreshing(true);
-        const result = await doRefresh(); // Cookie-based refresh
-        setAuth(result.access_token, result.user, undefined, true);
-      } catch {
+      // Check for persistent cookie via document.cookie
+      const refreshToken = getRefreshCookie();
+      if (refreshToken) {
+        try {
+          setRefreshing(true);
+          const result = await doRefresh(refreshToken);
+          setAuth(result.access_token, result.user, result.refresh_token, true);
+        } catch {
+          clearRefreshCookie();
+          logout();
+        } finally {
+          setRefreshing(false);
+        }
+      } else {
         // No valid authentication found
         logout();
-      } finally {
-        setRefreshing(false);
       }
     };
     
@@ -170,15 +174,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 ### Token Refresh Utility Updates
 ```typescript
-// Updated doRefresh to handle optional refresh token
-export async function doRefresh(refreshToken?: string) {
-  const body = refreshToken ? { refresh_token: refreshToken } : {};
-  
+// doRefresh always sends token in body (frontend reads from cookie before calling)
+export async function doRefresh(refreshToken: string) {
   const response = await fetch('/api/auth/refresh', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    credentials: 'include', // Important for cookies
-    body: JSON.stringify(body),
+    body: JSON.stringify({ refresh_token: refreshToken }),
   });
 
   if (!response.ok) {
@@ -216,27 +217,23 @@ export function isTokenExpired(token: string): boolean {
 
 ### API Client Updates
 ```typescript
-// Enhanced API client for logout
+// API client for logout and refresh
 class ApiClient {
   async logout() {
     const response = await fetch('/api/auth/logout', {
       method: 'POST',
-      credentials: 'include', // Include cookies for clearing
     });
     
     // Don't throw on error - logout should always succeed locally
     return response.ok;
   }
   
-  // Updated refresh method
-  async refresh(refreshToken?: string) {
-    const body = refreshToken ? { refresh_token: refreshToken } : {};
-    
+  // Refresh always requires token in body
+  async refresh(refreshToken: string) {
     const response = await fetch('/api/auth/refresh', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify(body),
+      body: JSON.stringify({ refresh_token: refreshToken }),
     });
 
     if (!response.ok) {

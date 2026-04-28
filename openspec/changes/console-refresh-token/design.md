@@ -23,10 +23,10 @@ Current authentication flow:
 ## Decisions
 
 ### Decision 1: Refresh Token Storage Strategy
-**Choice:** Store refresh tokens in dedicated database table with user association and expiration
-**Rationale:** Allows for revocation, rotation, and security auditing. Alternative approaches like JWT refresh tokens can't be revoked server-side.
+**Choice:** Issue refresh tokens as signed JWTs (stateless, no database storage)
+**Rationale:** Real-time revocation across multiple sessions is explicitly out of scope (see Non-Goals). Stateless JWTs eliminate the need for a new database table while still supporting rotation — each `/auth/refresh` call issues a new JWT, making the old one practically obsolete. Separate secret from access tokens prevents cross-type forgery.
 **Alternatives considered:**
-- JWT refresh tokens: Cannot be revoked without complex blacklisting
+- Dedicated DB table: Enables server-side revocation but adds schema migration and cleanup job complexity; revocation is out of scope anyway
 - In-memory storage: Would not survive server restarts
 
 ### Decision 2: Token Rotation on Refresh
@@ -55,5 +55,5 @@ Current authentication flow:
 **Risk: Refresh token compromise** → Mitigation: Short expiration (7 days), rotation on use, secure storage
 **Risk: Race conditions during concurrent refresh attempts** → Mitigation: Single refresh promise pattern, retry logic
 **Risk: Token rotation breaking concurrent requests** → Mitigation: Grace period for old access tokens during rotation window
-**Trade-off: Complexity vs security** → Accepting additional implementation complexity for improved security posture
-**Trade-off: Database load from token storage** → Minimal impact, tokens are lightweight and infrequently accessed
+**Trade-off: Complexity vs security** → Stateless JWTs reduce implementation complexity with acceptable security posture given revocation is out of scope
+**Trade-off: Stolen refresh token window** → If compromised, token lives until 7-day expiry; rotation limits this to single-use window

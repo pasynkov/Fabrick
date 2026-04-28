@@ -17,7 +17,6 @@ const Ctx = createContext<AuthCtx | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const stored = sessionStorage.getItem('token');
   const storedUser = sessionStorage.getItem('user');
-  const storedRefresh = sessionStorage.getItem('refresh_token');
   const [token, setToken] = useState<string | null>(stored);
   const [user, setUser] = useState<AuthUser | null>(storedUser ? JSON.parse(storedUser) : null);
   const [refreshing, setRefreshing] = useState(false);

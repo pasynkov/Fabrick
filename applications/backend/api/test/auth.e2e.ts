@@ -35,10 +35,22 @@ describe('Auth E2E', () => {
   });
 
   describe('POST /auth/register', () => {
-    it('returns 201 with access_token, refresh_token and user', async () => {
+    it('returns 201 with access_token and user (no refresh_token in session mode)', async () => {
       const res = await request(app.getHttpServer())
         .post('/auth/register')
         .send({ email: 'test@example.com', password: 'password123' })
+        .expect(201);
+
+      expect(res.body.access_token).toBeDefined();
+      expect(res.body.refresh_token).toBeUndefined();
+      expect(res.body.user.email).toBe('test@example.com');
+      expect(res.body.user.id).toBeDefined();
+    });
+
+    it('returns 201 with access_token, refresh_token and user when persistent=true', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/auth/register')
+        .send({ email: 'test@example.com', password: 'password123', persistent: true })
         .expect(201);
 
       expect(res.body.access_token).toBeDefined();
@@ -67,7 +79,7 @@ describe('Auth E2E', () => {
   });
 
   describe('POST /auth/login', () => {
-    it('returns 200 with JWT after register', async () => {
+    it('returns 200 with access_token and no refresh_token in session mode', async () => {
       await request(app.getHttpServer())
         .post('/auth/register')
         .send({ email: 'login@example.com', password: 'password123' });
@@ -75,6 +87,20 @@ describe('Auth E2E', () => {
       const res = await request(app.getHttpServer())
         .post('/auth/login')
         .send({ email: 'login@example.com', password: 'password123' })
+        .expect(200);
+
+      expect(res.body.access_token).toBeDefined();
+      expect(res.body.refresh_token).toBeUndefined();
+    });
+
+    it('returns 200 with refresh_token when persistent=true', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/register')
+        .send({ email: 'login-p@example.com', password: 'password123' });
+
+      const res = await request(app.getHttpServer())
+        .post('/auth/login')
+        .send({ email: 'login-p@example.com', password: 'password123', persistent: true })
         .expect(200);
 
       expect(res.body.access_token).toBeDefined();
@@ -104,7 +130,7 @@ describe('Auth E2E', () => {
     it('returns 200 with new access_token and refresh_token on valid refresh token', async () => {
       const reg = await request(app.getHttpServer())
         .post('/auth/register')
-        .send({ email: 'refresh@example.com', password: 'password123' });
+        .send({ email: 'refresh@example.com', password: 'password123', persistent: true });
 
       const res = await request(app.getHttpServer())
         .post('/auth/refresh')
@@ -128,6 +154,16 @@ describe('Auth E2E', () => {
         .post('/auth/refresh')
         .send({})
         .expect(401);
+    });
+  });
+
+  describe('POST /auth/logout', () => {
+    it('returns 200 with success: true', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/auth/logout')
+        .expect(200);
+
+      expect(res.body.success).toBe(true);
     });
   });
 

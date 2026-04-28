@@ -1,4 +1,4 @@
-import { doRefresh, isTokenExpiringSoon } from './tokenRefresh';
+import { clearRefreshCookie, doRefresh, getRefreshCookie, isTokenExpiringSoon, setRefreshCookie } from './tokenRefresh';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
@@ -7,18 +7,24 @@ function getToken(): string | null {
 }
 
 function getRefreshToken(): string | null {
-  return sessionStorage.getItem('refresh_token');
+  return sessionStorage.getItem('refresh_token') || getRefreshCookie();
 }
 
 function storeTokens(accessToken: string, refreshToken: string) {
   sessionStorage.setItem('token', accessToken);
-  sessionStorage.setItem('refresh_token', refreshToken);
+  const hasCookie = !!getRefreshCookie();
+  if (hasCookie) {
+    setRefreshCookie(refreshToken);
+  } else {
+    sessionStorage.setItem('refresh_token', refreshToken);
+  }
 }
 
 function clearAuth() {
   sessionStorage.removeItem('token');
   sessionStorage.removeItem('user');
   sessionStorage.removeItem('refresh_token');
+  clearRefreshCookie();
   window.location.href = '/login';
 }
 
@@ -74,17 +80,20 @@ async function request<T>(path: string, options: RequestInit = {}, retry = true)
 }
 
 export const api = {
-  register: (email: string, password: string) =>
-    request<{ access_token: string; refresh_token: string; user: { id: string; email: string } }>('/auth/register', {
+  register: (email: string, password: string, persistent?: boolean) =>
+    request<{ access_token: string; refresh_token?: string; user: { id: string; email: string } }>('/auth/register', {
       method: 'POST',
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email, password, persistent }),
     }),
 
-  login: (email: string, password: string) =>
-    request<{ access_token: string; refresh_token: string; user: { id: string; email: string } }>('/auth/login', {
+  login: (email: string, password: string, persistent?: boolean) =>
+    request<{ access_token: string; refresh_token?: string; user: { id: string; email: string } }>('/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email, password, persistent }),
     }),
+
+  logout: () =>
+    request<{ success: boolean }>('/auth/logout', { method: 'POST', body: '{}' }),
 
   refresh: (refreshToken: string) =>
     request<{ access_token: string; refresh_token: string }>('/auth/refresh', {

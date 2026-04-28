@@ -33,40 +33,69 @@ jobs:
       - name: Install openspec
         if: steps.check.outputs.exists == 'true'
         run: npm install -g @fission-ai/openspec
+      - name: Build apply prompt
+        if: steps.check.outputs.exists == 'true'
+        run: |
+          NAME="${{ steps.name.outputs.name }}"
+          SKILL=".claude/skills/openspec-apply-change/SKILL.md"
+          # Strip YAML frontmatter (between first and second ---)
+          CONTENT=$(awk 'BEGIN{i=0} /^---$/{i++; next} i>=2{print}' "$SKILL")
+          cat > /tmp/apply-prompt.txt << PROMPT
+          Change name: $NAME
+
+          $CONTENT
+
+          Additional constraints:
+          - Stay on the current branch. Do NOT create or switch branches.
+          - Do NOT run any git commands.
+          - Do NOT modify any files under \`.github/workflows/\` — skip those tasks.
+          - Best effort: implement as many tasks as possible, skip only if truly blocked.
+          PROMPT
       - name: Apply OpenSpec change
         if: steps.check.outputs.exists == 'true'
         uses: anthropics/claude-code-base-action@beta
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           model: claude-sonnet-4-6
-          allowed_tools: "Bash,Read,Write,Edit,Glob,Skill"
+          allowed_tools: "Bash,Read,Write,Edit,Glob"
           timeout_minutes: 30
           settings: |
             {
               "permissions": {
-                "allow": ["Bash(*)", "Read(*)", "Write(*)", "Edit(*)", "Glob(*)", "Skill(*)"],
+                "allow": ["Bash(*)", "Read(*)", "Write(*)", "Edit(*)", "Glob(*)"],
                 "deny": []
               }
             }
-          prompt: |
-            Use the Skill tool to invoke the "openspec-apply-change" skill
-            with args "${{ steps.name.outputs.name }}".
-            Important:
-            - Stay on the current branch. Do NOT create or switch branches.
-            - Do NOT run any git commands.
-            - Do NOT modify any files under `.github/workflows/` — skip those tasks.
-            - Best effort: implement as many tasks as possible, skip only if truly blocked.
+          prompt_file: /tmp/apply-prompt.txt
+      - name: Build archive prompt
+        if: steps.check.outputs.exists == 'true'
+        run: |
+          NAME="${{ steps.name.outputs.name }}"
+          SKILL=".claude/skills/openspec-archive-change/SKILL.md"
+          CONTENT=$(awk 'BEGIN{i=0} /^---$/{i++; next} i>=2{print}' "$SKILL")
+          cat > /tmp/archive-prompt.txt << PROMPT
+          Change name: $NAME
+
+          $CONTENT
+
+          Additional constraints:
+          - Do NOT run any git commands. Only perform the file operations.
+          PROMPT
       - name: Archive OpenSpec change
         if: steps.check.outputs.exists == 'true'
         uses: anthropics/claude-code-base-action@beta
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           model: claude-sonnet-4-6
-          allowed_tools: "Bash,Read,Write,Edit,Glob,Skill"
-          prompt: |
-            Use the Skill tool to invoke the "openspec-archive-change" skill
-            with args "${{ steps.name.outputs.name }}".
-            Do NOT run any git commands. Only perform the file operations.
+          allowed_tools: "Bash,Read,Write,Edit,Glob"
+          settings: |
+            {
+              "permissions": {
+                "allow": ["Bash(*)", "Read(*)", "Write(*)", "Edit(*)", "Glob(*)"],
+                "deny": []
+              }
+            }
+          prompt_file: /tmp/archive-prompt.txt
       - name: Commit
         if: steps.check.outputs.exists == 'true'
         run: |

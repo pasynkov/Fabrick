@@ -62,20 +62,22 @@ jobs:
             3. After artifacts are generated, create and push the branch:
                ```
                CHANGE_NAME=<the-name-you-derived>
-               git checkout -b "proposal/$CHANGE_NAME"
+               ISSUE_NUMBER=${{ github.event.issue.number }}
+               BRANCH_NAME="${ISSUE_NUMBER}-${CHANGE_NAME}"
+               git checkout -b "proposal/$BRANCH_NAME"
                git add openspec/changes/$CHANGE_NAME/
                git commit -m "proposal: $CHANGE_NAME
 
                refs #${{ github.event.issue.number }}"
-               git push origin "proposal/$CHANGE_NAME"
+               git push origin "proposal/$BRANCH_NAME"
                ```
-            4. Write the branch name (just the name after "proposal/", e.g. "my-change") to a file
+            4. Write BRANCH_NAME (issue number + change name, e.g. "30-my-change") to a file
                at /tmp/proposal-branch-name.txt so the next step can trigger the review workflow.
-               Do NOT include "proposal/" prefix in the file — just the change name.
+               Do NOT include "proposal/" prefix in the file.
 
             5. Post a comment on the issue:
                ```
-               gh issue comment ${{ github.event.issue.number }} --body "Proposal branch created: \`proposal/$CHANGE_NAME\`. Review workflow starting."
+               gh issue comment ${{ github.event.issue.number }} --body "Proposal branch created: \`proposal/$BRANCH_NAME\`. Review workflow starting."
                ```
 
       - name: Trigger proposal review

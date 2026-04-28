@@ -12,25 +12,65 @@ on:
 jobs:
   review:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
     steps:
       - uses: actions/checkout@v4
-      - name: Extract change name
-        id: name
+        with:
+          fetch-depth: 0
+
+      - name: Extract change name and issue number
+        id: meta
         run: |
           BRANCH="${GITHUB_REF#refs/heads/}"
-          NAME="${BRANCH#proposal/}"
+          BRANCH_SUFFIX="${BRANCH#proposal/}"
+          # Branch format: proposal/<issue>-<name>
+          ISSUE="${BRANCH_SUFFIX%%-*}"
+          NAME="${BRANCH_SUFFIX#*-}"
           echo "name=$NAME" >> $GITHUB_OUTPUT
+          echo "issue=$ISSUE" >> $GITHUB_OUTPUT
+
       - name: Install openspec
         run: npm install -g @fission-ai/openspec
+
       - name: Review proposal
+        id: review
         uses: anthropics/claude-code-base-action@beta
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          model: claude-haiku-4-5-20251001
-          allowed_tools: "Bash,Read,Glob,LS,Skill"
+          model: claude-sonnet-4-6
+          allowed_tools: "Bash,Read,Write,Edit,Glob,LS,Skill"
           prompt: |
             Use the Skill tool to invoke the "review-proposal" skill
-            with args "${{ steps.name.outputs.name }}".
+            with args "${{ steps.meta.outputs.name }} --issue ${{ steps.meta.outputs.issue }}".
+
+            GITHUB_REPOSITORY is "${{ github.repository }}".
+
+      - name: Commit spec fixes if any
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if ! git diff --quiet; then
+            git add openspec/
+            git commit -m "fix(proposal): align spec with issue #${{ steps.meta.outputs.issue }}"
+            git push
+          fi
+
+      - name: Post review comment on issue
+        if: steps.meta.outputs.issue != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -f /tmp/review-report.md ]; then
+            gh issue comment "${{ steps.meta.outputs.issue }}" \
+              --body "$(cat /tmp/review-report.md)" \
+              --repo "$GITHUB_REPOSITORY"
+          fi
 
   open-pr:
     needs: [review]
@@ -38,12 +78,15 @@ jobs:
     permissions:
       pull-requests: write
     steps:
+      - uses: actions/checkout@v4
+
       - name: Open PR to develop
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           BRANCH="${GITHUB_REF#refs/heads/}"
-          NAME="${BRANCH#proposal/}"
+          BRANCH_SUFFIX="${BRANCH#proposal/}"
+          NAME="${BRANCH_SUFFIX#*-}"
           existing=$(gh pr list --repo "$GITHUB_REPOSITORY" --base develop --head "$BRANCH" --json number --jq '.[0].number')
           if [ -z "$existing" ]; then
             gh pr create \

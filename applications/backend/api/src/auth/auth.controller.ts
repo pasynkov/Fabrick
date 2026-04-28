@@ -10,6 +10,7 @@ import {
 import { AuthService } from './auth.service';
 import { FabrickAuthGuard } from './fabrick-auth.guard';
 import { JwtAuthGuard } from './jwt-auth.guard';
+import { RefreshAuthGuard } from './refresh-auth.guard';
 
 @Controller('auth')
 export class AuthController {
@@ -28,6 +29,20 @@ export class AuthController {
   @HttpCode(200)
   async login(@Body() body: { email: string; password: string }) {
     return this.authService.login(body.email, body.password);
+  }
+
+  @Post('refresh')
+  @HttpCode(200)
+  @UseGuards(RefreshAuthGuard)
+  async refresh(@Body() body: { refresh_token: string }) {
+    return this.authService.refresh(body.refresh_token);
+  }
+
+  @Post('revoke')
+  @HttpCode(200)
+  @UseGuards(JwtAuthGuard)
+  async revoke() {
+    return this.authService.revoke();
   }
 
   @Post('cli-token')

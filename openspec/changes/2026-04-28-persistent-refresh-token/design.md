@@ -27,25 +27,22 @@ Implement a conditional persistent login feature that allows users to choose bet
 
 #### 1. Authentication Endpoints
 - Modify `/auth/login` and `/auth/register` to accept optional `persistent` parameter
-- When `persistent=true`, set refresh token as secure httpOnly cookie
-- When `persistent=false` or omitted, return refresh token in response body (current behavior)
+- When `persistent=true`, return refresh token in response body for frontend to store
+- When `persistent=false` or omitted, do not issue refresh token at all
+- Backend does NOT set cookies — frontend manages all cookie storage
 
-#### 2. Cookie Configuration
-- Set refresh token as httpOnly, secure, sameSite cookie
-- Use appropriate domain and path settings for the application
-- Set cookie expiration to match refresh token expiration (7 days)
-
-#### 3. Token Refresh Endpoint
-- Update `/auth/refresh` to accept refresh tokens from both cookies and request body
-- Priority: Check request body first, then fall back to cookies
-- Return new refresh token using the same method (cookie if original was cookie)
+#### 2. Token Refresh Endpoint
+- `/auth/refresh` accepts refresh token from request body only
+- Returns new access token and new refresh token in response body
+- Frontend is responsible for reading the cookie and sending token in request body
 
 ### Security Considerations
 
-#### httpOnly Cookies
-- Prevents XSS attacks from accessing refresh tokens
-- Automatically included in requests to the same domain
-- Secure flag ensures transmission only over HTTPS in production
+#### Frontend-Managed Cookies
+- Frontend uses `document.cookie` to store/read/clear refresh tokens
+- Cookies set with `Secure` and `SameSite=Strict` flags (but NOT httpOnly, since frontend must read them)
+- `Secure` flag ensures transmission only over HTTPS in production
+- `SameSite=Strict` prevents CSRF by blocking cross-site requests
 
 #### Token Rotation
 - Continue existing refresh token rotation for both storage methods
@@ -61,18 +58,18 @@ Implement a conditional persistent login feature that allows users to choose bet
 1. User checks "Save Login" checkbox and submits login form
 2. Frontend sends login request with `persistent: true` parameter
 3. Backend validates credentials and issues tokens
-4. Backend sets refresh token as httpOnly cookie
-5. Backend returns access token and user data in response body
-6. Frontend stores access token in sessionStorage
+4. Backend returns access token, refresh token, and user data in response body
+5. Frontend stores access token in sessionStorage
+6. Frontend stores refresh token in cookie via `document.cookie` with `Secure; SameSite=Strict`
 7. Frontend updates auth context with user data
 
 ### Application Startup Flow
 1. Check sessionStorage for existing access token and user data
 2. If found and not expired, use current session
-3. If not found or expired, check for refresh token cookie
-4. If refresh token cookie exists, attempt token refresh
-5. If refresh successful, update sessionStorage with new access token
-6. If refresh fails, redirect to login
+3. If not found or expired, check for refresh token cookie via `document.cookie`
+4. If refresh token cookie exists, send it in request body to `/auth/refresh`
+5. If refresh successful, store new access token in sessionStorage, update cookie with new refresh token
+6. If refresh fails or no cookie, redirect to login
 
 ### User Login Flow (Session)
 1. User leaves "Save Login" unchecked (default) and submits login form
@@ -112,14 +109,14 @@ Implement a conditional persistent login feature that allows users to choose bet
 // Response (persistent=true)
 {
   access_token: string;
+  refresh_token: string; // Frontend stores in cookie via document.cookie
   user: { id: string; email: string; };
 }
-// + Set-Cookie: refresh_token=xxx; HttpOnly; Secure; SameSite=Strict
 
 // Response (persistent=false or omitted)
 {
   access_token: string;
-  refresh_token: string;
+  // No refresh_token — session only, no persistence
   user: { id: string; email: string; };
 }
 ```
@@ -129,29 +126,23 @@ Same changes as login endpoint.
 
 ### POST /auth/refresh
 ```typescript
-// Request (body takes priority)
+// Request (always via body — frontend reads cookie and sends token)
 {
-  refresh_token?: string; // Optional, falls back to cookie
+  refresh_token: string;
 }
-
-// Alternative: Cookie-based refresh
-// Cookie: refresh_token=xxx
 
 // Response
 {
   access_token: string;
-  refresh_token?: string; // Only in body if original was in body
+  refresh_token: string; // Frontend updates cookie with new value
 }
-// + Optional Set-Cookie for new refresh token if using cookies
 ```
 
 ## Configuration
 
 ### Environment Variables
-- `REFRESH_TOKEN_SECRET`: Existing refresh token secret
-- `COOKIE_DOMAIN`: Domain for refresh token cookies (default: auto-detect)
-- `COOKIE_SECURE`: Force secure cookies (default: true in production)
+- `REFRESH_TOKEN_SECRET`: Existing refresh token secret (unchanged)
 
 ### Frontend Configuration
 - No additional configuration required
-- Behavior determined by user choice and server response
+- Cookie storage managed entirely by frontend via `document.cookie`

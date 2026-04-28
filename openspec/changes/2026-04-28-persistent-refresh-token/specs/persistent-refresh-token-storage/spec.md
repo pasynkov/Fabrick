@@ -8,16 +8,16 @@ Implements secure httpOnly cookie storage for refresh tokens when users choose p
 
 ### Functional Requirements
 
-#### Cookie-Based Storage
-- Store refresh tokens in httpOnly cookies when `persistent=true`
-- Set appropriate cookie flags: `HttpOnly`, `Secure`, `SameSite=Strict`
-- Use same domain as application for cookie scope
+#### Frontend-Managed Cookie Storage
+- Backend returns refresh token in response body when `persistent=true`
+- Frontend stores refresh token in cookie via `document.cookie` with `Secure; SameSite=Strict` flags
+- Cookie is NOT httpOnly — frontend must be able to read and manage it
 - Set cookie expiration to match refresh token expiration (7 days)
 
 #### Storage Detection
-- Detect existing refresh tokens from cookies on server startup
-- Support reading refresh tokens from both cookies and request body
-- Prioritize request body over cookies for backward compatibility
+- On app startup, frontend reads cookie via `document.cookie`
+- If cookie found, frontend sends token in request body to `/auth/refresh`
+- No cookie reading on the backend
 
 #### Token Rotation
 - Update refresh token cookie during token refresh operations
@@ -27,10 +27,10 @@ Implements secure httpOnly cookie storage for refresh tokens when users choose p
 ### Security Requirements
 
 #### Cookie Security
-- Use `HttpOnly` flag to prevent JavaScript access
-- Use `Secure` flag in production (HTTPS)
+- Use `Secure` flag in production (HTTPS only)
 - Use `SameSite=Strict` to prevent CSRF attacks
-- Set appropriate `Domain` and `Path` attributes
+- Set appropriate `Path` attribute
+- Note: cookies are NOT httpOnly since frontend must read them via `document.cookie`
 
 #### Token Management
 - Implement proper token rotation for cookie-stored tokens
@@ -51,7 +51,7 @@ interface LoginRequest {
 
 interface LoginResponse {
   access_token: string;
-  refresh_token?: string; // Only present when persistent=false
+  refresh_token?: string; // Present only when persistent=true
   user: {
     id: string;
     email: string;
@@ -60,26 +60,25 @@ interface LoginResponse {
 ```
 
 When `persistent=true`:
-- Response omits `refresh_token` field
-- Sets `Set-Cookie` header: `refresh_token={token}; HttpOnly; Secure; SameSite=Strict; Max-Age=604800`
+- Response includes `refresh_token` in body
+- Frontend stores it via `document.cookie` with `Secure; SameSite=Strict; Max-Age=604800; Path=/`
+
+When `persistent=false` or omitted:
+- Response has no `refresh_token`
 
 #### Token Refresh Endpoint
 
 ```typescript
 // POST /auth/refresh
 interface RefreshRequest {
-  refresh_token?: string; // Optional - falls back to cookie
+  refresh_token: string; // Required — frontend reads from cookie and sends in body
 }
 
 interface RefreshResponse {
   access_token: string;
-  refresh_token?: string; // Only present when not using cookies
+  refresh_token: string; // Frontend updates cookie with new value
 }
 ```
-
-Priority for refresh token source:
-1. Request body `refresh_token` field
-2. `refresh_token` cookie
 
 ## Implementation
 
@@ -92,79 +91,60 @@ async login(email: string, password: string, persistent?: boolean) {
   // ... existing validation logic
   
   const access_token = this.signJwt(user);
-  const refresh_token = this.signRefreshJwt(user);
+  const refresh_token = persistent ? this.signRefreshJwt(user) : undefined;
   
   return {
     access_token,
-    refresh_token: persistent ? undefined : refresh_token,
+    refresh_token, // Only present when persistent=true
     user: { id: user.id, email: user.email },
-    // For controller to set cookie
-    refreshTokenForCookie: persistent ? refresh_token : undefined,
   };
 }
 
 async refresh(refreshToken: string) {
   // ... existing refresh logic
-  // Return both tokens for flexible response handling
+  return {
+    access_token: this.signJwt(user),
+    refresh_token: this.signRefreshJwt(user),
+  };
 }
 ```
 
 #### Controller Updates
 ```typescript
-// In auth.controller.ts
+// In auth.controller.ts — no cookie handling needed
 @Post('login')
-async login(
-  @Body() { email, password, persistent }: LoginDto,
-  @Res({ passthrough: true }) response: Response,
-) {
-  const result = await this.authService.login(email, password, persistent);
-  
-  if (result.refreshTokenForCookie) {
-    response.cookie('refresh_token', result.refreshTokenForCookie, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in milliseconds
-    });
-  }
-  
-  return {
-    access_token: result.access_token,
-    refresh_token: result.refresh_token,
-    user: result.user,
-  };
+async login(@Body() { email, password, persistent }: LoginDto) {
+  return this.authService.login(email, password, persistent);
 }
 
 @Post('refresh')
-async refresh(
-  @Body() body: RefreshDto,
-  @Req() request: Request,
-  @Res({ passthrough: true }) response: Response,
-) {
-  const refreshToken = body.refresh_token || request.cookies?.refresh_token;
-  
-  if (!refreshToken) {
+async refresh(@Body() { refresh_token }: RefreshDto) {
+  if (!refresh_token) {
     throw new UnauthorizedException('No refresh token provided');
   }
-  
-  const result = await this.authService.refresh(refreshToken);
-  
-  // If original token was from cookie, update cookie
-  if (!body.refresh_token && request.cookies?.refresh_token) {
-    response.cookie('refresh_token', result.refresh_token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
-    
-    return {
-      access_token: result.access_token,
-      // Don't return refresh_token in body when using cookies
-    };
-  }
-  
-  return result;
+  return this.authService.refresh(refresh_token);
+}
+```
+
+### Frontend Cookie Management
+
+```typescript
+// Cookie utilities for refresh token management
+const REFRESH_COOKIE = 'refresh_token';
+const COOKIE_MAX_AGE = 7 * 24 * 60 * 60; // 7 days in seconds
+
+export function setRefreshCookie(token: string) {
+  const secure = location.protocol === 'https:' ? '; Secure' : '';
+  document.cookie = `${REFRESH_COOKIE}=${token}; SameSite=Strict${secure}; Max-Age=${COOKIE_MAX_AGE}; Path=/`;
+}
+
+export function getRefreshCookie(): string | null {
+  const match = document.cookie.match(new RegExp(`(?:^|; )${REFRESH_COOKIE}=([^;]*)`));
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+export function clearRefreshCookie() {
+  document.cookie = `${REFRESH_COOKIE}=; Max-Age=0; Path=/`;
 }
 ```
 
@@ -224,11 +204,10 @@ COOKIE_SECURE=true
 
 ### Cookie Configuration
 - **Name**: `refresh_token`
-- **HttpOnly**: `true`
+- **HttpOnly**: `false` (frontend must read/write via `document.cookie`)
 - **Secure**: `true` (production), `false` (development)
 - **SameSite**: `Strict`
 - **Max-Age**: `604800` (7 days in seconds)
-- **Domain**: Auto-detect or configured
 - **Path**: `/` (root path)
 
 ## Monitoring

@@ -44,7 +44,7 @@ jobs:
           settings: |
             {
               "permissions": {
-                "allow": ["Bash(*)", "Read(*)", "Write(*)", "Edit(*)", "Glob(*)"],
+                "allow": ["Bash(*)", "Read(*)", "Write(*)", "Edit(*)", "Glob(*)", "Skill(*)"],
                 "deny": []
               }
             }

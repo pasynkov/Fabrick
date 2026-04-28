@@ -16,7 +16,7 @@ export default function Login() {
     setError('');
     try {
       const res = await api.login(email, password);
-      setAuth(res.access_token, res.user);
+      setAuth(res.access_token, res.user, res.refresh_token);
       navigate(params.get('next') || '/');
     } catch (err: any) {
       setError(err.message || 'Login failed');

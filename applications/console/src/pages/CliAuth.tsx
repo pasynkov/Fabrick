@@ -4,7 +4,7 @@ import { api } from '../api';
 import { useAuth } from '../auth';
 
 export default function CliAuth() {
-  const { token } = useAuth();
+  const { token, logout } = useAuth();
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const [status, setStatus] = useState<'pending' | 'done' | 'error'>('pending');
@@ -29,6 +29,11 @@ export default function CliAuth() {
       window.location.href = `http://localhost:${port}/callback?token=${encodeURIComponent(cliToken)}&api_url=${encodeURIComponent(apiUrl)}`;
       setStatus('done');
     }).catch((err) => {
+      if (err.status === 401) {
+        logout();
+        navigate(`/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`);
+        return;
+      }
       setStatus('error');
       setErrorMsg(err.message || 'Failed to issue CLI token');
     });

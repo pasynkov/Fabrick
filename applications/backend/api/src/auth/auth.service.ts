@@ -13,6 +13,9 @@ import { OrgMember } from '../entities/org-member.entity';
 import { Organization } from '../entities/organization.entity';
 import { User } from '../entities/user.entity';
 
+const REFRESH_SECRET = () => process.env.REFRESH_TOKEN_SECRET || 'refresh-secret-change-me';
+const REFRESH_EXPIRY = '7d';
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -43,7 +46,8 @@ export class AuthService {
       this.orgMemberRepo.create({ orgId: org.id, userId: user.id, role: 'admin' }),
     );
     const access_token = this.signJwt(user);
-    return { access_token, user: { id: user.id, email: user.email } };
+    const refresh_token = this.signRefreshJwt(user);
+    return { access_token, refresh_token, user: { id: user.id, email: user.email } };
   }
 
   async login(email: string, password: string) {
@@ -51,7 +55,32 @@ export class AuthService {
     if (!user) throw new UnauthorizedException();
     const valid = await bcrypt.compare(password, user.passwordHash);
     if (!valid) throw new UnauthorizedException();
-    return { access_token: this.signJwt(user), user: { id: user.id, email: user.email } };
+    return {
+      access_token: this.signJwt(user),
+      refresh_token: this.signRefreshJwt(user),
+      user: { id: user.id, email: user.email },
+    };
+  }
+
+  async refresh(refreshToken: string) {
+    let payload: { sub: string; email: string; type: string };
+    try {
+      payload = this.jwtService.verify(refreshToken, { secret: REFRESH_SECRET() });
+    } catch {
+      throw new UnauthorizedException('Invalid or expired refresh token');
+    }
+    if (payload.type !== 'refresh') throw new UnauthorizedException('Invalid token type');
+
+    const user = await this.userRepo.findOne({ where: { id: payload.sub } });
+    if (!user) throw new UnauthorizedException();
+
+    const access_token = this.signJwt(user);
+    const refresh_token = this.signRefreshJwt(user);
+    return { access_token, refresh_token };
+  }
+
+  async revoke() {
+    return {};
   }
 
   async issueCliToken(userId: string) {
@@ -85,6 +114,13 @@ export class AuthService {
 
   private signJwt(user: User) {
     return this.jwtService.sign({ sub: user.id, email: user.email });
+  }
+
+  private signRefreshJwt(user: User) {
+    return this.jwtService.sign(
+      { sub: user.id, email: user.email, type: 'refresh', jti: randomBytes(16).toString('hex') },
+      { secret: REFRESH_SECRET(), expiresIn: REFRESH_EXPIRY },
+    );
   }
 
   private async uniqueSlug(base: string): Promise<string> {

@@ -22,7 +22,7 @@ const mockOrgMemberRepo = () => ({
   save: jest.fn(),
   create: jest.fn((v) => v),
 });
-const mockJwt = () => ({ sign: jest.fn().mockReturnValue('signed-token') });
+const mockJwt = () => ({ sign: jest.fn().mockReturnValue('signed-token'), verify: jest.fn() });
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -66,7 +66,9 @@ describe('AuthService', () => {
       const saved = userRepo.save.mock.calls[0][0];
       expect(saved.passwordHash).toBeDefined();
       expect(await bcrypt.compare('password123', saved.passwordHash)).toBe(true);
-      expect(result).toEqual({ access_token: 'signed-token', user: { id: 'uid1', email: 'a@b.com' } });
+      expect(result.access_token).toBe('signed-token');
+      expect(result.refresh_token).toBe('signed-token');
+      expect(result.user).toEqual({ id: 'uid1', email: 'a@b.com' });
     });
 
     it('throws ConflictException if email already registered', async () => {
@@ -97,6 +99,7 @@ describe('AuthService', () => {
       const result = await service.login('a@b.com', 'pass1234');
 
       expect(result.access_token).toBe('signed-token');
+      expect(result.refresh_token).toBe('signed-token');
       expect(result.user).toEqual({ id: 'uid1', email: 'a@b.com' });
     });
 
@@ -109,6 +112,41 @@ describe('AuthService', () => {
       const passwordHash = await bcrypt.hash('correct', 10);
       userRepo.findOne.mockResolvedValue({ id: 'uid1', email: 'a@b.com', passwordHash });
       await expect(service.login('a@b.com', 'wrong')).rejects.toThrow(UnauthorizedException);
+    });
+  });
+
+  describe('refresh', () => {
+    it('returns new access_token and refresh_token on valid refresh token', async () => {
+      jwtService.verify.mockReturnValue({ sub: 'uid1', email: 'a@b.com', type: 'refresh', iat: 1000 });
+      userRepo.findOne.mockResolvedValue({ id: 'uid1', email: 'a@b.com' });
+
+      const result = await service.refresh('valid-refresh-token');
+
+      expect(result.access_token).toBe('signed-token');
+      expect(result.refresh_token).toBe('signed-token');
+    });
+
+    it('throws UnauthorizedException on invalid refresh token', async () => {
+      jwtService.verify.mockImplementation(() => { throw new Error('invalid'); });
+      await expect(service.refresh('bad-token')).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('throws UnauthorizedException if token type is not refresh', async () => {
+      jwtService.verify.mockReturnValue({ sub: 'uid1', email: 'a@b.com', type: 'access' });
+      await expect(service.refresh('wrong-type-token')).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('throws UnauthorizedException if user not found', async () => {
+      jwtService.verify.mockReturnValue({ sub: 'uid1', email: 'a@b.com', type: 'refresh' });
+      userRepo.findOne.mockResolvedValue(null);
+      await expect(service.refresh('valid-token')).rejects.toThrow(UnauthorizedException);
+    });
+  });
+
+  describe('revoke', () => {
+    it('returns empty object', async () => {
+      const result = await service.revoke();
+      expect(result).toEqual({});
     });
   });
 });

@@ -1,11 +1,52 @@
+import { doRefresh, isTokenExpiringSoon } from './tokenRefresh';
+
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
 function getToken(): string | null {
   return sessionStorage.getItem('token');
 }
 
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const token = getToken();
+function getRefreshToken(): string | null {
+  return sessionStorage.getItem('refresh_token');
+}
+
+function storeTokens(accessToken: string, refreshToken: string) {
+  sessionStorage.setItem('token', accessToken);
+  sessionStorage.setItem('refresh_token', refreshToken);
+}
+
+function clearAuth() {
+  sessionStorage.removeItem('token');
+  sessionStorage.removeItem('user');
+  sessionStorage.removeItem('refresh_token');
+  window.location.href = '/login';
+}
+
+async function tryRefresh(): Promise<string | null> {
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) return null;
+  try {
+    const result = await doRefresh(refreshToken);
+    storeTokens(result.access_token, result.refresh_token);
+    return result.access_token;
+  } catch {
+    return null;
+  }
+}
+
+async function request<T>(path: string, options: RequestInit = {}, retry = true): Promise<T> {
+  let token = getToken();
+
+  if (token && isTokenExpiringSoon(token)) {
+    const refreshed = await tryRefresh();
+    if (refreshed) {
+      token = refreshed;
+    } else {
+      clearAuth();
+      throw Object.assign(new Error('Session expired'), { status: 401 });
+    }
+  }
+
   const res = await fetch(`${API_URL}${path}`, {
     ...options,
     headers: {
@@ -14,6 +55,16 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
       ...(options.headers || {}),
     },
   });
+
+  if (res.status === 401 && retry) {
+    const refreshed = await tryRefresh();
+    if (!refreshed) {
+      clearAuth();
+      throw Object.assign(new Error('Session expired'), { status: 401 });
+    }
+    return request<T>(path, options, false);
+  }
+
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw Object.assign(new Error(body.message || res.statusText), { status: res.status });
@@ -24,16 +75,25 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
 export const api = {
   register: (email: string, password: string) =>
-    request<{ access_token: string; user: { id: string; email: string } }>('/auth/register', {
+    request<{ access_token: string; refresh_token: string; user: { id: string; email: string } }>('/auth/register', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     }),
 
   login: (email: string, password: string) =>
-    request<{ access_token: string; user: { id: string; email: string } }>('/auth/login', {
+    request<{ access_token: string; refresh_token: string; user: { id: string; email: string } }>('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     }),
+
+  refresh: (refreshToken: string) =>
+    request<{ access_token: string; refresh_token: string }>('/auth/refresh', {
+      method: 'POST',
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    }),
+
+  revoke: () =>
+    request<void>('/auth/revoke', { method: 'POST', body: '{}' }),
 
   cliToken: () =>
     request<{ token: string }>('/auth/cli-token', { method: 'POST', body: '{}' }),

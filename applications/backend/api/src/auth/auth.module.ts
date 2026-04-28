@@ -10,6 +10,7 @@ import { AuthService } from './auth.service';
 import { FabrickAuthGuard } from './fabrick-auth.guard';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { JwtStrategy } from './jwt.strategy';
+import { RefreshAuthGuard } from './refresh-auth.guard';
 
 @Module({
   imports: [
@@ -21,7 +22,7 @@ import { JwtStrategy } from './jwt.strategy';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, JwtAuthGuard, FabrickAuthGuard],
-  exports: [JwtAuthGuard, FabrickAuthGuard, TypeOrmModule, JwtModule],
+  providers: [AuthService, JwtStrategy, JwtAuthGuard, FabrickAuthGuard, RefreshAuthGuard],
+  exports: [JwtAuthGuard, FabrickAuthGuard, RefreshAuthGuard, TypeOrmModule, JwtModule],
 })
 export class AuthModule {}

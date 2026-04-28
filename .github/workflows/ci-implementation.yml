@@ -80,6 +80,10 @@ jobs:
 
           Additional constraints:
           - Do NOT run any git commands. Only perform the file operations.
+          - This is a non-interactive CI environment. Do NOT use AskUserQuestion tool.
+          - Skip all interactive confirmations — proceed automatically with archive.
+          - Skip delta spec sync (do NOT sync specs, just archive the change directory).
+          - If tasks or artifacts are incomplete, proceed anyway without prompting.
           PROMPT
       - name: Archive OpenSpec change
         if: steps.check.outputs.exists == 'true'

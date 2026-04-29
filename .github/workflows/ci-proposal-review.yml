@@ -34,6 +34,26 @@ jobs:
       - name: Install openspec
         run: npm install -g @fission-ai/openspec
 
+      - name: Build review-proposal prompt
+        run: |
+          NAME="${{ steps.meta.outputs.name }}"
+          ISSUE="${{ steps.meta.outputs.issue }}"
+          SKILL=".claude/skills/review-proposal/SKILL.md"
+          CONTENT=$(cat "$SKILL")
+          cat > /tmp/review-proposal-prompt.txt << PROMPT
+          Change name: $NAME
+          Issue number: $ISSUE
+          GITHUB_REPOSITORY: ${{ github.repository }}
+
+          $CONTENT
+
+          Additional constraints:
+          - Non-interactive CI environment. Do NOT use AskUserQuestion tool.
+          - Write the full report to /tmp/review-report.md (step 9 of the skill).
+          - Use Edit tool to fix discrepancies in openspec/ files (step 7 of the skill).
+          - Stay on current branch. Do NOT run git commands.
+          PROMPT
+
       - name: Review proposal
         id: review
         uses: anthropics/claude-code-base-action@beta
@@ -42,12 +62,16 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           model: claude-sonnet-4-6
-          allowed_tools: "Bash,Read,Write,Edit,Glob,LS,Skill"
-          prompt: |
-            Use the Skill tool to invoke the "review-proposal" skill
-            with args "${{ steps.meta.outputs.name }} --issue ${{ steps.meta.outputs.issue }}".
-
-            GITHUB_REPOSITORY is "${{ github.repository }}".
+          allowed_tools: "Bash,Read,Write,Edit,Glob,LS"
+          timeout_minutes: 15
+          settings: |
+            {
+              "permissions": {
+                "allow": ["Bash(*)", "Read(*)", "Write(*)", "Edit(*)", "Glob(*)"],
+                "deny": []
+              }
+            }
+          prompt_file: /tmp/review-proposal-prompt.txt
 
       - name: Commit spec fixes if any
         env:
@@ -55,8 +79,8 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          if ! git diff --quiet; then
-            git add openspec/
+          git add openspec/
+          if ! git diff --staged --quiet; then
             git commit -m "fix(proposal): align spec with issue #${{ steps.meta.outputs.issue }}"
             git push
           fi

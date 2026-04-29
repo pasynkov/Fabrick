@@ -1,34 +1,27 @@
 ## ADDED Requirements
 
-### Requirement: Files must use kebab-case naming
-All files and directories SHALL use kebab-case naming convention for consistency and readability.
+### Requirement: Org admins can update project name
+Organization admins SHALL be able to update the name of a project within their org.
 
-#### Scenario: File creation follows naming standard
-- **WHEN** a developer creates a new file or directory
-- **THEN** the name SHALL use kebab-case format (lowercase words separated by hyphens)
+#### Scenario: Admin updates project name
+- **GIVEN** the user is an org admin
+- **WHEN** they send `PATCH /orgs/:orgId/projects/:projectId` with a valid name
+- **THEN** the project name SHALL be updated and the change SHALL be logged
 
-#### Scenario: Existing files are renamed to standard
-- **WHEN** updating project structure
-- **THEN** existing files with non-standard names SHALL be renamed to kebab-case
+#### Scenario: Non-admin cannot update project name
+- **GIVEN** the user is not an org admin
+- **WHEN** they send `PATCH /orgs/:orgId/projects/:projectId`
+- **THEN** the response SHALL be 403 Forbidden
 
-### Requirement: Component names must be consistent
-Component names SHALL follow established patterns based on their type and function.
+#### Scenario: Project slug is not changed on rename
+- **GIVEN** a project with an existing slug
+- **WHEN** the name is changed
+- **THEN** the slug SHALL remain unchanged
 
-#### Scenario: Component files follow naming pattern
-- **WHEN** creating component files
-- **THEN** file names SHALL match the component name in kebab-case format
+#### Scenario: Project name must not exceed 128 characters
+- **WHEN** a name longer than 128 characters is submitted
+- **THEN** the response SHALL be 400 Bad Request with a validation error
 
-#### Scenario: Test files follow naming pattern
-- **WHEN** creating test files
-- **THEN** test file names SHALL append appropriate suffix (.test.js, .spec.js) to component name
-
-### Requirement: Configuration files must use standard names
-Configuration files SHALL use standardized names that clearly indicate their purpose.
-
-#### Scenario: Build configuration files
-- **WHEN** updating build configuration
-- **THEN** files SHALL use descriptive kebab-case names (e.g., webpack-config.js, build-scripts.js)
-
-#### Scenario: Environment configuration files
-- **WHEN** managing environment settings
-- **THEN** files SHALL use clear naming (e.g., env-config.js, environment-variables.js)
+#### Scenario: Project name must not be empty
+- **WHEN** an empty name is submitted
+- **THEN** the response SHALL be 400 Bad Request with a validation error

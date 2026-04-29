@@ -1,29 +1,20 @@
 ## Why
 
-The current project naming and organization structure needs updating to improve clarity, consistency, and maintainability across the codebase. This change addresses inconsistencies in naming conventions and organizational patterns that can cause confusion for developers and reduce development velocity.
+Organizations and projects can be created but not renamed after creation. Admins need the ability to update names as requirements evolve.
 
 ## What Changes
 
-- Standardize project naming conventions across all components
-- Update organizational structure to follow established patterns
-- Rename files, directories, and references to align with new naming scheme
-- Update configuration files and build scripts to reflect new organization
-- Modify documentation to reflect updated naming and structure
+- Add `PATCH /orgs/:orgId` endpoint to update organization name (admin-only)
+- Add `PATCH /orgs/:orgId/projects/:projectId` endpoint to update project name (admin-only)
+- Add edit UI in console — separate route for editing org/project names
+- Log name changes
 
 ## Capabilities
 
 ### New Capabilities
-- `project-naming-standards`: Establish and enforce consistent naming conventions across the project
-- `organizational-structure`: Define clear organizational patterns for files, directories, and components
+- `org-name-update`: API endpoint and UI for renaming an organization
+- `project-name-update`: API endpoint and UI for renaming a project within an org
 
 ### Modified Capabilities
-<!-- No existing capabilities require requirement changes for this organizational update -->
-
-## Impact
-
-- Configuration files (package.json, build configs, etc.)
-- Directory structure and file organization
-- Import/export statements and module references
-- Documentation and README files
-- CI/CD pipeline configurations
-- Development tooling and scripts
+- `org-management`: Extended with PATCH endpoint and admin guard
+- `project-repo-management`: Extended with PATCH endpoint and admin guard

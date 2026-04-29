@@ -11,6 +11,14 @@ jobs:
     timeout-minutes: 40
     permissions:
       contents: write
+    env:
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_USER: fabrick
+      DB_PASS: ${{ secrets.DB_PASS }}
+      DB_TEST_NAME: fabrick_test
+      DB_SSL: 'false'
+      JWT_SECRET: ${{ secrets.JWT_SECRET }}
     services:
       postgres:
         image: postgres:16
@@ -75,6 +83,8 @@ jobs:
           - Do NOT run any git commands.
           - Do NOT modify any files under \`.github/workflows/\` — skip those tasks.
           - Best effort: implement as many tasks as possible, skip only if truly blocked.
+          - After implementation, run: cd applications/backend/api && npm run test:e2e
+          - If tests fail, fix the code (including test files if needed) until all tests pass.
           PROMPT
       - name: Apply OpenSpec change
         if: steps.check.outputs.exists == 'true'
@@ -92,18 +102,6 @@ jobs:
               }
             }
           prompt_file: /tmp/apply-prompt.txt
-      - name: E2E tests (after apply)
-        if: steps.check.outputs.exists == 'true'
-        run: npm run test:e2e
-        working-directory: applications/backend/api
-        env:
-          DB_HOST: localhost
-          DB_PORT: 5432
-          DB_USER: fabrick
-          DB_PASS: ${{ secrets.DB_PASS }}
-          DB_TEST_NAME: fabrick_test
-          DB_SSL: 'false'
-          JWT_SECRET: ${{ secrets.JWT_SECRET }}
       - name: Commit apply
         if: steps.check.outputs.exists == 'true'
         run: |
@@ -124,6 +122,8 @@ jobs:
           - Do NOT modify any files under .github/workflows/
           - Do NOT modify test files (*.spec.ts, *.test.ts, *.e2e.ts, **/test/**)
           - Stay on current branch. Do NOT run git commands.
+          - After simplifying, run: cd applications/backend/api && npm run test:e2e
+          - If tests fail, fix implementation code only. Do NOT modify test files.
           PROMPT
       - name: Simplify changed files
         if: steps.check.outputs.exists == 'true'
@@ -141,18 +141,6 @@ jobs:
               }
             }
           prompt_file: /tmp/simplify-prompt.txt
-      - name: E2E tests (after simplify)
-        if: steps.check.outputs.exists == 'true'
-        run: npm run test:e2e
-        working-directory: applications/backend/api
-        env:
-          DB_HOST: localhost
-          DB_PORT: 5432
-          DB_USER: fabrick
-          DB_PASS: ${{ secrets.DB_PASS }}
-          DB_TEST_NAME: fabrick_test
-          DB_SSL: 'false'
-          JWT_SECRET: ${{ secrets.JWT_SECRET }}
       - name: Commit simplify
         if: steps.check.outputs.exists == 'true'
         run: |
@@ -201,6 +189,8 @@ jobs:
           - Do NOT modify any files under .github/workflows/
           - Do NOT modify test files (*.spec.ts, *.test.ts, *.e2e.ts, **/test/**)
           - Stay on current branch. Do NOT run git commands.
+          - After applying fixes, run: cd applications/backend/api && npm run test:e2e
+          - If tests fail, fix implementation code only. Do NOT modify test files.
           PROMPT
       - name: Apply review fixes
         if: steps.check.outputs.exists == 'true'
@@ -218,18 +208,6 @@ jobs:
               }
             }
           prompt_file: /tmp/review-fix-prompt.txt
-      - name: E2E tests (after review-fix)
-        if: steps.check.outputs.exists == 'true'
-        run: npm run test:e2e
-        working-directory: applications/backend/api
-        env:
-          DB_HOST: localhost
-          DB_PORT: 5432
-          DB_USER: fabrick
-          DB_PASS: ${{ secrets.DB_PASS }}
-          DB_TEST_NAME: fabrick_test
-          DB_SSL: 'false'
-          JWT_SECRET: ${{ secrets.JWT_SECRET }}
       - name: Commit review-fix
         if: steps.check.outputs.exists == 'true'
         run: |

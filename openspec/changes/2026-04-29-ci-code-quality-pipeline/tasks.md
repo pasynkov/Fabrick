@@ -17,7 +17,7 @@
   - If no issues: write "No issues found" and exit
   - Never modify source files — output only
 
-- [ ] Create `.claude/skills/review-fix/SKILL.md`
+- [x] Create `.claude/skills/review-fix/SKILL.md`
   - Read `/tmp/review-output.md`; exit immediately if "No issues found"
   - For each issue: locate file+line, verify still present, apply minimal surgical fix
   - Skip test files; skip if fix is ambiguous

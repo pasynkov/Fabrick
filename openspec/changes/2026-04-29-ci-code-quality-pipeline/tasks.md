@@ -2,7 +2,7 @@
 
 ## Skills
 
-- [ ] Create `.claude/skills/simplify/SKILL.md`
+- [x] Create `.claude/skills/simplify/SKILL.md`
   - Prompt-file skill (no frontmatter model, runs as main agent in CI)
   - Get changed files: `git diff --name-only HEAD`, filter test/config/openspec files
   - Apply DRY: extract duplicated logic (3+ uses), remove copy-paste patterns

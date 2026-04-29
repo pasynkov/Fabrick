@@ -10,7 +10,7 @@
   - Follow CLAUDE.md guidelines; never change exports/interfaces
   - Base on `claude-plugins-official/code-simplifier` agent content (already at `~/.claude/plugins/marketplaces/claude-plugins-official/plugins/code-simplifier/agents/code-simplifier.md`)
 
-- [ ] Create `.claude/skills/review/SKILL.md`
+- [x] Create `.claude/skills/review/SKILL.md`
   - Get changed files: `git diff --name-only HEAD`, filter test/config/openspec files
   - Check each file for: bugs, dead code (from this diff), security issues, bottlenecks (N+1, sync blocks)
   - Write findings to `/tmp/review-output.md` in structured format (see design.md)

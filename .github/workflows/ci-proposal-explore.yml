@@ -46,8 +46,6 @@ jobs:
 
       - name: Run explore dialogue
         uses: anthropics/claude-code-base-action@beta
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           model: claude-haiku-4-5-20251001
@@ -61,13 +59,28 @@ jobs:
             Issue number: ${{ github.event.issue.number }}
 
             Use the Skill tool to invoke the "openspec-explore" skill.
-            After exploring, post EXACTLY ONE comment on the issue summarizing your analysis
-            and asking clarifying questions. If the proposal seems sufficiently explored and
-            ready for implementation planning, include a suggestion to add the `proposal:ready`
-            label to trigger artifact generation.
+            After exploring, write your analysis summary and clarifying questions to a file:
 
-            IMPORTANT: Post the comment exactly once at the very end, after all analysis is complete.
-            Do NOT post intermediate or draft comments. Do NOT post more than one comment.
+            ```
+            cat > /tmp/explore-comment.md << 'COMMENT_EOF'
+            <your comment here>
+            COMMENT_EOF
+            ```
 
-            Post the comment using:
-            gh issue comment ${{ github.event.issue.number }} --body "<your comment>"
+            If the proposal seems sufficiently explored and ready for implementation planning,
+            include a suggestion to add the `proposal:ready` label in the comment.
+
+            IMPORTANT: Write to /tmp/explore-comment.md EXACTLY ONCE at the very end.
+            Do NOT post any GitHub comments yourself. Do NOT call gh issue comment.
+
+      - name: Post explore comment
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -f /tmp/explore-comment.md ]; then
+            gh issue comment ${{ github.event.issue.number }} \
+              --body-file /tmp/explore-comment.md \
+              --repo "$GITHUB_REPOSITORY"
+          else
+            echo "No comment file found, skipping"
+          fi

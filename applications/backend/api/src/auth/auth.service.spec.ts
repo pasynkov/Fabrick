@@ -50,7 +50,7 @@ describe('AuthService', () => {
   });
 
   describe('register', () => {
-    it('hashes password and saves user', async () => {
+    it('hashes password and saves user (session mode, no refresh_token)', async () => {
       userRepo.findOne.mockResolvedValue(null);
       const savedUser = { id: 'uid1', email: 'a@b.com' };
       userRepo.save.mockResolvedValue(savedUser);
@@ -67,8 +67,33 @@ describe('AuthService', () => {
       expect(saved.passwordHash).toBeDefined();
       expect(await bcrypt.compare('password123', saved.passwordHash)).toBe(true);
       expect(result.access_token).toBe('signed-token');
-      expect(result.refresh_token).toBe('signed-token');
+      expect(result.refresh_token).toBeUndefined();
       expect(result.user).toEqual({ id: 'uid1', email: 'a@b.com' });
+    });
+
+    it('returns refresh_token when persistent=true', async () => {
+      userRepo.findOne.mockResolvedValue(null);
+      userRepo.save.mockResolvedValue({ id: 'uid1', email: 'a@b.com' });
+      orgRepo.findOne.mockResolvedValue(null);
+      orgRepo.save.mockResolvedValue({ id: 'org1', slug: 'a' });
+      orgMemberRepo.save.mockResolvedValue({});
+
+      const result = await service.register('a@b.com', 'password123', true);
+
+      expect(result.access_token).toBe('signed-token');
+      expect(result.refresh_token).toBe('signed-token');
+    });
+
+    it('does not return refresh_token when persistent=false', async () => {
+      userRepo.findOne.mockResolvedValue(null);
+      userRepo.save.mockResolvedValue({ id: 'uid1', email: 'a@b.com' });
+      orgRepo.findOne.mockResolvedValue(null);
+      orgRepo.save.mockResolvedValue({ id: 'org1', slug: 'a' });
+      orgMemberRepo.save.mockResolvedValue({});
+
+      const result = await service.register('a@b.com', 'password123', false);
+
+      expect(result.refresh_token).toBeUndefined();
     });
 
     it('throws ConflictException if email already registered', async () => {
@@ -92,15 +117,35 @@ describe('AuthService', () => {
   });
 
   describe('login', () => {
-    it('returns JWT on valid credentials', async () => {
+    it('returns access_token without refresh_token in session mode', async () => {
       const passwordHash = await bcrypt.hash('pass1234', 10);
       userRepo.findOne.mockResolvedValue({ id: 'uid1', email: 'a@b.com', passwordHash });
 
       const result = await service.login('a@b.com', 'pass1234');
 
       expect(result.access_token).toBe('signed-token');
+      expect(result.refresh_token).toBeUndefined();
+      expect(result.user).toEqual({ id: 'uid1', email: 'a@b.com' });
+    });
+
+    it('returns refresh_token when persistent=true', async () => {
+      const passwordHash = await bcrypt.hash('pass1234', 10);
+      userRepo.findOne.mockResolvedValue({ id: 'uid1', email: 'a@b.com', passwordHash });
+
+      const result = await service.login('a@b.com', 'pass1234', true);
+
+      expect(result.access_token).toBe('signed-token');
       expect(result.refresh_token).toBe('signed-token');
       expect(result.user).toEqual({ id: 'uid1', email: 'a@b.com' });
+    });
+
+    it('does not return refresh_token when persistent=false', async () => {
+      const passwordHash = await bcrypt.hash('pass1234', 10);
+      userRepo.findOne.mockResolvedValue({ id: 'uid1', email: 'a@b.com', passwordHash });
+
+      const result = await service.login('a@b.com', 'pass1234', false);
+
+      expect(result.refresh_token).toBeUndefined();
     });
 
     it('throws UnauthorizedException on unknown email', async () => {
@@ -140,6 +185,13 @@ describe('AuthService', () => {
       jwtService.verify.mockReturnValue({ sub: 'uid1', email: 'a@b.com', type: 'refresh' });
       userRepo.findOne.mockResolvedValue(null);
       await expect(service.refresh('valid-token')).rejects.toThrow(UnauthorizedException);
+    });
+  });
+
+  describe('logout', () => {
+    it('returns success: true', async () => {
+      const result = await service.logout();
+      expect(result).toEqual({ success: true });
     });
   });
 

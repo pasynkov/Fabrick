@@ -41,7 +41,6 @@ jobs:
         uses: anthropics/claude-code-base-action@beta
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           model: claude-haiku-4-5-20251001
@@ -59,36 +58,39 @@ jobs:
                reflects the final agreed scope (not just a slug of the title).
             2. Use the Skill tool to invoke the "openspec-propose" skill with that name as the argument.
                This will generate proposal.md, design.md, specs/, and tasks.md artifacts.
-            3. After artifacts are generated, create and push the branch:
-               ```
-               CHANGE_NAME=<the-name-you-derived>
-               git checkout -b "proposal/$CHANGE_NAME"
-               git add openspec/changes/$CHANGE_NAME/
-               git commit -m "proposal: $CHANGE_NAME
+            3. Write ONLY the change name (e.g. "persistent-refresh-token") to /tmp/change-name.txt.
+               Do NOT include the issue number or "proposal/" prefix.
 
-               refs #${{ github.event.issue.number }}"
-               git push origin "proposal/$CHANGE_NAME"
-               ```
-            4. Write the branch name (just the name after "proposal/", e.g. "my-change") to a file
-               at /tmp/proposal-branch-name.txt so the next step can trigger the review workflow.
-               Do NOT include "proposal/" prefix in the file — just the change name.
-
-            5. Post a comment on the issue:
-               ```
-               gh issue comment ${{ github.event.issue.number }} --body "Proposal branch created: \`proposal/$CHANGE_NAME\`. Review workflow starting."
-               ```
-
-      - name: Trigger proposal review
-        if: always()
+      - name: Commit and push proposal branch
+        id: push
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if [ -f /tmp/proposal-branch-name.txt ]; then
-            CHANGE_NAME=$(cat /tmp/proposal-branch-name.txt | tr -d '[:space:]')
-            gh workflow run ci-proposal-review.yml \
-              --ref "proposal/$CHANGE_NAME" \
-              --field "branch=proposal/$CHANGE_NAME" \
-              --repo "$GITHUB_REPOSITORY"
-          else
-            echo "No branch name file found, skipping review trigger"
-          fi
+          CHANGE_NAME=$(cat /tmp/change-name.txt | tr -d '[:space:]')
+          ISSUE_NUMBER="${{ github.event.issue.number }}"
+          BRANCH_NAME="${ISSUE_NUMBER}-${CHANGE_NAME}"
+          git checkout -b "proposal/${BRANCH_NAME}"
+          git add openspec/changes/${CHANGE_NAME}/
+          git commit -m "proposal: ${CHANGE_NAME}
+
+          refs #${ISSUE_NUMBER}"
+          git push origin "proposal/${BRANCH_NAME}"
+          echo "branch_name=${BRANCH_NAME}" >> $GITHUB_OUTPUT
+          echo "change_name=${CHANGE_NAME}" >> $GITHUB_OUTPUT
+
+      - name: Post branch created comment
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue comment ${{ github.event.issue.number }} \
+            --body "Proposal branch created: \`proposal/${{ steps.push.outputs.branch_name }}\`. Review workflow starting." \
+            --repo "$GITHUB_REPOSITORY"
+
+      - name: Trigger proposal review
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh workflow run ci-proposal-review.yml \
+            --ref "proposal/${{ steps.push.outputs.branch_name }}" \
+            --field "branch=proposal/${{ steps.push.outputs.branch_name }}" \
+            --repo "$GITHUB_REPOSITORY"

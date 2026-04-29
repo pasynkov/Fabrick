@@ -28,7 +28,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
   ) {}
 
-  async register(email: string, password: string) {
+  async register(email: string, password: string, persistent?: boolean) {
     const existing = await this.userRepo.findOne({ where: { email } });
     if (existing) throw new ConflictException('Email already registered');
 
@@ -46,20 +46,25 @@ export class AuthService {
       this.orgMemberRepo.create({ orgId: org.id, userId: user.id, role: 'admin' }),
     );
     const access_token = this.signJwt(user);
-    const refresh_token = this.signRefreshJwt(user);
+    const refresh_token = persistent ? this.signRefreshJwt(user) : undefined;
     return { access_token, refresh_token, user: { id: user.id, email: user.email } };
   }
 
-  async login(email: string, password: string) {
+  async login(email: string, password: string, persistent?: boolean) {
     const user = await this.userRepo.findOne({ where: { email } });
     if (!user) throw new UnauthorizedException();
     const valid = await bcrypt.compare(password, user.passwordHash);
     if (!valid) throw new UnauthorizedException();
+    const refresh_token = persistent ? this.signRefreshJwt(user) : undefined;
     return {
       access_token: this.signJwt(user),
-      refresh_token: this.signRefreshJwt(user),
+      refresh_token,
       user: { id: user.id, email: user.email },
     };
+  }
+
+  async logout() {
+    return { success: true };
   }
 
   async refresh(refreshToken: string) {

@@ -10,6 +10,7 @@ const mockAuthService = () => ({
   register: jest.fn(),
   login: jest.fn(),
   refresh: jest.fn(),
+  logout: jest.fn(),
   revoke: jest.fn(),
   issueCliToken: jest.fn(),
   issueMcpToken: jest.fn(),
@@ -41,7 +42,17 @@ describe('AuthController', () => {
 
       const result = await controller.register({ email: 'a@b.com', password: 'password1' });
 
-      expect(authService.register).toHaveBeenCalledWith('a@b.com', 'password1');
+      expect(authService.register).toHaveBeenCalledWith('a@b.com', 'password1', undefined);
+      expect(result).toBe(expected);
+    });
+
+    it('passes persistent=true to authService.register', async () => {
+      const expected = { access_token: 'tok', refresh_token: 'ref', user: { id: '1', email: 'a@b.com' } };
+      authService.register.mockResolvedValue(expected);
+
+      const result = await controller.register({ email: 'a@b.com', password: 'password1', persistent: true });
+
+      expect(authService.register).toHaveBeenCalledWith('a@b.com', 'password1', true);
       expect(result).toBe(expected);
     });
 
@@ -61,7 +72,17 @@ describe('AuthController', () => {
 
       const result = await controller.login({ email: 'a@b.com', password: 'password1' });
 
-      expect(authService.login).toHaveBeenCalledWith('a@b.com', 'password1');
+      expect(authService.login).toHaveBeenCalledWith('a@b.com', 'password1', undefined);
+      expect(result).toBe(expected);
+    });
+
+    it('passes persistent=true to authService.login', async () => {
+      const expected = { access_token: 'tok', refresh_token: 'ref', user: { id: '1', email: 'a@b.com' } };
+      authService.login.mockResolvedValue(expected);
+
+      const result = await controller.login({ email: 'a@b.com', password: 'password1', persistent: true });
+
+      expect(authService.login).toHaveBeenCalledWith('a@b.com', 'password1', true);
       expect(result).toBe(expected);
     });
   });
@@ -75,6 +96,17 @@ describe('AuthController', () => {
 
       expect(authService.refresh).toHaveBeenCalledWith('old-refresh');
       expect(result).toBe(expected);
+    });
+  });
+
+  describe('logout', () => {
+    it('delegates to authService.logout and returns result', async () => {
+      authService.logout.mockResolvedValue({ success: true });
+
+      const result = await controller.logout();
+
+      expect(authService.logout).toHaveBeenCalled();
+      expect(result).toEqual({ success: true });
     });
   });
 

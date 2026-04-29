@@ -9,14 +9,22 @@ export default function Login() {
   const [params] = useSearchParams();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [persistent, setPersistent] = useState(
+    () => localStorage.getItem('saveLogin') === 'true',
+  );
   const [error, setError] = useState('');
+
+  function handlePersistentChange(e: React.ChangeEvent<HTMLInputElement>) {
+    setPersistent(e.target.checked);
+    localStorage.setItem('saveLogin', String(e.target.checked));
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
     try {
-      const res = await api.login(email, password);
-      setAuth(res.access_token, res.user, res.refresh_token);
+      const res = await api.login(email, password, persistent);
+      setAuth(res.access_token, res.user, res.refresh_token, persistent);
       navigate(params.get('next') || '/');
     } catch (err: any) {
       setError(err.message || 'Login failed');
@@ -45,6 +53,19 @@ export default function Login() {
             required
             className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
           />
+          <div className="flex items-center">
+            <input
+              type="checkbox"
+              id="persistent-login"
+              checked={persistent}
+              onChange={handlePersistentChange}
+              className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
+            />
+            <label htmlFor="persistent-login" className="ml-2 block text-sm text-gray-700">
+              Save Login
+            </label>
+          </div>
+          <p className="text-xs text-gray-500">Stay signed in across browser sessions</p>
           <button
             type="submit"
             className="w-full bg-purple-600 text-white rounded py-2 text-sm font-medium hover:bg-purple-700"

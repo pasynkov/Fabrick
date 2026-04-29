@@ -1,6 +1,23 @@
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 const REFRESH_THRESHOLD_MS = 5 * 60 * 1000;
 
+const REFRESH_COOKIE_NAME = 'refresh_token';
+const REFRESH_COOKIE_MAX_AGE = 7 * 24 * 60 * 60;
+
+export function setRefreshCookie(token: string) {
+  const secure = location.protocol === 'https:' ? '; Secure' : '';
+  document.cookie = `${REFRESH_COOKIE_NAME}=${encodeURIComponent(token)}; SameSite=Strict${secure}; Max-Age=${REFRESH_COOKIE_MAX_AGE}; Path=/`;
+}
+
+export function getRefreshCookie(): string | null {
+  const match = document.cookie.match(new RegExp(`(?:^|; )${REFRESH_COOKIE_NAME}=([^;]*)`));
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+export function clearRefreshCookie() {
+  document.cookie = `${REFRESH_COOKIE_NAME}=; Max-Age=0; Path=/`;
+}
+
 let refreshPromise: Promise<{ access_token: string; refresh_token: string }> | null = null;
 
 function getTokenExpiry(token: string): number | null {

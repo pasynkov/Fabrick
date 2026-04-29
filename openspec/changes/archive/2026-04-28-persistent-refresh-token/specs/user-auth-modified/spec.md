@@ -16,48 +16,44 @@ This specification modifies the existing `user-auth` capability to:
 ## Updated Requirements
 
 ### Requirement: Enhanced user registration with persistent option
-The system SHALL expose `POST /auth/register` accepting `{ email, password, persistent? }`. When `persistent=true`, it SHALL set the refresh token as an httpOnly cookie instead of returning it in the response body.
+The system SHALL expose `POST /auth/register` accepting `{ email, password, persistent? }`. When `persistent=true`, it SHALL return the refresh token in the response body for the frontend to store. When `persistent=false` or omitted, no refresh token is issued. The backend does NOT set any cookies.
 
 #### Scenario: Successful registration with persistent login
 - **WHEN** a client sends `POST /auth/register` with `persistent: true`
-- **THEN** the system returns `{ access_token, user: { id, email } }` and sets `Set-Cookie: refresh_token=...; HttpOnly; Secure; SameSite=Strict`
+- **THEN** the system returns `{ access_token, refresh_token, user: { id, email } }`
 
 #### Scenario: Successful registration with session login
 - **WHEN** a client sends `POST /auth/register` with `persistent: false` or omitted
-- **THEN** the system returns `{ access_token, refresh_token, user: { id, email } }` (current behavior)
+- **THEN** the system returns `{ access_token, user: { id, email } }` with no refresh token
 
 ### Requirement: Enhanced user login with persistent option
-The system SHALL expose `POST /auth/login` accepting `{ email, password, persistent? }`. When `persistent=true`, it SHALL set the refresh token as an httpOnly cookie instead of returning it in the response body.
+The system SHALL expose `POST /auth/login` accepting `{ email, password, persistent? }`. When `persistent=true`, it SHALL return the refresh token in the response body. When `persistent=false` or omitted, no refresh token is issued. The backend does NOT set any cookies.
 
 #### Scenario: Successful login with persistent option
 - **WHEN** a client sends `POST /auth/login` with `persistent: true` and correct credentials
-- **THEN** the system returns `{ access_token, user: { id, email } }` and sets secure httpOnly cookie
+- **THEN** the system returns `{ access_token, refresh_token, user: { id, email } }`
 
 #### Scenario: Successful login without persistent option
 - **WHEN** a client sends `POST /auth/login` with correct credentials and no persistent flag
-- **THEN** the system returns `{ access_token, refresh_token, user: { id, email } }` (current behavior)
+- **THEN** the system returns `{ access_token, user: { id, email } }` with no refresh token
 
-### Requirement: Enhanced token refresh with dual source support
-The system SHALL expose `POST /auth/refresh` that accepts refresh tokens from both request body and httpOnly cookies. It SHALL prioritize request body over cookies and maintain the same storage method for the new refresh token.
+### Requirement: Token refresh via request body
+The system SHALL expose `POST /auth/refresh` that accepts the refresh token from the request body only. The frontend is responsible for reading the cookie and sending the token. The backend does NOT read cookies.
 
 #### Scenario: Refresh with token in request body
 - **WHEN** a client sends `POST /auth/refresh` with `{ refresh_token: "..." }`
-- **THEN** the system uses the body token and returns `{ access_token, refresh_token }`
+- **THEN** the system validates the token, rotates it, and returns `{ access_token, refresh_token }`
 
-#### Scenario: Refresh with token in cookie
-- **WHEN** a client sends `POST /auth/refresh` without body token but with refresh_token cookie
-- **THEN** the system uses the cookie token, returns `{ access_token }`, and updates the refresh_token cookie
+#### Scenario: Refresh without token
+- **WHEN** a client sends `POST /auth/refresh` with no `refresh_token` in body
+- **THEN** the system returns 401 Unauthorized
 
-#### Scenario: Refresh with both token sources
-- **WHEN** a client sends `POST /auth/refresh` with both body token and cookie token
-- **THEN** the system prioritizes the body token and follows body token behavior
+### Requirement: Logout endpoint
+The system SHALL expose `POST /auth/logout` that returns success. Cookie clearing is handled by the frontend via `document.cookie`.
 
-### Requirement: Logout endpoint for cookie cleanup
-The system SHALL expose `POST /auth/logout` that clears refresh token cookies and invalidates the current session.
-
-#### Scenario: Logout clears cookies
+#### Scenario: Logout
 - **WHEN** a client sends `POST /auth/logout`
-- **THEN** the system sets `Set-Cookie: refresh_token=; HttpOnly; Secure; SameSite=Strict; Max-Age=0` and returns success
+- **THEN** the system returns `{ success: true }` (frontend clears cookie and sessionStorage)
 
 ## Implementation Updates
 
@@ -104,15 +100,12 @@ export class AuthService {
     // ... existing validation logic
     
     const access_token = this.signJwt(user);
-    const refresh_token = this.signRefreshJwt(user);
+    const refresh_token = persistent ? this.signRefreshJwt(user) : undefined;
     
     return {
       access_token,
-      refresh_token: persistent ? undefined : refresh_token,
+      refresh_token, // Only present when persistent=true
       user: { id: user.id, email: user.email },
-      // For controller to set cookie
-      refreshTokenForCookie: persistent ? refresh_token : undefined,
-      isPersistent: !!persistent,
     };
   }
 
@@ -120,14 +113,12 @@ export class AuthService {
     // ... existing validation logic
     
     const access_token = this.signJwt(user);
-    const refresh_token = this.signRefreshJwt(user);
+    const refresh_token = persistent ? this.signRefreshJwt(user) : undefined;
     
     return {
       access_token,
-      refresh_token: persistent ? undefined : refresh_token,
+      refresh_token, // Only present when persistent=true
       user: { id: user.id, email: user.email },
-      refreshTokenForCookie: persistent ? refresh_token : undefined,
-      isPersistent: !!persistent,
     };
   }
 
@@ -140,7 +131,6 @@ export class AuthService {
   }
 
   async logout() {
-    // Logout logic can be extended here for token revocation if needed
     return { success: true };
   }
 
@@ -150,139 +140,40 @@ export class AuthService {
 
 ### Enhanced AuthController
 ```typescript
-// auth.controller.ts - Updated endpoints
+// auth.controller.ts - Updated endpoints (no cookie handling needed)
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('register')
-  async register(
-    @Body() { email, password, persistent }: RegisterDto,
-    @Res({ passthrough: true }) response: Response,
-  ) {
-    const result = await this.authService.register(email, password, persistent);
-    
-    if (result.refreshTokenForCookie) {
-      this.setRefreshTokenCookie(response, result.refreshTokenForCookie);
-    }
-    
-    return {
-      access_token: result.access_token,
-      refresh_token: result.refresh_token,
-      user: result.user,
-    };
+  async register(@Body() { email, password, persistent }: RegisterDto) {
+    return this.authService.register(email, password, persistent);
   }
 
   @Post('login')
-  async login(
-    @Body() { email, password, persistent }: LoginDto,
-    @Res({ passthrough: true }) response: Response,
-  ) {
-    const result = await this.authService.login(email, password, persistent);
-    
-    if (result.refreshTokenForCookie) {
-      this.setRefreshTokenCookie(response, result.refreshTokenForCookie);
-    }
-    
-    return {
-      access_token: result.access_token,
-      refresh_token: result.refresh_token,
-      user: result.user,
-    };
+  async login(@Body() { email, password, persistent }: LoginDto) {
+    return this.authService.login(email, password, persistent);
   }
 
   @Post('refresh')
-  async refresh(
-    @Body() body: RefreshDto,
-    @Req() request: Request,
-    @Res({ passthrough: true }) response: Response,
-  ) {
-    // Priority: body token > cookie token
-    const refreshToken = body.refresh_token || request.cookies?.refresh_token;
-    
-    if (!refreshToken) {
+  async refresh(@Body() { refresh_token }: RefreshDto) {
+    if (!refresh_token) {
       throw new UnauthorizedException('No refresh token provided');
     }
-
-    const result = await this.authService.refresh(refreshToken);
-    
-    // If original token was from cookie, maintain cookie storage
-    if (!body.refresh_token && request.cookies?.refresh_token) {
-      this.setRefreshTokenCookie(response, result.refresh_token);
-      return {
-        access_token: result.access_token,
-        // Don't return refresh_token in body when using cookies
-      };
-    }
-    
-    // Original token was from body, return both in body
-    return {
-      access_token: result.access_token,
-      refresh_token: result.refresh_token,
-    };
+    return this.authService.refresh(refresh_token);
   }
 
   @Post('logout')
-  async logout(@Res({ passthrough: true }) response: Response) {
-    await this.authService.logout();
-    
-    // Clear refresh token cookie
-    this.clearRefreshTokenCookie(response);
-    
-    return { success: true };
+  async logout() {
+    return this.authService.logout();
   }
 
   // ... existing endpoints (cli-token, etc.) unchanged
-
-  private setRefreshTokenCookie(response: Response, refreshToken: string) {
-    const isProduction = process.env.NODE_ENV === 'production';
-    
-    response.cookie('refresh_token', refreshToken, {
-      httpOnly: true,
-      secure: isProduction,
-      sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in milliseconds
-      domain: process.env.COOKIE_DOMAIN, // Optional: set domain if needed
-    });
-  }
-
-  private clearRefreshTokenCookie(response: Response) {
-    response.cookie('refresh_token', '', {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 0,
-      domain: process.env.COOKIE_DOMAIN,
-    });
-  }
 }
 ```
 
-### Enhanced Module Configuration
-```typescript
-// auth.module.ts - Add cookie parser middleware
-import * as cookieParser from 'cookie-parser';
-
-@Module({
-  imports: [
-    TypeOrmModule.forFeature([User, Organization, OrgMember]),
-    JwtModule.register({
-      secret: process.env.JWT_SECRET || 'jwt-secret-change-me',
-      signOptions: { expiresIn: '1h' },
-    }),
-  ],
-  providers: [AuthService, JwtStrategy],
-  controllers: [AuthController],
-  exports: [AuthService],
-})
-export class AuthModule implements NestModule {
-  configure(consumer: MiddlewareConsumer) {
-    consumer
-      .apply(cookieParser())
-      .forRoutes(AuthController);
-  }
-}
-```
+### Module Configuration
+No changes needed — cookie parser middleware is NOT required since backend does not handle cookies.
 
 ## Testing Updates
 

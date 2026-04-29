@@ -23,8 +23,9 @@ Provides UI components and user experience for choosing between session-based an
 
 #### State Management
 - Track checkbox state in form component
+- **Persist checkbox state in localStorage** (key: `saveLogin`) across browser sessions
+- Initialize checkbox from localStorage on component mount
 - Pass persistent preference to authentication API
-- Maintain preference consistency across login/register flows
 
 ### UI/UX Requirements
 
@@ -62,8 +63,15 @@ export default function Login() {
   const [params] = useSearchParams();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [persistent, setPersistent] = useState(false); // New state
+  const [persistent, setPersistent] = useState(
+    () => localStorage.getItem('saveLogin') === 'true' // Restore from localStorage
+  );
   const [error, setError] = useState('');
+
+  function handlePersistentChange(e: React.ChangeEvent<HTMLInputElement>) {
+    setPersistent(e.target.checked);
+    localStorage.setItem('saveLogin', String(e.target.checked)); // Persist preference
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -106,7 +114,7 @@ export default function Login() {
               type="checkbox"
               id="persistent-login"
               checked={persistent}
-              onChange={(e) => setPersistent(e.target.checked)}
+              onChange={handlePersistentChange}
               className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
             />
             <label htmlFor="persistent-login" className="ml-2 block text-sm text-gray-700">
@@ -147,8 +155,15 @@ export default function Register() {
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [persistent, setPersistent] = useState(false); // New state
+  const [persistent, setPersistent] = useState(
+    () => localStorage.getItem('saveLogin') === 'true' // Restore from localStorage
+  );
   const [error, setError] = useState('');
+
+  function handlePersistentChange(e: React.ChangeEvent<HTMLInputElement>) {
+    setPersistent(e.target.checked);
+    localStorage.setItem('saveLogin', String(e.target.checked)); // Persist preference
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -192,7 +207,7 @@ export default function Register() {
               type="checkbox"
               id="persistent-register"
               checked={persistent}
-              onChange={(e) => setPersistent(e.target.checked)}
+              onChange={handlePersistentChange}
               className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
             />
             <label htmlFor="persistent-register" className="ml-2 block text-sm text-gray-700">

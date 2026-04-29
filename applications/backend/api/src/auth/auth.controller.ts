@@ -18,17 +18,17 @@ export class AuthController {
 
   @Post('register')
   @HttpCode(201)
-  async register(@Body() body: { email: string; password: string }) {
+  async register(@Body() body: { email: string; password: string; persistent?: boolean }) {
     if (!body.email || !body.password || body.password.length < 8) {
       throw new BadRequestException('email and password (min 8 chars) required');
     }
-    return this.authService.register(body.email, body.password);
+    return this.authService.register(body.email, body.password, body.persistent);
   }
 
   @Post('login')
   @HttpCode(200)
-  async login(@Body() body: { email: string; password: string }) {
-    return this.authService.login(body.email, body.password);
+  async login(@Body() body: { email: string; password: string; persistent?: boolean }) {
+    return this.authService.login(body.email, body.password, body.persistent);
   }
 
   @Post('refresh')
@@ -36,6 +36,12 @@ export class AuthController {
   @UseGuards(RefreshAuthGuard)
   async refresh(@Body() body: { refresh_token: string }) {
     return this.authService.refresh(body.refresh_token);
+  }
+
+  @Post('logout')
+  @HttpCode(200)
+  async logout() {
+    return this.authService.logout();
   }
 
   @Post('revoke')

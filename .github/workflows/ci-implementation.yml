@@ -35,6 +35,13 @@ jobs:
         run: |
           BRANCH="${GITHUB_REF#refs/heads/}"
           NAME="${BRANCH#implementation/}"
+          # Strip leading issue-id prefix (e.g. "47-foo" -> "foo") if exact dir not found
+          if [ ! -d "openspec/changes/$NAME" ]; then
+            NAME_NO_ID=$(echo "$NAME" | sed 's/^[0-9]*-//')
+            if [ -d "openspec/changes/$NAME_NO_ID" ]; then
+              NAME="$NAME_NO_ID"
+            fi
+          fi
           echo "name=$NAME" >> $GITHUB_OUTPUT
       - name: Check if change exists
         id: check

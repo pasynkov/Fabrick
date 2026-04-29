@@ -7,7 +7,6 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
-import { randomBytes } from 'crypto';
 import { Repository } from 'typeorm';
 import { OrgMember } from '../entities/org-member.entity';
 import { Organization } from '../entities/organization.entity';
@@ -91,8 +90,7 @@ export class OrgsService {
 
   async requireAdmin(userId: string, orgId: string) {
     const m = await this.memberRepo.findOne({ where: { orgId, userId } });
-    if (!m) throw new ForbiddenException();
-    if (m.role !== 'admin') throw new ForbiddenException();
+    if (!m || m.role !== 'admin') throw new ForbiddenException();
   }
 
   async requireMember(userId: string, orgId: string) {

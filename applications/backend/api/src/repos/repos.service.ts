@@ -103,8 +103,7 @@ export class ReposService {
 
   async requireOrgAdmin(userId: string, orgId: string) {
     const m = await this.memberRepo.findOne({ where: { orgId, userId } });
-    if (!m) throw new ForbiddenException();
-    if (m.role !== 'admin') throw new ForbiddenException();
+    if (!m || m.role !== 'admin') throw new ForbiddenException();
   }
 
   async updateProjectName(orgId: string, projectId: string, name: string, userId: string) {
@@ -120,8 +119,7 @@ export class ReposService {
 
   async requireOrgMemberByRepo(userId: string, repoId: string) {
     const { repo } = await this.getRepoWithContext(repoId);
-    const project = await this.getProjectOrFail(repo.projectId);
-    await this.requireOrgMember(userId, project.orgId);
+    await this.requireOrgMember(userId, (repo.project as any).orgId);
   }
 
   private async getProjectOrFail(projectId: string): Promise<Project> {

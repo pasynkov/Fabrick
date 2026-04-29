@@ -2,6 +2,7 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -13,6 +14,8 @@ import { normalizeGitRemote, slugFromRemote } from './git-remote.util';
 
 @Injectable()
 export class ReposService {
+  private readonly logger = new Logger(ReposService.name);
+
   constructor(
     @InjectRepository(Project)
     private readonly projectRepo: TypeOrmRepository<Project>,
@@ -96,6 +99,23 @@ export class ReposService {
   async requireOrgMember(userId: string, orgId: string) {
     const m = await this.memberRepo.findOne({ where: { orgId, userId } });
     if (!m) throw new ForbiddenException();
+  }
+
+  async requireOrgAdmin(userId: string, orgId: string) {
+    const m = await this.memberRepo.findOne({ where: { orgId, userId } });
+    if (!m) throw new ForbiddenException();
+    if (m.role !== 'admin') throw new ForbiddenException();
+  }
+
+  async updateProjectName(orgId: string, projectId: string, name: string, userId: string) {
+    await this.requireOrgAdmin(userId, orgId);
+    const project = await this.getProjectOrFail(projectId);
+    if (project.orgId !== orgId) throw new ForbiddenException();
+    const oldName = project.name;
+    project.name = name;
+    await this.projectRepo.save(project);
+    this.logger.log(`Project ${projectId} name changed from "${oldName}" to "${name}" by user ${userId}`);
+    return { id: project.id, name: project.name, slug: project.slug, orgId: project.orgId };
   }
 
   async requireOrgMemberByRepo(userId: string, repoId: string) {

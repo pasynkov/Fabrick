@@ -2,6 +2,7 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -13,6 +14,8 @@ import { Organization } from '../entities/organization.entity';
 import { User } from '../entities/user.entity';
 @Injectable()
 export class OrgsService {
+  private readonly logger = new Logger(OrgsService.name);
+
   constructor(
     @InjectRepository(Organization)
     private readonly orgRepo: Repository<Organization>,
@@ -95,6 +98,17 @@ export class OrgsService {
   async requireMember(userId: string, orgId: string) {
     const m = await this.memberRepo.findOne({ where: { orgId, userId } });
     if (!m) throw new ForbiddenException();
+  }
+
+  async updateOrgName(orgId: string, name: string, userId: string) {
+    await this.requireAdmin(userId, orgId);
+    const org = await this.orgRepo.findOne({ where: { id: orgId } });
+    if (!org) throw new NotFoundException('Org not found');
+    const oldName = org.name;
+    org.name = name;
+    await this.orgRepo.save(org);
+    this.logger.log(`Org ${orgId} name changed from "${oldName}" to "${name}" by user ${userId}`);
+    return { id: org.id, name: org.name, slug: org.slug };
   }
 
   async getOrgBySlug(slug: string): Promise<Organization> {

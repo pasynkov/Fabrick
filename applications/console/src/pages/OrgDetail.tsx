@@ -64,12 +64,20 @@ export default function OrgDetail() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b border-gray-200 px-6 py-4">
+      <header className="bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
         <nav className="text-sm text-gray-500">
           <Link to="/" className="hover:underline">Orgs</Link>
           <span className="mx-2">/</span>
           <span className="text-gray-900 font-medium">{org.name}</span>
         </nav>
+        {org.role === 'admin' && (
+          <Link
+            to={`/orgs/${orgSlug}/edit`}
+            className="text-xs text-gray-500 border border-gray-200 rounded px-2 py-1 hover:border-purple-400 hover:text-purple-600 transition"
+          >
+            Edit Name
+          </Link>
+        )}
       </header>
       <main className="max-w-2xl mx-auto py-10 px-4 space-y-10">
         {error && <p className="text-red-500 text-sm">{error}</p>}
@@ -78,14 +86,22 @@ export default function OrgDetail() {
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Projects</h2>
           <ul className="space-y-2 mb-4">
             {projects.map((p) => (
-              <li key={p.id}>
+              <li key={p.id} className="flex items-center gap-2">
                 <Link
                   to={`/orgs/${orgSlug}/projects/${p.slug}`}
-                  className="block bg-white border border-gray-200 rounded-lg px-4 py-3 hover:border-purple-400 transition"
+                  className="flex-1 block bg-white border border-gray-200 rounded-lg px-4 py-3 hover:border-purple-400 transition"
                 >
                   <span className="font-medium text-gray-900">{p.name}</span>
                   <span className="ml-2 text-xs text-gray-400">{p.slug}</span>
                 </Link>
+                {org.role === 'admin' && (
+                  <Link
+                    to={`/orgs/${orgSlug}/projects/${p.slug}/edit`}
+                    className="text-xs text-gray-500 border border-gray-200 rounded px-2 py-1 hover:border-purple-400 hover:text-purple-600 transition"
+                  >
+                    Edit
+                  </Link>
+                )}
               </li>
             ))}
           </ul>

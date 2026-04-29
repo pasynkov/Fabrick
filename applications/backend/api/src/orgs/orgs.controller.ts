@@ -1,9 +1,11 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
   HttpCode,
   Param,
+  Patch,
   Post,
   Request,
   UseGuards,
@@ -46,5 +48,16 @@ export class OrgsController {
     @Param('orgId') orgId: string,
   ) {
     return this.orgsService.listMembers(req.user.id, orgId);
+  }
+
+  @Patch(':orgId')
+  updateName(
+    @Request() req: { user: { id: string } },
+    @Param('orgId') orgId: string,
+    @Body() body: { name: string },
+  ) {
+    if (!body.name || body.name.trim().length === 0) throw new BadRequestException('Name must not be empty');
+    if (body.name.length > 128) throw new BadRequestException('Name must not exceed 128 characters');
+    return this.orgsService.updateOrgName(orgId, body.name.trim(), req.user.id);
   }
 }

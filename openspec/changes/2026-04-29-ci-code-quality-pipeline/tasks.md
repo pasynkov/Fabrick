@@ -25,7 +25,7 @@
 
 ## CI Workflow
 
-- [ ] Update `.github/workflows/ci-implementation.yml`
+- [x] Update `.github/workflows/ci-implementation.yml`
   - Add postgres service container to `apply-and-archive` job (same config as `ci-e2e.yml`)
   - Add `npm ci --legacy-peer-deps` step for `applications/backend/api` (needed for e2e)
   - Add build prompt + Claude step for `simplify` (between apply and archive)

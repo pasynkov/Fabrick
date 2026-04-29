@@ -11,6 +11,20 @@ jobs:
     timeout-minutes: 40
     permissions:
       contents: write
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: fabrick_test
+          POSTGRES_USER: fabrick
+          POSTGRES_PASSWORD: ${{ secrets.DB_PASS }}
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
         with:
@@ -33,6 +47,10 @@ jobs:
       - name: Install openspec
         if: steps.check.outputs.exists == 'true'
         run: npm install -g @fission-ai/openspec
+      - name: Install API dependencies
+        if: steps.check.outputs.exists == 'true'
+        run: npm ci --legacy-peer-deps
+        working-directory: applications/backend/api
       - name: Build apply prompt
         if: steps.check.outputs.exists == 'true'
         run: |
@@ -67,6 +85,132 @@ jobs:
               }
             }
           prompt_file: /tmp/apply-prompt.txt
+      - name: E2E tests (after apply)
+        if: steps.check.outputs.exists == 'true'
+        run: npm run test:e2e
+        working-directory: applications/backend/api
+        env:
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_USER: fabrick
+          DB_PASS: ${{ secrets.DB_PASS }}
+          DB_TEST_NAME: fabrick_test
+          DB_SSL: 'false'
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+      - name: Build simplify prompt
+        if: steps.check.outputs.exists == 'true'
+        run: |
+          SKILL=".claude/skills/simplify/SKILL.md"
+          CONTENT=$(awk 'BEGIN{i=0} /^---$/{i++; next} i>=2{print}' "$SKILL")
+          cat > /tmp/simplify-prompt.txt << PROMPT
+          $CONTENT
+
+          Additional constraints:
+          - Non-interactive CI environment. Do NOT use AskUserQuestion tool.
+          - Do NOT modify any files under .github/workflows/
+          - Do NOT modify test files (*.spec.ts, *.test.ts, *.e2e.ts, **/test/**)
+          - Stay on current branch. Do NOT run git commands.
+          PROMPT
+      - name: Simplify changed files
+        if: steps.check.outputs.exists == 'true'
+        uses: anthropics/claude-code-base-action@beta
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          model: claude-sonnet-4-6
+          allowed_tools: "Bash,Read,Write,Edit,Glob"
+          timeout_minutes: 30
+          settings: |
+            {
+              "permissions": {
+                "allow": ["Bash(*)", "Read(*)", "Write(*)", "Edit(*)", "Glob(*)"],
+                "deny": []
+              }
+            }
+          prompt_file: /tmp/simplify-prompt.txt
+      - name: E2E tests (after simplify)
+        if: steps.check.outputs.exists == 'true'
+        run: npm run test:e2e
+        working-directory: applications/backend/api
+        env:
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_USER: fabrick
+          DB_PASS: ${{ secrets.DB_PASS }}
+          DB_TEST_NAME: fabrick_test
+          DB_SSL: 'false'
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+      - name: Build review prompt
+        if: steps.check.outputs.exists == 'true'
+        run: |
+          SKILL=".claude/skills/review/SKILL.md"
+          CONTENT=$(awk 'BEGIN{i=0} /^---$/{i++; next} i>=2{print}' "$SKILL")
+          cat > /tmp/review-prompt.txt << PROMPT
+          $CONTENT
+
+          Additional constraints:
+          - Non-interactive CI environment. Do NOT use AskUserQuestion tool.
+          - Do NOT modify any files under .github/workflows/
+          - Do NOT modify test files (*.spec.ts, *.test.ts, *.e2e.ts, **/test/**)
+          - Stay on current branch. Do NOT run git commands.
+          PROMPT
+      - name: Review changed files
+        if: steps.check.outputs.exists == 'true'
+        uses: anthropics/claude-code-base-action@beta
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          model: claude-sonnet-4-6
+          allowed_tools: "Bash,Read,Write,Edit,Glob"
+          timeout_minutes: 30
+          settings: |
+            {
+              "permissions": {
+                "allow": ["Bash(*)", "Read(*)", "Write(*)", "Edit(*)", "Glob(*)"],
+                "deny": []
+              }
+            }
+          prompt_file: /tmp/review-prompt.txt
+      - name: Build review-fix prompt
+        if: steps.check.outputs.exists == 'true'
+        run: |
+          SKILL=".claude/skills/review-fix/SKILL.md"
+          CONTENT=$(awk 'BEGIN{i=0} /^---$/{i++; next} i>=2{print}' "$SKILL")
+          cat > /tmp/review-fix-prompt.txt << PROMPT
+          $CONTENT
+
+          Additional constraints:
+          - Non-interactive CI environment. Do NOT use AskUserQuestion tool.
+          - Do NOT modify any files under .github/workflows/
+          - Do NOT modify test files (*.spec.ts, *.test.ts, *.e2e.ts, **/test/**)
+          - Stay on current branch. Do NOT run git commands.
+          PROMPT
+      - name: Apply review fixes
+        if: steps.check.outputs.exists == 'true'
+        uses: anthropics/claude-code-base-action@beta
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          model: claude-sonnet-4-6
+          allowed_tools: "Bash,Read,Write,Edit,Glob"
+          timeout_minutes: 30
+          settings: |
+            {
+              "permissions": {
+                "allow": ["Bash(*)", "Read(*)", "Write(*)", "Edit(*)", "Glob(*)"],
+                "deny": []
+              }
+            }
+          prompt_file: /tmp/review-fix-prompt.txt
+      - name: E2E tests (after review-fix)
+        if: steps.check.outputs.exists == 'true'
+        run: npm run test:e2e
+        working-directory: applications/backend/api
+        env:
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_USER: fabrick
+          DB_PASS: ${{ secrets.DB_PASS }}
+          DB_TEST_NAME: fabrick_test
+          DB_SSL: 'false'
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
       - name: Build archive prompt
         if: steps.check.outputs.exists == 'true'
         run: |

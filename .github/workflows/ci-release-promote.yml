@@ -1,0 +1,108 @@
+name: CI Release Promote
+
+on:
+  pull_request:
+    branches: [develop]
+    types: [closed]
+
+jobs:
+  promote:
+    if: github.event.pull_request.merged == true && startsWith(github.event.pull_request.head.ref, 'feature/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      actions: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: develop
+          fetch-depth: 0
+
+      - name: Extract change name and issue number
+        id: meta
+        run: |
+          BRANCH="${{ github.event.pull_request.head.ref }}"
+          FULL_NAME="${BRANCH#feature/}"
+          ISSUE=$(echo "$FULL_NAME" | grep -oE '^[0-9]+' || true)
+          CHANGE_NAME=$(echo "$FULL_NAME" | sed 's/^[0-9]*-//')
+          echo "full_name=$FULL_NAME" >> $GITHUB_OUTPUT
+          echo "issue=$ISSUE" >> $GITHUB_OUTPUT
+          echo "change_name=$CHANGE_NAME" >> $GITHUB_OUTPUT
+
+      - name: Build version-bump prompt
+        run: |
+          CHANGE_NAME="${{ steps.meta.outputs.change_name }}"
+          SKILL=".claude/skills/release-version-bump/SKILL.md"
+          CONTENT=$(awk 'BEGIN{i=0} /^---$/{i++; next} i>=2{print}' "$SKILL")
+          cat > /tmp/version-bump-prompt.txt << PROMPT
+          Change name: $CHANGE_NAME
+
+          $CONTENT
+          PROMPT
+
+      - name: Analyze version bump
+        uses: anthropics/claude-code-base-action@beta
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          model: claude-haiku-4-5-20251001
+          allowed_tools: "Bash,Read,Glob,LS"
+          timeout_minutes: 5
+          settings: |
+            {
+              "permissions": {
+                "allow": ["Bash(*)", "Read(*)", "Glob(*)"],
+                "deny": []
+              }
+            }
+          prompt_file: /tmp/version-bump-prompt.txt
+
+      - name: Calculate new version
+        id: version
+        run: |
+          git fetch origin main --tags
+          LATEST=$(git tag --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1)
+          if [ -z "$LATEST" ]; then
+            LATEST="v0.0.0"
+          fi
+          MAJOR=$(echo "$LATEST" | tr -d 'v' | cut -d. -f1)
+          MINOR=$(echo "$LATEST" | cut -d. -f2)
+          PATCH=$(echo "$LATEST" | cut -d. -f3)
+
+          BUMP=$(cat /tmp/version-bump.txt 2>/dev/null | tr -d '[:space:]')
+          if [ "$BUMP" = "minor" ]; then
+            MINOR=$((MINOR + 1))
+            PATCH=0
+          else
+            BUMP="patch"
+            PATCH=$((PATCH + 1))
+          fi
+
+          NEW_VERSION="v${MAJOR}.${MINOR}.${PATCH}"
+          REASON=$(cat /tmp/version-bump-reason.txt 2>/dev/null | head -1 || echo "routine update")
+          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "bump=$BUMP" >> $GITHUB_OUTPUT
+          echo "reason=$REASON" >> $GITHUB_OUTPUT
+
+      - name: Create release branch
+        run: |
+          git checkout -b "release/${{ steps.version.outputs.version }}"
+          git push origin "release/${{ steps.version.outputs.version }}"
+
+      - name: Trigger cd-release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh workflow run cd-release.yml \
+            --ref "release/${{ steps.version.outputs.version }}" \
+            --repo "$GITHUB_REPOSITORY"
+
+      - name: Comment on issue
+        if: steps.meta.outputs.issue != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH_URL="https://github.com/$GITHUB_REPOSITORY/tree/release/${{ steps.version.outputs.version }}"
+          gh issue comment "${{ steps.meta.outputs.issue }}" \
+            --body "Release branch created: [release/${{ steps.version.outputs.version }}]($BRANCH_URL) (${{ steps.version.outputs.bump }} bump — ${{ steps.version.outputs.reason }}). CD release pipeline starting." \
+            --repo "$GITHUB_REPOSITORY"

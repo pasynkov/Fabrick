@@ -12,23 +12,50 @@ jobs:
     permissions:
       contents: write
       actions: write
+      issues: write
     steps:
       - uses: actions/checkout@v4
         with:
           ref: develop
           fetch-depth: 0
+
+      - name: Extract name and issue number
+        id: meta
+        run: |
+          BRANCH="${{ github.event.pull_request.head.ref }}"
+          NAME="${BRANCH#proposal/}"
+          ISSUE=$(echo "$NAME" | grep -oE '^[0-9]+' || true)
+          echo "name=$NAME" >> $GITHUB_OUTPUT
+          echo "issue=$ISSUE" >> $GITHUB_OUTPUT
+
       - name: Create implementation branch
         run: |
-          NAME="${{ github.event.pull_request.head.ref }}"
-          NAME="${NAME#proposal/}"
-          git checkout -b "implementation/$NAME"
-          git push origin "implementation/$NAME"
+          git checkout -b "implementation/${{ steps.meta.outputs.name }}"
+          git push origin "implementation/${{ steps.meta.outputs.name }}"
+
+      - name: Label issue as implementation
+        if: steps.meta.outputs.issue != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue edit "${{ steps.meta.outputs.issue }}" \
+            --add-label "implementation" \
+            --repo "$GITHUB_REPOSITORY"
+
+      - name: Comment on issue
+        if: steps.meta.outputs.issue != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH_URL="https://github.com/$GITHUB_REPOSITORY/tree/implementation/${{ steps.meta.outputs.name }}"
+          gh issue comment "${{ steps.meta.outputs.issue }}" \
+            --body "Implementation started. Branch: [implementation/${{ steps.meta.outputs.name }}]($BRANCH_URL)" \
+            --repo "$GITHUB_REPOSITORY"
+
       - name: Trigger implementation
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          NAME="${{ github.event.pull_request.head.ref }}"
-          NAME="${NAME#proposal/}"
           gh workflow run ci-implementation.yml \
-            --ref "implementation/$NAME" \
+            --ref "implementation/${{ steps.meta.outputs.name }}" \
             --repo "$GITHUB_REPOSITORY"

@@ -3,6 +3,7 @@ name: CD Release
 on:
   push:
     branches: ['release/**']
+  workflow_dispatch:
 
 jobs:
   e2e-api:

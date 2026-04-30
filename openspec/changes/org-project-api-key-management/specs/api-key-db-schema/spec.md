@@ -118,8 +118,7 @@ export class AddApiKeys1745100000000 implements MigrationInterface {
 ## Data Considerations
 
 - **Encryption**: All API key values stored in the database will be encrypted using AES-256-GCM with the global ANTHROPIC_API_KEY as the encryption key
-- **Nullable columns**: Both columns are nullable to support gradual adoption and organizations/projects that don't provide their own keys
-- **Backward compatibility**: Existing organizations and projects will have NULL values initially, falling back to the global environment variable
+- **Nullable columns**: Both columns are nullable. Existing organizations/projects will have NULL values initially; synthesis is blocked for those without a configured key until one is set
 - **Indexing**: Partial indexes on non-null values optimize key resolution queries
 - **Text type**: Using TEXT type to accommodate encrypted string length variations
 

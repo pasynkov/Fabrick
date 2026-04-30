@@ -104,7 +104,7 @@ interface SynthesisJob {
   repos: { id: string; slug: string }[];
   callbackToken: string;
   apiKey: string; // New: resolved API key for this job
-  apiKeySource: 'project' | 'organization' | 'global'; // New: source for logging
+  apiKeySource: 'project' | 'organization'; // New: source for logging
 }
 
 @Injectable()
@@ -229,34 +229,9 @@ export class SynthesisProcessor implements OnModuleInit {
 }
 ```
 
-## Backward Compatibility
+## Job Format
 
-### Fallback Handling
-```typescript
-// Enhanced fallback logic in case job doesn't include API key info
-private async processJob(job: SynthesisJob): Promise<void> {
-  // Handle both new and old job formats for backward compatibility
-  let apiKey: string;
-  let apiKeySource: string;
-
-  if (job.apiKey) {
-    // New format with resolved API key
-    apiKey = job.apiKey;
-    apiKeySource = job.apiKeySource || 'unknown';
-  } else {
-    // Legacy format - fall back to global environment variable
-    apiKey = process.env.ANTHROPIC_API_KEY!;
-    apiKeySource = 'global-legacy';
-    
-    if (!apiKey) {
-      throw new Error('No API key available for synthesis');
-    }
-  }
-
-  const anthropic = new Anthropic({ apiKey });
-  // ... rest of processing logic
-}
-```
+The synthesis job always includes a resolved `apiKey` from the resolution service. The processor does not fall back to any global environment variable — key resolution happens entirely before the job is queued.
 
 ## Error Handling Enhancements
 
@@ -294,9 +269,7 @@ catch (err: any) {
   
   if (err?.status === 401) {
     errorMessage = 'API key authentication failed';
-    suggestedAction = apiKeySource === 'global' 
-      ? 'Please check the global ANTHROPIC_API_KEY configuration.'
-      : `Please verify your ${apiKeySource} API key in the settings.`;
+    suggestedAction = `Please verify your ${apiKeySource} API key in the settings.`;
   } else if (err?.status === 429) {
     errorMessage = 'Rate limit exceeded';
     suggestedAction = 'Please try again later or consider upgrading your API key tier.';
@@ -394,15 +367,8 @@ jest.spyOn(apiKeyResolutionService, 'resolveForProject')
 
 ## Migration Strategy
 
-### Gradual Rollout
-1. **Phase 1**: Deploy API key resolution with fallback to global key
-2. **Phase 2**: Update synthesis service to use resolution service
-3. **Phase 3**: Update UI to allow API key configuration
-4. **Phase 4**: Encourage organizations to set their own keys
-5. **Phase 5**: Monitor usage and optimize performance
-
-### Feature Flags
-Consider adding feature flags to control:
-- API key resolution vs. global key usage
-- Specific organization or project API key usage
-- Audit logging granularity
+### Rollout
+1. **Phase 1**: Deploy schema changes and resolution service
+2. **Phase 2**: Update synthesis service — key required, synthesis blocked if not set
+3. **Phase 3**: Deploy UI for API key configuration
+4. **Phase 4**: Monitor synthesis operations for API key-related issues

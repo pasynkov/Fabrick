@@ -1,19 +1,19 @@
 # API Key Management Endpoints
 
 ## Overview
-REST API endpoints for managing Anthropic API keys at organization and project levels, including CRUD operations, validation, and audit log retrieval.
+API key management is handled via the existing settings endpoints for organizations and projects. No separate `/api-key` routes are created — the `anthropicApiKey` field is updated through the same PATCH endpoint used for other settings (e.g., name).
 
-## Organization API Key Endpoints
+## Organization API Key Endpoint
 
-### PUT /orgs/:orgId/api-key
-Updates or sets the Anthropic API key for an organization.
+### PATCH /orgs/:orgId
+Updates organization settings including the API key field.
 
 #### Request
 ```typescript
-// Request body
-interface SetOrgApiKeyDto {
-  apiKey: string;
-  validateConnectivity?: boolean; // Default: false
+// Request body (anthropicApiKey field added to existing org update DTO)
+interface UpdateOrgDto {
+  name?: string;
+  anthropicApiKey?: string | null; // null to remove the key
 }
 
 // Headers
@@ -24,59 +24,37 @@ Content-Type: application/json
 #### Response
 ```typescript
 // 200 Success
-interface SetApiKeyResponse {
-  success: boolean;
-  message: string;
-  validation?: {
-    warnings: string[];
-  };
+interface UpdateOrgResponse {
+  id: string;
+  name: string;
+  slug: string;
+  hasApiKey: boolean; // whether an API key is configured; never returns the key itself
 }
 
-// 400 Bad Request
+// 400 Bad Request (invalid key format)
 interface ValidationErrorResponse {
   statusCode: 400;
   message: string[];
   error: "Bad Request";
-  details: {
-    validationErrors: string[];
-    validationWarnings: string[];
-  };
 }
 ```
 
 #### Implementation
 ```typescript
 // applications/backend/api/src/orgs/orgs.controller.ts
-@Put(':orgId/api-key')
+@Patch(':orgId')
 @UseGuards(IsAdminGuard)
-async setApiKey(
+async updateOrg(
   @Request() req: { user: { id: string }; ip?: string },
   @Param('orgId') orgId: string,
-  @Body() body: SetOrgApiKeyDto,
+  @Body() body: UpdateOrgDto,
   @Headers('user-agent') userAgent?: string,
-): Promise<SetApiKeyResponse> {
-  return this.orgsService.setApiKey(
-    orgId,
-    body.apiKey,
-    body.validateConnectivity ?? false,
-    {
-      userId: req.user.id,
-      ipAddress: req.ip,
-      userAgent,
-    },
-  );
-}
-```
-
-### DELETE /orgs/:orgId/api-key
-Removes the API key for an organization, falling back to global key.
-
-#### Response
-```typescript
-// 200 Success
-interface DeleteApiKeyResponse {
-  success: boolean;
-  message: string;
+): Promise<UpdateOrgResponse> {
+  return this.orgsService.updateOrg(orgId, body, {
+    userId: req.user.id,
+    ipAddress: req.ip,
+    userAgent,
+  });
 }
 ```
 
@@ -87,7 +65,7 @@ Checks if an organization has an API key configured (without exposing the key).
 ```typescript
 interface ApiKeyStatusResponse {
   hasApiKey: boolean;
-  source: 'organization' | 'global';
+  source: 'organization';
   lastUpdated?: string; // ISO date string
   keyHash?: string; // For audit correlation
 }
@@ -123,45 +101,37 @@ interface AuditLogsResponse {
 }
 ```
 
-## Project API Key Endpoints
+## Project API Key Endpoint
 
-### PUT /projects/:projectId/api-key
-Updates or sets the Anthropic API key for a project.
+### PATCH /projects/:projectId
+Updates project settings including the API key field.
 
 #### Request
 ```typescript
-interface SetProjectApiKeyDto {
-  apiKey: string;
-  validateConnectivity?: boolean;
+// Request body (anthropicApiKey field added to existing project update DTO)
+interface UpdateProjectDto {
+  name?: string;
+  anthropicApiKey?: string | null; // null to remove the key
 }
 ```
 
 #### Implementation
 ```typescript
 // applications/backend/api/src/repos/repos.controller.ts
-@Put(':projectId/api-key')
-async setApiKey(
+@Patch(':projectId')
+async updateProject(
   @Request() req: { user: { id: string }; ip?: string },
   @Param('projectId') projectId: string,
-  @Body() body: SetProjectApiKeyDto,
+  @Body() body: UpdateProjectDto,
   @Headers('user-agent') userAgent?: string,
-): Promise<SetApiKeyResponse> {
-  return this.reposService.setProjectApiKey(
-    projectId,
-    body.apiKey,
-    body.validateConnectivity ?? false,
-    req.user.id,
-    {
-      userId: req.user.id,
-      ipAddress: req.ip,
-      userAgent,
-    },
-  );
+): Promise<UpdateProjectResponse> {
+  return this.reposService.updateProject(projectId, body, req.user.id, {
+    userId: req.user.id,
+    ipAddress: req.ip,
+    userAgent,
+  });
 }
 ```
-
-### DELETE /projects/:projectId/api-key
-Removes the project's API key, falling back to organization or global key.
 
 ### GET /projects/:projectId/api-key/status
 Checks project API key configuration and resolution chain.
@@ -171,7 +141,7 @@ Checks project API key configuration and resolution chain.
 interface ProjectApiKeyStatusResponse {
   hasProjectApiKey: boolean;
   hasOrgApiKey: boolean;
-  effectiveSource: 'project' | 'organization' | 'global';
+  effectiveSource: 'project' | 'organization' | 'none';
   projectKeyLastUpdated?: string;
   orgKeyLastUpdated?: string;
   keyHashes: {
@@ -189,110 +159,54 @@ Retrieves audit logs for project API key operations.
 ### OrgsService Updates
 ```typescript
 // applications/backend/api/src/orgs/orgs.service.ts
-async setApiKey(
+async updateOrg(
   orgId: string,
-  apiKey: string,
-  validateConnectivity: boolean,
+  dto: UpdateOrgDto,
   context: AuditContext,
-): Promise<SetApiKeyResponse> {
-  // Verify user has admin access to organization
+): Promise<UpdateOrgResponse> {
   await this.requireOrgAdmin(context.userId, orgId);
 
-  // Validate API key format
-  const validation = await this.apiKeyValidationService.validate(
-    apiKey,
-    validateConnectivity,
-  );
-
-  if (!validation.isValid) {
-    await this.apiKeyAuditService.logValidationFailure(
-      ApiKeyAuditLevel.ORGANIZATION,
-      orgId,
-      validation.errors,
-      context,
-    );
-    throw new BadRequestException({
-      message: validation.errors,
-      details: {
-        validationErrors: validation.errors,
-        validationWarnings: validation.warnings,
-      },
-    });
-  }
-
-  // Check if this is an update or new key
   const existingOrg = await this.orgRepo.findOne({ where: { id: orgId } });
-  const isUpdate = !!existingOrg?.anthropicApiKey;
+  if (!existingOrg) throw new NotFoundException('Organization not found');
 
-  // Encrypt and store API key
-  const encryptedKey = await this.apiKeyEncryptionService.encrypt(apiKey);
-  await this.orgRepo.update(orgId, { anthropicApiKey: encryptedKey });
+  const updates: Partial<Organization> = {};
 
-  // Audit the operation
-  await this.apiKeyAuditService.logApiKeySet(
-    ApiKeyAuditLevel.ORGANIZATION,
-    orgId,
-    apiKey,
-    isUpdate,
-    context,
-  );
-
-  return {
-    success: true,
-    message: isUpdate ? 'API key updated successfully' : 'API key set successfully',
-    validation: validation.warnings.length > 0 ? { warnings: validation.warnings } : undefined,
-  };
-}
-
-async deleteApiKey(orgId: string, context: AuditContext): Promise<DeleteApiKeyResponse> {
-  await this.requireOrgAdmin(context.userId, orgId);
-
-  const org = await this.orgRepo.findOne({ where: { id: orgId } });
-  if (!org?.anthropicApiKey) {
-    throw new NotFoundException('No API key configured for this organization');
+  if (dto.name !== undefined) {
+    updates.name = dto.name;
   }
 
-  // Generate hash for audit before deletion
-  const decryptedKey = await this.apiKeyEncryptionService.decrypt(org.anthropicApiKey);
-  const keyHash = this.apiKeyEncryptionService.generateKeyHash(decryptedKey);
-
-  // Delete the API key
-  await this.orgRepo.update(orgId, { anthropicApiKey: null });
-
-  // Audit the deletion
-  await this.apiKeyAuditService.logApiKeyDelete(
-    ApiKeyAuditLevel.ORGANIZATION,
-    orgId,
-    keyHash,
-    context,
-  );
-
-  return {
-    success: true,
-    message: 'API key removed successfully',
-  };
-}
-
-async getApiKeyStatus(orgId: string, userId: string): Promise<ApiKeyStatusResponse> {
-  await this.requireOrgMember(userId, orgId);
-
-  const org = await this.orgRepo.findOne({ where: { id: orgId } });
-  const hasApiKey = !!org?.anthropicApiKey;
-
-  let keyHash: string | undefined;
-  if (hasApiKey) {
-    try {
-      const decryptedKey = await this.apiKeyEncryptionService.decrypt(org.anthropicApiKey!);
-      keyHash = this.apiKeyEncryptionService.generateKeyHash(decryptedKey);
-    } catch (error) {
-      // If decryption fails, still show that a key exists but is problematic
+  if (dto.anthropicApiKey !== undefined) {
+    if (dto.anthropicApiKey === null) {
+      // Remove key
+      const isUpdate = !!existingOrg.anthropicApiKey;
+      if (isUpdate) {
+        const decryptedKey = await this.apiKeyEncryptionService.decrypt(existingOrg.anthropicApiKey!);
+        const keyHash = this.apiKeyEncryptionService.generateKeyHash(decryptedKey);
+        await this.apiKeyAuditService.logApiKeyDelete(ApiKeyAuditLevel.ORGANIZATION, orgId, keyHash, context);
+      }
+      updates.anthropicApiKey = null;
+    } else {
+      // Validate format (prefix only)
+      const validation = this.apiKeyValidationService.validateFormat(dto.anthropicApiKey);
+      if (!validation.isValid) {
+        await this.apiKeyAuditService.logValidationFailure(ApiKeyAuditLevel.ORGANIZATION, orgId, validation.errors, context);
+        throw new BadRequestException(validation.errors);
+      }
+      const isUpdate = !!existingOrg.anthropicApiKey;
+      updates.anthropicApiKey = await this.apiKeyEncryptionService.encrypt(dto.anthropicApiKey);
+      await this.apiKeyAuditService.logApiKeySet(ApiKeyAuditLevel.ORGANIZATION, orgId, dto.anthropicApiKey, isUpdate, context);
     }
   }
 
+  await this.orgRepo.update(orgId, updates);
+
   return {
-    hasApiKey,
-    source: hasApiKey ? 'organization' : 'global',
-    keyHash,
+    id: orgId,
+    name: updates.name ?? existingOrg.name,
+    slug: existingOrg.slug,
+    hasApiKey: updates.anthropicApiKey !== undefined
+      ? updates.anthropicApiKey !== null
+      : !!existingOrg.anthropicApiKey,
   };
 }
 ```
@@ -300,62 +214,53 @@ async getApiKeyStatus(orgId: string, userId: string): Promise<ApiKeyStatusRespon
 ### ReposService Updates for Projects
 ```typescript
 // applications/backend/api/src/repos/repos.service.ts
-async setProjectApiKey(
+async updateProject(
   projectId: string,
-  apiKey: string,
-  validateConnectivity: boolean,
+  dto: UpdateProjectDto,
   userId: string,
   context: AuditContext,
-): Promise<SetApiKeyResponse> {
+): Promise<UpdateProjectResponse> {
   const project = await this.projectRepo.findOne({ where: { id: projectId } });
-  if (!project) {
-    throw new NotFoundException('Project not found');
-  }
+  if (!project) throw new NotFoundException('Project not found');
 
-  // Verify user has access to the organization
   await this.requireOrgMember(userId, project.orgId);
 
-  // Validate API key
-  const validation = await this.apiKeyValidationService.validate(
-    apiKey,
-    validateConnectivity,
-  );
+  const updates: Partial<Project> = {};
 
-  if (!validation.isValid) {
-    await this.apiKeyAuditService.logValidationFailure(
-      ApiKeyAuditLevel.PROJECT,
-      projectId,
-      validation.errors,
-      context,
-    );
-    throw new BadRequestException({
-      message: validation.errors,
-      details: {
-        validationErrors: validation.errors,
-        validationWarnings: validation.warnings,
-      },
-    });
+  if (dto.name !== undefined) {
+    updates.name = dto.name;
   }
 
-  const isUpdate = !!project.anthropicApiKey;
+  if (dto.anthropicApiKey !== undefined) {
+    if (dto.anthropicApiKey === null) {
+      const isUpdate = !!project.anthropicApiKey;
+      if (isUpdate) {
+        const decryptedKey = await this.apiKeyEncryptionService.decrypt(project.anthropicApiKey!);
+        const keyHash = this.apiKeyEncryptionService.generateKeyHash(decryptedKey);
+        await this.apiKeyAuditService.logApiKeyDelete(ApiKeyAuditLevel.PROJECT, projectId, keyHash, context);
+      }
+      updates.anthropicApiKey = null;
+    } else {
+      const validation = this.apiKeyValidationService.validateFormat(dto.anthropicApiKey);
+      if (!validation.isValid) {
+        await this.apiKeyAuditService.logValidationFailure(ApiKeyAuditLevel.PROJECT, projectId, validation.errors, context);
+        throw new BadRequestException(validation.errors);
+      }
+      const isUpdate = !!project.anthropicApiKey;
+      updates.anthropicApiKey = await this.apiKeyEncryptionService.encrypt(dto.anthropicApiKey);
+      await this.apiKeyAuditService.logApiKeySet(ApiKeyAuditLevel.PROJECT, projectId, dto.anthropicApiKey, isUpdate, context);
+    }
+  }
 
-  // Encrypt and store
-  const encryptedKey = await this.apiKeyEncryptionService.encrypt(apiKey);
-  await this.projectRepo.update(projectId, { anthropicApiKey: encryptedKey });
-
-  // Audit the operation
-  await this.apiKeyAuditService.logApiKeySet(
-    ApiKeyAuditLevel.PROJECT,
-    projectId,
-    apiKey,
-    isUpdate,
-    context,
-  );
+  await this.projectRepo.update(projectId, updates);
 
   return {
-    success: true,
-    message: isUpdate ? 'Project API key updated successfully' : 'Project API key set successfully',
-    validation: validation.warnings.length > 0 ? { warnings: validation.warnings } : undefined,
+    id: projectId,
+    name: updates.name ?? project.name,
+    slug: project.slug,
+    hasApiKey: updates.anthropicApiKey !== undefined
+      ? updates.anthropicApiKey !== null
+      : !!project.anthropicApiKey,
   };
 }
 ```
@@ -364,17 +269,30 @@ async setProjectApiKey(
 
 ### Data Transfer Objects
 ```typescript
-// applications/backend/api/src/api-keys/dto/set-api-key.dto.ts
-import { IsString, IsOptional, IsBoolean, MinLength } from 'class-validator';
+// applications/backend/api/src/orgs/dto/update-org.dto.ts
+import { IsString, IsOptional, MinLength } from 'class-validator';
 
-export class SetApiKeyDto {
+export class UpdateOrgDto {
+  @IsOptional()
   @IsString()
-  @MinLength(20, { message: 'API key must be at least 20 characters long' })
-  apiKey: string;
+  name?: string;
 
   @IsOptional()
-  @IsBoolean()
-  validateConnectivity?: boolean;
+  @IsString()
+  anthropicApiKey?: string | null;
+}
+
+// applications/backend/api/src/repos/dto/update-project.dto.ts
+import { IsString, IsOptional } from 'class-validator';
+
+export class UpdateProjectDto {
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @IsOptional()
+  @IsString()
+  anthropicApiKey?: string | null;
 }
 
 // applications/backend/api/src/api-keys/dto/audit-logs-query.dto.ts

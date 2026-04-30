@@ -102,136 +102,36 @@ export class ApiKeyEncryptionService {
 ### Service Implementation  
 ```typescript
 // applications/backend/api/src/api-keys/api-key-validation.service.ts
-import { Injectable, Logger } from '@nestjs/common';
-import Anthropic from '@anthropic-ai/sdk';
+import { Injectable } from '@nestjs/common';
 
 export interface ValidationResult {
   isValid: boolean;
   errors: string[];
-  warnings: string[];
 }
 
 @Injectable()
 export class ApiKeyValidationService {
-  private readonly logger = new Logger(ApiKeyValidationService.name);
-
   /**
-   * Validates an Anthropic API key format
+   * Validates an Anthropic API key format (prefix check only)
    */
   validateFormat(apiKey: string): ValidationResult {
     const result: ValidationResult = {
       isValid: true,
       errors: [],
-      warnings: [],
     };
 
-    // Check basic format
     if (!apiKey) {
       result.isValid = false;
       result.errors.push('API key is required');
       return result;
     }
 
-    // Check Anthropic API key prefix
     if (!apiKey.startsWith('sk-ant-')) {
       result.isValid = false;
       result.errors.push('API key must start with sk-ant-');
     }
 
-    // Check approximate length (Anthropic keys are typically 50-100 characters)
-    if (apiKey.length < 20) {
-      result.isValid = false;
-      result.errors.push('API key appears too short');
-    }
-
-    if (apiKey.length > 200) {
-      result.warnings.push('API key appears unusually long');
-    }
-
-    // Check for valid characters (base64-like pattern after prefix)
-    const keyBody = apiKey.slice(7); // Remove 'sk-ant-' prefix
-    const validPattern = /^[A-Za-z0-9\-_]+$/;
-    if (!validPattern.test(keyBody)) {
-      result.isValid = false;
-      result.errors.push('API key contains invalid characters');
-    }
-
     return result;
-  }
-
-  /**
-   * Performs a connectivity test with the API key (optional validation)
-   */
-  async validateConnectivity(apiKey: string): Promise<ValidationResult> {
-    const formatResult = this.validateFormat(apiKey);
-    if (!formatResult.isValid) {
-      return formatResult;
-    }
-
-    try {
-      const client = new Anthropic({ apiKey });
-      
-      // Make a minimal API call to verify the key works
-      const response = await client.messages.create({
-        model: 'claude-3-haiku-20240307',
-        max_tokens: 10,
-        messages: [{ role: 'user', content: 'test' }],
-      });
-
-      if (response && response.content) {
-        this.logger.debug('API key connectivity test successful');
-        return {
-          isValid: true,
-          errors: [],
-          warnings: [],
-        };
-      } else {
-        return {
-          isValid: false,
-          errors: ['API key test call returned unexpected response'],
-          warnings: [],
-        };
-      }
-    } catch (error: any) {
-      this.logger.warn(`API key connectivity test failed: ${error.message}`);
-      
-      let errorMessage = 'API key test failed';
-      if (error.status === 401) {
-        errorMessage = 'API key is invalid or unauthorized';
-      } else if (error.status === 429) {
-        errorMessage = 'API key rate limited (but appears valid)';
-        return {
-          isValid: true,
-          errors: [],
-          warnings: [errorMessage],
-        };
-      }
-
-      return {
-        isValid: false,
-        errors: [errorMessage],
-        warnings: [],
-      };
-    }
-  }
-
-  /**
-   * Full validation: format + optional connectivity test
-   */
-  async validate(apiKey: string, testConnectivity = false): Promise<ValidationResult> {
-    const formatResult = this.validateFormat(apiKey);
-    
-    if (!formatResult.isValid || !testConnectivity) {
-      return formatResult;
-    }
-
-    const connectivityResult = await this.validateConnectivity(apiKey);
-    
-    return {
-      isValid: formatResult.isValid && connectivityResult.isValid,
-      errors: [...formatResult.errors, ...connectivityResult.errors],
-      warnings: [...formatResult.warnings, ...connectivityResult.warnings],
-    };
   }
 }
 ```
@@ -282,9 +182,8 @@ export class ApiKeysModule {}
 - Use secure string handling practices
 
 ### Validation Security
-- Format validation prevents obvious input errors
-- Connectivity testing is optional to avoid unnecessary API calls
-- Rate limiting considerations for validation testing
+- Format validation (prefix check only) prevents obvious input errors
+- No connectivity testing — validation is format-only per author decision
 - Error messages don't expose key details
 
 ## Usage Examples
@@ -299,7 +198,7 @@ const encrypted = await encryptionService.encrypt('sk-ant-api03-...');
 ### Validating an API Key
 ```typescript
 const validationService = new ApiKeyValidationService();
-const result = await validationService.validate('sk-ant-api03-...', true);
+const result = validationService.validateFormat('sk-ant-api03-...');
 if (result.isValid) {
   // Proceed with storing the key
 } else {
@@ -309,8 +208,8 @@ if (result.isValid) {
 
 ### Full Workflow
 ```typescript
-// Validate, encrypt, and store
-const validation = await validationService.validate(userApiKey);
+// Validate format, encrypt, and store
+const validation = validationService.validateFormat(userApiKey);
 if (validation.isValid) {
   const encrypted = await encryptionService.encrypt(userApiKey);
   await orgRepo.update(orgId, { anthropicApiKey: encrypted });

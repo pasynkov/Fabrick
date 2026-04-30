@@ -1,7 +1,7 @@
 # API Key Resolution Service
 
 ## Overview
-Hierarchical API key resolution service that determines which Anthropic API key to use for synthesis operations following the pattern: project key → organization key → global environment variable fallback.
+Hierarchical API key resolution service that determines which Anthropic API key to use for synthesis operations following the pattern: project key → organization key → error (no global fallback).
 
 ## Service Interface
 
@@ -17,7 +17,7 @@ import { ApiKeyEncryptionService } from './api-key-encryption.service';
 
 interface ApiKeyResolution {
   apiKey: string;
-  source: 'project' | 'organization' | 'global';
+  source: 'project' | 'organization';
   projectId?: string;
   orgId?: string;
 }
@@ -82,19 +82,8 @@ export class ApiKeyResolutionService {
       }
     }
 
-    // Final fallback to global environment variable
-    const globalKey = process.env.ANTHROPIC_API_KEY;
-    if (!globalKey) {
-      throw new Error(`No API key available for project ${projectId}`);
-    }
-
-    this.logger.debug(`Using global API key for project ${projectId}`);
-    return {
-      apiKey: globalKey,
-      source: 'global',
-      projectId: project.id,
-      orgId: project.orgId,
-    };
+    // No key available — do not fall back to global
+    throw new Error(`No API key available for project ${projectId}. Please configure an API key for this project or organization.`);
   }
 
   /**
@@ -122,18 +111,8 @@ export class ApiKeyResolutionService {
       }
     }
 
-    // Fall back to global environment variable
-    const globalKey = process.env.ANTHROPIC_API_KEY;
-    if (!globalKey) {
-      throw new Error(`No API key available for organization ${orgId}`);
-    }
-
-    this.logger.debug(`Using global API key for organization ${orgId}`);
-    return {
-      apiKey: globalKey,
-      source: 'global',
-      orgId: org.id,
-    };
+    // No key available — do not fall back to global
+    throw new Error(`No API key available for organization ${orgId}. Please configure an API key for this organization.`);
   }
 
   /**
@@ -154,24 +133,16 @@ export class ApiKeyResolutionService {
    - If present but decryption fails → log warning, continue to step 2
    - If null → continue to step 2
 
-2. **Organization Key Check**: Query organization entity for `anthropicApiKey`  
+2. **Organization Key Check**: Query organization entity for `anthropicApiKey`
    - If present and decryption succeeds → use organization key
-   - If present but decryption fails → log warning, continue to step 3
-   - If null → continue to step 3
-
-3. **Global Key Fallback**: Use `process.env.ANTHROPIC_API_KEY`
-   - If present → use global key
-   - If null → throw error (no API key available)
+   - If present but decryption fails → log warning, throw error
+   - If null → throw error with user-facing message to configure a key
 
 ### For Organization-level Operations
 1. **Organization Key Check**: Query organization entity for `anthropicApiKey`
    - If present and decryption succeeds → use organization key
-   - If present but decryption fails → log warning, continue to step 2
-   - If null → continue to step 2
-
-2. **Global Key Fallback**: Use `process.env.ANTHROPIC_API_KEY`
-   - If present → use global key
-   - If null → throw error (no API key available)
+   - If present but decryption fails → log warning, throw error
+   - If null → throw error with user-facing message to configure a key
 
 ## Error Handling
 

@@ -11,15 +11,14 @@
 - [ ] 2.1 Implement ApiKeyEncryptionService with AES-256-GCM encryption using global API key
 - [ ] 2.2 Implement encrypt/decrypt methods with proper error handling
 - [ ] 2.3 Add generateKeyHash method for audit logging
-- [ ] 2.4 Implement ApiKeyValidationService with format validation
-- [ ] 2.5 Add optional connectivity testing for API key validation
-- [ ] 2.6 Create comprehensive unit tests for encryption and validation services
+- [ ] 2.4 Implement ApiKeyValidationService with format validation (prefix check only, no connectivity test)
+- [ ] 2.5 Create comprehensive unit tests for encryption and validation services
 
 ## 3. API Key Resolution Service
 
 - [ ] 3.1 Implement ApiKeyResolutionService with hierarchical resolution logic
-- [ ] 3.2 Add resolveForProject method (project → org → global fallback)
-- [ ] 3.3 Add resolveForOrganization method (org → global fallback)  
+- [ ] 3.2 Add resolveForProject method (project → org; error if neither configured)
+- [ ] 3.3 Add resolveForOrganization method (org key only; error if not configured)
 - [ ] 3.4 Implement proper error handling for decryption failures
 - [ ] 3.5 Add validation of resolution results
 - [ ] 3.6 Create unit tests for all resolution scenarios
@@ -35,14 +34,12 @@
 
 ## 5. API Endpoints for API Key Management
 
-- [ ] 5.1 Add PUT /orgs/:orgId/api-key endpoint for organization API key management
-- [ ] 5.2 Add DELETE /orgs/:orgId/api-key endpoint for removing organization API keys
+- [ ] 5.1 Extend PATCH /orgs/:orgId to accept and handle anthropicApiKey field
+- [ ] 5.2 Extend PATCH /projects/:projectId to accept and handle anthropicApiKey field
 - [ ] 5.3 Add GET /orgs/:orgId/api-key/status endpoint for API key status
 - [ ] 5.4 Add GET /orgs/:orgId/api-key/audit-logs endpoint for audit log retrieval
-- [ ] 5.5 Add PUT /projects/:projectId/api-key endpoint for project API key management
-- [ ] 5.6 Add DELETE /projects/:projectId/api-key endpoint for removing project API keys
-- [ ] 5.7 Add GET /projects/:projectId/api-key/status endpoint with resolution chain info
-- [ ] 5.8 Add GET /projects/:projectId/api-key/audit-logs endpoint for project audit logs
+- [ ] 5.5 Add GET /projects/:projectId/api-key/status endpoint with resolution chain info
+- [ ] 5.6 Add GET /projects/:projectId/api-key/audit-logs endpoint for project audit logs
 
 ## 6. Service Layer Integration
 
@@ -59,16 +56,15 @@
 - [ ] 7.2 Modify triggerForProject to resolve API keys before queuing jobs
 - [ ] 7.3 Pass resolved API key information to synthesis jobs
 - [ ] 7.4 Add proper error handling for API key resolution failures
-- [ ] 7.5 Update SynthesisProcessor to use job-specific API keys
-- [ ] 7.6 Maintain backward compatibility with existing job format
-- [ ] 7.7 Add enhanced error messaging for API key-related failures
+- [ ] 7.5 Update SynthesisProcessor to use job-specific API keys (apiKey always resolved before queuing)
+- [ ] 7.6 Add enhanced error messaging for API key-related failures
 
 ## 8. Frontend UI Components
 
 - [ ] 8.1 Create ApiKeySection component for organization and project settings
-- [ ] 8.2 Implement ApiKeyStatusDisplay component with resolution chain visualization
-- [ ] 8.3 Create ApiKeyForm component with secure input handling
-- [ ] 8.4 Add ProjectKeyResolutionChain component for project-specific status
+- [ ] 8.2 Implement ApiKeyStatusDisplay component with resolution chain visualization (project → org only, no global fallback)
+- [ ] 8.3 Create ApiKeyForm component with secure input handling (no connectivity test option)
+- [ ] 8.4 Add ProjectKeyResolutionChain component for project-specific status (shows "no key" warning when neither configured)
 - [ ] 8.5 Implement ApiKeyAuditLogs component for activity tracking
 - [ ] 8.6 Integrate API key management into existing OrgDetail page
 - [ ] 8.7 Integrate API key management into existing ProjectDetail page

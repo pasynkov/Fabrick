@@ -173,7 +173,6 @@ interface Props {
 
 export const ApiKeyForm: React.FC<Props> = ({ level, resourceId, onSave, onCancel }) => {
   const [apiKey, setApiKey] = useState('');
-  const [validateConnectivity, setValidateConnectivity] = useState(false);
   const [loading, setLoading] = useState(false);
   const [validation, setValidation] = useState<ValidationResult | null>(null);
   const [showKey, setShowKey] = useState(false);
@@ -195,12 +194,11 @@ export const ApiKeyForm: React.FC<Props> = ({ level, resourceId, onSave, onCance
       setValidation(null);
 
       const endpoint = level === 'organization' 
-        ? `/orgs/${resourceId}/api-key`
-        : `/projects/${resourceId}/api-key`;
+        ? `/orgs/${resourceId}`
+        : `/projects/${resourceId}`;
 
-      const response = await api.put(endpoint, {
-        apiKey: apiKey.trim(),
-        validateConnectivity
+      const response = await api.patch(endpoint, {
+        anthropicApiKey: apiKey.trim(),
       });
 
       if (response.data.validation?.warnings.length > 0) {
@@ -242,10 +240,10 @@ export const ApiKeyForm: React.FC<Props> = ({ level, resourceId, onSave, onCance
     try {
       setLoading(true);
       const endpoint = level === 'organization' 
-        ? `/orgs/${resourceId}/api-key`
-        : `/projects/${resourceId}/api-key`;
+        ? `/orgs/${resourceId}`
+        : `/projects/${resourceId}`;
       
-      await api.delete(endpoint);
+      await api.patch(endpoint, { anthropicApiKey: null });
       onSave();
     } catch (err) {
       setValidation({
@@ -288,23 +286,6 @@ export const ApiKeyForm: React.FC<Props> = ({ level, resourceId, onSave, onCance
         </p>
       </div>
 
-      <div>
-        <label className="flex items-center">
-          <input
-            type="checkbox"
-            checked={validateConnectivity}
-            onChange={(e) => setValidateConnectivity(e.target.checked)}
-            disabled={loading}
-            className="mr-2"
-          />
-          <span className="text-sm text-gray-700">
-            Test API key connectivity (recommended)
-          </span>
-        </label>
-        <p className="text-xs text-gray-500 mt-1">
-          This will make a test API call to verify your key works. May incur minimal API usage.
-        </p>
-      </div>
 
       {validation && (
         <div className={`p-3 rounded border text-sm ${
@@ -376,7 +357,7 @@ import { api } from '../api';
 interface ProjectApiKeyStatus {
   hasProjectApiKey: boolean;
   hasOrgApiKey: boolean;
-  effectiveSource: 'project' | 'organization' | 'global';
+  effectiveSource: 'project' | 'organization' | 'none';
   projectKeyLastUpdated?: string;
   orgKeyLastUpdated?: string;
 }
@@ -429,19 +410,16 @@ export const ProjectKeyResolutionChain: React.FC<Props> = ({ resourceId }) => {
             <span className="bg-blue-100 text-blue-800 px-1 rounded">ACTIVE</span>
           )}
         </div>
-        
-        <div className={`flex items-center space-x-2 ${
-          status.effectiveSource === 'global' ? 'text-blue-600 font-medium' : 'text-gray-500'
-        }`}>
-          <div className="w-2 h-2 rounded-full bg-blue-500" />
-          <span>Global API Key</span>
-          {status.effectiveSource === 'global' && (
-            <span className="bg-blue-100 text-blue-800 px-1 rounded">ACTIVE</span>
-          )}
-        </div>
+
+        {status.effectiveSource === 'none' && (
+          <div className="flex items-center space-x-2 text-red-600">
+            <div className="w-2 h-2 rounded-full bg-red-500" />
+            <span>No API key configured — synthesis will be blocked</span>
+          </div>
+        )}
       </div>
       <p className="text-xs text-gray-600 mt-2">
-        The effective API key is determined by the first available key in this priority order.
+        The effective API key is the first available key in this priority order. Synthesis requires at least one key to be configured.
       </p>
     </div>
   );

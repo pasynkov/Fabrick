@@ -15,24 +15,25 @@ Current synthesis flow:
 ## Goals / Non-Goals
 
 **Goals:**
-- Implement hierarchical API key management (project → organization → global fallback)
+- Implement hierarchical API key management (project → organization; synthesis blocked if no key configured)
 - Secure storage of API keys using encryption with the global key as encryption secret
-- Maintain backward compatibility with existing global API key configuration
 - Add comprehensive audit logging for API key operations
 - Provide intuitive UI for API key management in organization and project settings
-- Validate Anthropic API keys format and basic connectivity
+- Validate Anthropic API key format (prefix check only)
 
 **Non-Goals:**
 - Supporting other AI provider API keys (focus only on Anthropic)
 - Real-time API usage tracking or billing integration
-- API key rotation automation (manual management only)
+- API key rotation (not needed per author)
 - Multi-region API key distribution
+- API key connectivity testing (not needed per author)
+- Global/platform-level API key fallback
 
 ## Decisions
 
 ### Decision 1: Hierarchical Resolution Strategy
-**Choice:** Project API key → Organization API key → Global environment variable fallback
-**Rationale:** Provides maximum flexibility while maintaining backward compatibility. Projects can override organization defaults, and the global key ensures existing setups continue working.
+**Choice:** Project API key → Organization API key → fail with user-facing error (no global fallback)
+**Rationale:** Per author decision — if no project or org key is configured, synthesis must not start. User is prompted to configure a key.
 **Alternatives considered:**
 - Flat project-only keys: Would require every project to have a key
 - Organization-only keys: Lacks project-level flexibility
@@ -53,11 +54,10 @@ Current synthesis flow:
 - JSON configuration column: Less type-safe and harder to query
 
 ### Decision 4: API Key Validation Strategy
-**Choice:** Format validation (sk-ant-apiXX- prefix) plus optional connectivity test
-**Rationale:** Format validation catches most input errors. Connectivity test confirms the key works but is optional to avoid API calls during configuration.
+**Choice:** Format validation only (sk-ant- prefix check)
+**Rationale:** Per author decision — only prefix validation is needed. No connectivity testing.
 **Alternatives considered:**
-- Format-only validation: Misses invalid keys until synthesis
-- Required connectivity test: Adds latency and API costs to configuration
+- Connectivity test: Author explicitly declined this feature
 
 ### Decision 5: Audit Logging Approach
 **Choice:** Log API key operations (set/update/delete) with hashed key identifiers, never log actual keys

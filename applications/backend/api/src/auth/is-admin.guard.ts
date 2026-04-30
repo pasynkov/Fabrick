@@ -19,6 +19,10 @@ export class IsAdminGuard implements CanActivate {
       throw new BadRequestException('Organization context could not be determined');
     }
 
+    if (!userId) {
+      throw new ForbiddenException('Authentication required');
+    }
+
     const member = await this.memberRepo.findOne({ where: { orgId, userId } });
     if (!member) {
       throw new ForbiddenException('Not a member of this organization');

@@ -11,6 +11,9 @@ export class Organization {
   @Column({ unique: true })
   slug: string;
 
+  @Column({ nullable: true, type: 'text' })
+  anthropicApiKey: string | null;
+
   @CreateDateColumn()
   createdAt: Date;
 }

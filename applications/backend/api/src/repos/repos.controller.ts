@@ -3,10 +3,12 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   HttpCode,
   Param,
   Patch,
   Post,
+  Query,
   Request,
   UploadedFile,
   UseGuards,
@@ -17,11 +19,13 @@ import { memoryStorage } from 'multer';
 import * as unzipper from 'unzipper';
 import { FabrickAuthGuard } from '../auth/fabrick-auth.guard';
 import { IsAdminGuard } from '../auth/is-admin.guard';
+import { ApiKeyAuditService } from '../api-keys/api-key-audit.service';
+import { AuditLogsQueryDto } from '../api-keys/dto/audit-logs-query.dto';
 import { StorageService } from '../storage/storage.service';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { CreateRepoDto } from './dto/create-repo.dto';
 import { FindOrCreateRepoDto } from './dto/find-or-create-repo.dto';
-import { UpdateProjectNameDto } from './dto/update-project-name.dto';
+import { UpdateProjectDto } from './dto/update-project.dto';
 import { ReposService } from './repos.service';
 
 @Controller()
@@ -29,6 +33,7 @@ export class ReposController {
   constructor(
     private readonly reposService: ReposService,
     private readonly storageService: StorageService,
+    private readonly apiKeyAuditService: ApiKeyAuditService,
   ) {}
 
   @Post('orgs/:orgId/projects')
@@ -87,13 +92,35 @@ export class ReposController {
 
   @Patch('orgs/:orgId/projects/:projectId')
   @UseGuards(FabrickAuthGuard, IsAdminGuard)
-  updateProjectName(
-    @Request() req: { user: { id: string } },
+  updateProject(
+    @Request() req: { user: { id: string }; ip?: string },
     @Param('orgId') orgId: string,
     @Param('projectId') projectId: string,
-    @Body() body: UpdateProjectNameDto,
+    @Body() body: UpdateProjectDto,
+    @Headers('user-agent') userAgent?: string,
   ) {
-    return this.reposService.updateProjectName(orgId, projectId, body.name, req.user.id);
+    return this.reposService.updateProject(orgId, projectId, body, req.user.id, {
+      userId: req.user.id,
+      ipAddress: req.ip,
+      userAgent,
+    });
+  }
+
+  @Get('projects/:projectId/api-key/status')
+  @UseGuards(FabrickAuthGuard)
+  getProjectApiKeyStatus(
+    @Param('projectId') projectId: string,
+  ) {
+    return this.reposService.getProjectApiKeyStatus(projectId);
+  }
+
+  @Get('projects/:projectId/api-key/audit-logs')
+  @UseGuards(FabrickAuthGuard, IsAdminGuard)
+  getProjectAuditLogs(
+    @Param('projectId') projectId: string,
+    @Query() query: AuditLogsQueryDto,
+  ) {
+    return this.apiKeyAuditService.getProjectAuditLogs(projectId, query.limit, query.offset);
   }
 
   @Post('repos/:repoId/context')

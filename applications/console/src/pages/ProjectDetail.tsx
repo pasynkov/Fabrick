@@ -1,13 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api';
+import { ProjectKeyResolutionChain } from '../components/ProjectKeyResolutionChain';
+import { ApiKeyAuditLogs } from '../components/ApiKeyAuditLogs';
 
 interface Repo { id: string; name: string; slug: string; gitRemote: string }
 interface Project { id: string; name: string; slug: string }
+interface OrgInfo { id: string; role: string }
 
 export default function ProjectDetail() {
   const { orgSlug, projectSlug } = useParams<{ orgSlug: string; projectSlug: string }>();
   const [project, setProject] = useState<Project | null>(null);
+  const [orgInfo, setOrgInfo] = useState<OrgInfo | null>(null);
   const [repos, setRepos] = useState<Repo[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -21,6 +25,7 @@ export default function ProjectDetail() {
     api.orgs.list().then((orgs) => {
       const org = orgs.find((o) => o.slug === orgSlug);
       if (!org) return;
+      setOrgInfo({ id: org.id, role: org.role });
       api.projects.list(org.id).then((projects) => {
         const p = projects.find((pr) => pr.slug === projectSlug);
         if (!p) return;
@@ -113,6 +118,22 @@ export default function ProjectDetail() {
             </ul>
           )}
         </section>
+
+        {orgInfo && (
+          <section>
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">API Key</h2>
+            <div className="bg-white border border-gray-200 rounded-lg px-4 py-4 space-y-3">
+              <ProjectKeyResolutionChain
+                orgId={orgInfo.id}
+                projectId={project.id}
+                isAdmin={orgInfo.role === 'admin'}
+              />
+              {orgInfo.role === 'admin' && (
+                <ApiKeyAuditLogs type="project" resourceId={project.id} />
+              )}
+            </div>
+          </section>
+        )}
 
         <section>
           <div className="flex items-center justify-between mb-4">

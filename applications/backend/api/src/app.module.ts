@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthModule } from './auth/auth.module';
 import { ContextModule } from './context/context.module';
+import { ApiKeyAuditLog } from './entities/api-key-audit-log.entity';
 import { OrgMember } from './entities/org-member.entity';
 import { Organization } from './entities/organization.entity';
 import { Project } from './entities/project.entity';
@@ -24,7 +25,7 @@ import { SynthesisModule } from './synthesis/synthesis.module';
         database: process.env.DB_NAME || 'fabrick',
         username: process.env.DB_USER || 'fabrick',
         password: process.env.DB_PASS || 'fabrick',
-        entities: [User, Organization, OrgMember, Project, Repository],
+        entities: [User, Organization, OrgMember, Project, Repository, ApiKeyAuditLog],
         synchronize: false,
         migrationsRun: true,
         migrations,

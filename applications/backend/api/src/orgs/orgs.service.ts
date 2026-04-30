@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
@@ -8,9 +9,15 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
 import { Repository } from 'typeorm';
+import { ApiKeyAuditLevel } from '../entities/api-key-audit-log.entity';
 import { OrgMember } from '../entities/org-member.entity';
 import { Organization } from '../entities/organization.entity';
 import { User } from '../entities/user.entity';
+import { ApiKeyAuditService, AuditContext } from '../api-keys/api-key-audit.service';
+import { ApiKeyEncryptionService } from '../api-keys/api-key-encryption.service';
+import { ApiKeyValidationService } from '../api-keys/api-key-validation.service';
+import { UpdateOrgDto } from './dto/update-org.dto';
+
 @Injectable()
 export class OrgsService {
   private readonly logger = new Logger(OrgsService.name);
@@ -22,6 +29,9 @@ export class OrgsService {
     private readonly memberRepo: Repository<OrgMember>,
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
+    private readonly apiKeyEncryptionService: ApiKeyEncryptionService,
+    private readonly apiKeyValidationService: ApiKeyValidationService,
+    private readonly apiKeyAuditService: ApiKeyAuditService,
   ) {}
 
   async createOrg(userId: string, name: string) {
@@ -96,15 +106,69 @@ export class OrgsService {
     if (!m) throw new ForbiddenException();
   }
 
-  async updateOrgName(orgId: string, name: string, userId: string) {
-    await this.requireAdmin(userId, orgId);
+  async updateOrg(orgId: string, dto: UpdateOrgDto, context: AuditContext) {
+    await this.requireAdmin(context.userId, orgId);
     const org = await this.orgRepo.findOne({ where: { id: orgId } });
     if (!org) throw new NotFoundException('Org not found');
-    const oldName = org.name;
-    org.name = name;
-    await this.orgRepo.save(org);
-    this.logger.log(`Org ${orgId} name changed from "${oldName}" to "${name}" by user ${userId}`);
-    return { id: org.id, name: org.name, slug: org.slug };
+
+    const updates: Partial<Organization> = {};
+
+    if (dto.name !== undefined) {
+      if (!dto.name || dto.name.length === 0) throw new BadRequestException('Name must not be empty');
+      const oldName = org.name;
+      updates.name = dto.name;
+      this.logger.log(`Org ${orgId} name changed from "${oldName}" to "${dto.name}" by user ${context.userId}`);
+    }
+
+    if (dto.anthropicApiKey !== undefined) {
+      if (dto.anthropicApiKey === null) {
+        if (org.anthropicApiKey) {
+          const decryptedKey = this.apiKeyEncryptionService.decrypt(org.anthropicApiKey);
+          const keyHash = this.apiKeyEncryptionService.generateKeyHash(decryptedKey);
+          await this.apiKeyAuditService.logApiKeyDelete(ApiKeyAuditLevel.ORGANIZATION, orgId, keyHash, context);
+        }
+        updates.anthropicApiKey = null;
+      } else {
+        const validation = this.apiKeyValidationService.validateFormat(dto.anthropicApiKey);
+        if (!validation.isValid) {
+          await this.apiKeyAuditService.logValidationFailure(ApiKeyAuditLevel.ORGANIZATION, orgId, validation.errors, context);
+          throw new BadRequestException(validation.errors);
+        }
+        const isUpdate = !!org.anthropicApiKey;
+        updates.anthropicApiKey = this.apiKeyEncryptionService.encrypt(dto.anthropicApiKey);
+        await this.apiKeyAuditService.logApiKeySet(ApiKeyAuditLevel.ORGANIZATION, orgId, dto.anthropicApiKey, isUpdate, context);
+      }
+    }
+
+    await this.orgRepo.update(orgId, updates);
+
+    return {
+      id: orgId,
+      name: updates.name ?? org.name,
+      slug: org.slug,
+      hasApiKey: updates.anthropicApiKey !== undefined
+        ? updates.anthropicApiKey !== null
+        : !!org.anthropicApiKey,
+    };
+  }
+
+  async updateOrgName(orgId: string, name: string, userId: string) {
+    return this.updateOrg(orgId, { name }, { userId });
+  }
+
+  async getOrgApiKeyStatus(orgId: string) {
+    const org = await this.orgRepo.findOne({ where: { id: orgId } });
+    if (!org) throw new NotFoundException('Org not found');
+
+    return {
+      hasApiKey: !!org.anthropicApiKey,
+      source: 'organization' as const,
+      keyHash: org.anthropicApiKey
+        ? this.apiKeyEncryptionService.generateKeyHash(
+            this.apiKeyEncryptionService.decrypt(org.anthropicApiKey),
+          )
+        : undefined,
+    };
   }
 
   async getOrgBySlug(slug: string): Promise<Organization> {

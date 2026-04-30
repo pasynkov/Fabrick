@@ -16,6 +16,7 @@ import {
 } from '@nestjs/common';
 import { Response } from 'express';
 import { FabrickAuthGuard } from '../auth/fabrick-auth.guard';
+import { SynthesisCallbackDto } from './dto/synthesis-callback.dto';
 import { SynthesisService } from './synthesis.service';
 
 @Controller()
@@ -26,7 +27,7 @@ export class SynthesisController {
   @HttpCode(204)
   async synthesisCallback(
     @Headers('authorization') auth: string,
-    @Body() body: { projectId: string; status: string; error?: string },
+    @Body() body: SynthesisCallbackDto,
   ): Promise<void> {
     if (!auth?.startsWith('Bearer ')) throw new UnauthorizedException();
     const token = auth.slice(7);

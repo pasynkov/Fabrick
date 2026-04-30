@@ -3,6 +3,7 @@ import { ReposController } from './repos.controller';
 import { ReposService } from './repos.service';
 import { StorageService } from '../storage/storage.service';
 import { FabrickAuthGuard } from '../auth/fabrick-auth.guard';
+import { IsAdminGuard } from '../auth/is-admin.guard';
 
 const mockReposService = () => ({
   createProject: jest.fn(),
@@ -24,6 +25,7 @@ describe('ReposController', () => {
   let reposService: ReturnType<typeof mockReposService>;
 
   beforeEach(async () => {
+    const passGuard = { canActivate: () => true };
     const module = await Test.createTestingModule({
       controllers: [ReposController],
       providers: [
@@ -32,7 +34,9 @@ describe('ReposController', () => {
       ],
     })
       .overrideGuard(FabrickAuthGuard)
-      .useValue({ canActivate: () => true })
+      .useValue(passGuard)
+      .overrideGuard(IsAdminGuard)
+      .useValue(passGuard)
       .compile();
 
     controller = module.get(ReposController);
@@ -44,7 +48,7 @@ describe('ReposController', () => {
     reposService.createProject.mockResolvedValue(expected);
     const req = { user: { id: 'uid1' } };
 
-    const result = await controller.createProject(req as any, 'org1', { name: 'My Project' });
+    const result = await controller.createProject(req as any, 'org1', { name: 'My Project' } as any);
 
     expect(reposService.createProject).toHaveBeenCalledWith('uid1', 'org1', 'My Project');
     expect(result).toBe(expected);
@@ -55,7 +59,7 @@ describe('ReposController', () => {
     reposService.createRepo.mockResolvedValue(expected);
     const req = { user: { id: 'uid1' } };
 
-    const result = await controller.createRepo(req as any, 'proj1', { name: 'myrepo', gitRemote: 'https://github.com/org/myrepo.git' });
+    const result = await controller.createRepo(req as any, 'proj1', { name: 'myrepo', gitRemote: 'https://github.com/org/myrepo.git' } as any);
 
     expect(reposService.createRepo).toHaveBeenCalledWith('uid1', 'proj1', 'myrepo', 'https://github.com/org/myrepo.git');
     expect(result).toBe(expected);
@@ -66,7 +70,7 @@ describe('ReposController', () => {
     reposService.findOrCreateRepo.mockResolvedValue({ status: 201, repo });
     const req = { user: { id: 'uid1' } };
 
-    const result = await controller.findOrCreateRepo(req as any, { gitRemote: 'https://github.com/org/myrepo.git', projectId: 'proj1' });
+    const result = await controller.findOrCreateRepo(req as any, { gitRemote: 'https://github.com/org/myrepo.git', projectId: 'proj1' } as any);
 
     expect(reposService.findOrCreateRepo).toHaveBeenCalledWith('uid1', 'https://github.com/org/myrepo.git', 'proj1');
     expect(result).toBe(repo);

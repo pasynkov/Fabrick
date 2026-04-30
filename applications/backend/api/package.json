@@ -1,6 +1,6 @@
 {
   "name": "fabrick-api",
-  "version": "0.6.10",
+  "version": "0.6.11",
   "scripts": {
     "build": "nest build",
     "start": "node dist/main",

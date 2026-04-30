@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   Body,
   Controller,
   HttpCode,
@@ -8,6 +7,10 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
+import { LoginDto } from './dto/login.dto';
+import { McpTokenDto } from './dto/mcp-token.dto';
+import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { RegisterDto } from './dto/register.dto';
 import { FabrickAuthGuard } from './fabrick-auth.guard';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { RefreshAuthGuard } from './refresh-auth.guard';
@@ -18,23 +21,20 @@ export class AuthController {
 
   @Post('register')
   @HttpCode(201)
-  async register(@Body() body: { email: string; password: string; persistent?: boolean }) {
-    if (!body.email || !body.password || body.password.length < 8) {
-      throw new BadRequestException('email and password (min 8 chars) required');
-    }
+  async register(@Body() body: RegisterDto) {
     return this.authService.register(body.email, body.password, body.persistent);
   }
 
   @Post('login')
   @HttpCode(200)
-  async login(@Body() body: { email: string; password: string; persistent?: boolean }) {
+  async login(@Body() body: LoginDto) {
     return this.authService.login(body.email, body.password, body.persistent);
   }
 
   @Post('refresh')
   @HttpCode(200)
   @UseGuards(RefreshAuthGuard)
-  async refresh(@Body() body: { refresh_token: string }) {
+  async refresh(@Body() body: RefreshTokenDto) {
     return this.authService.refresh(body.refresh_token);
   }
 
@@ -63,11 +63,8 @@ export class AuthController {
   @UseGuards(FabrickAuthGuard)
   async mcpToken(
     @Request() req: { user: { id: string } },
-    @Body() body: { orgSlug: string; projectSlug: string; repoId: string },
+    @Body() body: McpTokenDto,
   ) {
-    if (!body.orgSlug || !body.projectSlug || !body.repoId) {
-      throw new BadRequestException('orgSlug, projectSlug, and repoId are required');
-    }
     return this.authService.issueMcpToken(req.user.id, body.orgSlug, body.projectSlug, body.repoId);
   }
 }

@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   Body,
   Controller,
   Get,
@@ -11,6 +10,10 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { FabrickAuthGuard } from '../auth/fabrick-auth.guard';
+import { IsAdminGuard } from '../auth/is-admin.guard';
+import { AddMemberDto } from './dto/add-member.dto';
+import { CreateOrgDto } from './dto/create-org.dto';
+import { UpdateOrgNameDto } from './dto/update-org-name.dto';
 import { OrgsService } from './orgs.service';
 
 @Controller('orgs')
@@ -22,7 +25,7 @@ export class OrgsController {
   @HttpCode(201)
   create(
     @Request() req: { user: { id: string } },
-    @Body() body: { name: string },
+    @Body() body: CreateOrgDto,
   ) {
     return this.orgsService.createOrg(req.user.id, body.name);
   }
@@ -34,10 +37,11 @@ export class OrgsController {
 
   @Post(':orgId/members')
   @HttpCode(201)
+  @UseGuards(IsAdminGuard)
   addMember(
     @Request() req: { user: { id: string } },
     @Param('orgId') orgId: string,
-    @Body() body: { email: string; password: string },
+    @Body() body: AddMemberDto,
   ) {
     return this.orgsService.addMember(req.user.id, orgId, body.email, body.password);
   }
@@ -51,13 +55,12 @@ export class OrgsController {
   }
 
   @Patch(':orgId')
+  @UseGuards(IsAdminGuard)
   updateName(
     @Request() req: { user: { id: string } },
     @Param('orgId') orgId: string,
-    @Body() body: { name: string },
+    @Body() body: UpdateOrgNameDto,
   ) {
-    if (!body.name || body.name.trim().length === 0) throw new BadRequestException('Name must not be empty');
-    if (body.name.length > 128) throw new BadRequestException('Name must not exceed 128 characters');
-    return this.orgsService.updateOrgName(orgId, body.name.trim(), req.user.id);
+    return this.orgsService.updateOrgName(orgId, body.name, req.user.id);
   }
 }

@@ -8,6 +8,7 @@ import { User } from '../entities/user.entity';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { FabrickAuthGuard } from './fabrick-auth.guard';
+import { IsAdminGuard } from './is-admin.guard';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { JwtStrategy } from './jwt.strategy';
 import { RefreshAuthGuard } from './refresh-auth.guard';
@@ -22,7 +23,7 @@ import { RefreshAuthGuard } from './refresh-auth.guard';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, JwtAuthGuard, FabrickAuthGuard, RefreshAuthGuard],
-  exports: [JwtAuthGuard, FabrickAuthGuard, RefreshAuthGuard, TypeOrmModule, JwtModule],
+  providers: [AuthService, JwtStrategy, JwtAuthGuard, FabrickAuthGuard, RefreshAuthGuard, IsAdminGuard],
+  exports: [JwtAuthGuard, FabrickAuthGuard, RefreshAuthGuard, IsAdminGuard, TypeOrmModule, JwtModule],
 })
 export class AuthModule {}

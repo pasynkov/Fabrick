@@ -1,4 +1,3 @@
-import { BadRequestException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
@@ -40,7 +39,7 @@ describe('AuthController', () => {
       const expected = { access_token: 'tok', user: { id: '1', email: 'a@b.com' } };
       authService.register.mockResolvedValue(expected);
 
-      const result = await controller.register({ email: 'a@b.com', password: 'password1' });
+      const result = await controller.register({ email: 'a@b.com', password: 'password1' } as any);
 
       expect(authService.register).toHaveBeenCalledWith('a@b.com', 'password1', undefined);
       expect(result).toBe(expected);
@@ -50,18 +49,10 @@ describe('AuthController', () => {
       const expected = { access_token: 'tok', refresh_token: 'ref', user: { id: '1', email: 'a@b.com' } };
       authService.register.mockResolvedValue(expected);
 
-      const result = await controller.register({ email: 'a@b.com', password: 'password1', persistent: true });
+      const result = await controller.register({ email: 'a@b.com', password: 'password1', persistent: true } as any);
 
       expect(authService.register).toHaveBeenCalledWith('a@b.com', 'password1', true);
       expect(result).toBe(expected);
-    });
-
-    it('throws BadRequestException on missing email', async () => {
-      await expect(controller.register({ email: '', password: 'password1' })).rejects.toThrow(BadRequestException);
-    });
-
-    it('throws BadRequestException on short password', async () => {
-      await expect(controller.register({ email: 'a@b.com', password: 'short' })).rejects.toThrow(BadRequestException);
     });
   });
 
@@ -70,7 +61,7 @@ describe('AuthController', () => {
       const expected = { access_token: 'tok', user: { id: '1', email: 'a@b.com' } };
       authService.login.mockResolvedValue(expected);
 
-      const result = await controller.login({ email: 'a@b.com', password: 'password1' });
+      const result = await controller.login({ email: 'a@b.com', password: 'password1' } as any);
 
       expect(authService.login).toHaveBeenCalledWith('a@b.com', 'password1', undefined);
       expect(result).toBe(expected);
@@ -80,7 +71,7 @@ describe('AuthController', () => {
       const expected = { access_token: 'tok', refresh_token: 'ref', user: { id: '1', email: 'a@b.com' } };
       authService.login.mockResolvedValue(expected);
 
-      const result = await controller.login({ email: 'a@b.com', password: 'password1', persistent: true });
+      const result = await controller.login({ email: 'a@b.com', password: 'password1', persistent: true } as any);
 
       expect(authService.login).toHaveBeenCalledWith('a@b.com', 'password1', true);
       expect(result).toBe(expected);
@@ -92,7 +83,7 @@ describe('AuthController', () => {
       const expected = { access_token: 'new-tok', refresh_token: 'new-refresh' };
       authService.refresh.mockResolvedValue(expected);
 
-      const result = await controller.refresh({ refresh_token: 'old-refresh' });
+      const result = await controller.refresh({ refresh_token: 'old-refresh' } as any);
 
       expect(authService.refresh).toHaveBeenCalledWith('old-refresh');
       expect(result).toBe(expected);

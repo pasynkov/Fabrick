@@ -33,7 +33,7 @@ export default function EditProjectName() {
     if (name.length > 128) { setError('Name must not exceed 128 characters'); return; }
     setLoading(true);
     try {
-      await api.projects.update(orgId, projectId, name.trim());
+      await api.projects.update(orgId, projectId, { name: name.trim() });
       navigate(`/orgs/${orgSlug}/projects/${projectSlug}`);
     } catch (err: any) {
       setError(err.message || 'Failed to update project name');

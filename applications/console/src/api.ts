@@ -114,6 +114,11 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ name }),
       }),
+    update: (orgId: string, name: string) =>
+      request<{ id: string; name: string; slug: string }>(`/orgs/${orgId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ name }),
+      }),
     members: {
       list: (orgId: string) =>
         request<{ userId: string; email: string; role: string }[]>(`/orgs/${orgId}/members`),
@@ -131,6 +136,11 @@ export const api = {
     create: (orgId: string, name: string) =>
       request<{ id: string; name: string; slug: string }>(`/orgs/${orgId}/projects`, {
         method: 'POST',
+        body: JSON.stringify({ name }),
+      }),
+    update: (orgId: string, projectId: string, name: string) =>
+      request<{ id: string; name: string; slug: string; orgId: string }>(`/orgs/${orgId}/projects/${projectId}`, {
+        method: 'PATCH',
         body: JSON.stringify({ name }),
       }),
   },

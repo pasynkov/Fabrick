@@ -5,6 +5,7 @@ import {
   Get,
   HttpCode,
   Param,
+  Patch,
   Post,
   Request,
   UploadedFile,
@@ -77,6 +78,19 @@ export class ReposController {
       body.projectId,
     );
     return result.repo;
+  }
+
+  @Patch('orgs/:orgId/projects/:projectId')
+  @UseGuards(FabrickAuthGuard)
+  updateProjectName(
+    @Request() req: { user: { id: string } },
+    @Param('orgId') orgId: string,
+    @Param('projectId') projectId: string,
+    @Body() body: { name: string },
+  ) {
+    if (!body.name || body.name.trim().length === 0) throw new BadRequestException('Name must not be empty');
+    if (body.name.length > 128) throw new BadRequestException('Name must not exceed 128 characters');
+    return this.reposService.updateProjectName(orgId, projectId, body.name.trim(), req.user.id);
   }
 
   @Post('repos/:repoId/context')

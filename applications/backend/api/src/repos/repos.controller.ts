@@ -16,7 +16,12 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import * as unzipper from 'unzipper';
 import { FabrickAuthGuard } from '../auth/fabrick-auth.guard';
+import { IsAdminGuard } from '../auth/is-admin.guard';
 import { StorageService } from '../storage/storage.service';
+import { CreateProjectDto } from './dto/create-project.dto';
+import { CreateRepoDto } from './dto/create-repo.dto';
+import { FindOrCreateRepoDto } from './dto/find-or-create-repo.dto';
+import { UpdateProjectNameDto } from './dto/update-project-name.dto';
 import { ReposService } from './repos.service';
 
 @Controller()
@@ -32,7 +37,7 @@ export class ReposController {
   createProject(
     @Request() req: { user: { id: string } },
     @Param('orgId') orgId: string,
-    @Body() body: { name: string },
+    @Body() body: CreateProjectDto,
   ) {
     return this.reposService.createProject(req.user.id, orgId, body.name);
   }
@@ -52,7 +57,7 @@ export class ReposController {
   createRepo(
     @Request() req: { user: { id: string } },
     @Param('projectId') projectId: string,
-    @Body() body: { name: string; gitRemote: string },
+    @Body() body: CreateRepoDto,
   ) {
     return this.reposService.createRepo(req.user.id, projectId, body.name, body.gitRemote);
   }
@@ -70,7 +75,7 @@ export class ReposController {
   @UseGuards(FabrickAuthGuard)
   async findOrCreateRepo(
     @Request() req: { user: { id: string } },
-    @Body() body: { gitRemote: string; projectId: string },
+    @Body() body: FindOrCreateRepoDto,
   ) {
     const result = await this.reposService.findOrCreateRepo(
       req.user.id,
@@ -81,16 +86,14 @@ export class ReposController {
   }
 
   @Patch('orgs/:orgId/projects/:projectId')
-  @UseGuards(FabrickAuthGuard)
+  @UseGuards(FabrickAuthGuard, IsAdminGuard)
   updateProjectName(
     @Request() req: { user: { id: string } },
     @Param('orgId') orgId: string,
     @Param('projectId') projectId: string,
-    @Body() body: { name: string },
+    @Body() body: UpdateProjectNameDto,
   ) {
-    if (!body.name || body.name.trim().length === 0) throw new BadRequestException('Name must not be empty');
-    if (body.name.length > 128) throw new BadRequestException('Name must not exceed 128 characters');
-    return this.reposService.updateProjectName(orgId, projectId, body.name.trim(), req.user.id);
+    return this.reposService.updateProjectName(orgId, projectId, body.name, req.user.id);
   }
 
   @Post('repos/:repoId/context')

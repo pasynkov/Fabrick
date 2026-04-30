@@ -54,8 +54,6 @@ export class OrgsService {
     email: string,
     password: string,
   ) {
-    await this.requireAdmin(requestingUserId, orgId);
-
     let user = await this.userRepo.findOne({ where: { email } });
     if (!user) {
       const passwordHash = await bcrypt.hash(password, 10);

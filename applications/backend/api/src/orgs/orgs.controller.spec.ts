@@ -2,12 +2,14 @@ import { Test } from '@nestjs/testing';
 import { OrgsController } from './orgs.controller';
 import { OrgsService } from './orgs.service';
 import { FabrickAuthGuard } from '../auth/fabrick-auth.guard';
+import { IsAdminGuard } from '../auth/is-admin.guard';
 
 const mockOrgsService = () => ({
   createOrg: jest.fn(),
   listOrgs: jest.fn(),
   addMember: jest.fn(),
   listMembers: jest.fn(),
+  updateOrgName: jest.fn(),
 });
 
 describe('OrgsController', () => {
@@ -15,12 +17,15 @@ describe('OrgsController', () => {
   let orgsService: ReturnType<typeof mockOrgsService>;
 
   beforeEach(async () => {
+    const passGuard = { canActivate: () => true };
     const module = await Test.createTestingModule({
       controllers: [OrgsController],
       providers: [{ provide: OrgsService, useFactory: mockOrgsService }],
     })
       .overrideGuard(FabrickAuthGuard)
-      .useValue({ canActivate: () => true })
+      .useValue(passGuard)
+      .overrideGuard(IsAdminGuard)
+      .useValue(passGuard)
       .compile();
 
     controller = module.get(OrgsController);
@@ -32,7 +37,7 @@ describe('OrgsController', () => {
     orgsService.createOrg.mockResolvedValue(expected);
     const req = { user: { id: 'uid1' } };
 
-    const result = await controller.create(req as any, { name: 'Acme' });
+    const result = await controller.create(req as any, { name: 'Acme' } as any);
 
     expect(orgsService.createOrg).toHaveBeenCalledWith('uid1', 'Acme');
     expect(result).toBe(expected);
@@ -54,7 +59,7 @@ describe('OrgsController', () => {
     orgsService.addMember.mockResolvedValue(expected);
     const req = { user: { id: 'uid1' } };
 
-    const result = await controller.addMember(req as any, 'org1', { email: 'b@b.com', password: 'pass1234' });
+    const result = await controller.addMember(req as any, 'org1', { email: 'b@b.com', password: 'pass1234' } as any);
 
     expect(orgsService.addMember).toHaveBeenCalledWith('uid1', 'org1', 'b@b.com', 'pass1234');
     expect(result).toBe(expected);

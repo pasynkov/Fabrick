@@ -6,7 +6,7 @@
 
 ## 2. Auth Controller DTOs and Validation
 
-- [ ] 2.1 Create RegisterDto with @IsEmail() for email, @IsString() @MinLength(8) for password, @IsOptional() @IsBoolean() for persistent
+- [ ] 2.1 Create RegisterDto with @IsEmail() for email, @IsString() for password, @IsOptional() @IsBoolean() for persistent
 - [ ] 2.2 Create LoginDto with @IsEmail() for email, @IsString() for password, @IsOptional() @IsBoolean() for persistent  
 - [ ] 2.3 Create RefreshTokenDto with @IsString() for refresh_token
 - [ ] 2.4 Create McpTokenDto with @IsString() for orgSlug, projectSlug, and repoId

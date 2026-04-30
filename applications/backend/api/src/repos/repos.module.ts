@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ApiKeysModule } from '../api-keys/api-keys.module';
 import { AuthModule } from '../auth/auth.module';
 import { OrgMember } from '../entities/org-member.entity';
 import { Project } from '../entities/project.entity';
@@ -14,6 +15,7 @@ import { ReposService } from './repos.service';
     TypeOrmModule.forFeature([Project, Repository, OrgMember, User]),
     StorageModule,
     AuthModule,
+    ApiKeysModule,
   ],
   controllers: [ReposController],
   providers: [ReposService],

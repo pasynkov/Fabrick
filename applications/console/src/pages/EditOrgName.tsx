@@ -27,7 +27,7 @@ export default function EditOrgName() {
     if (name.length > 128) { setError('Name must not exceed 128 characters'); return; }
     setLoading(true);
     try {
-      await api.orgs.update(orgId, name.trim());
+      await api.orgs.update(orgId, { name: name.trim() });
       navigate(`/orgs/${orgSlug}`);
     } catch (err: any) {
       setError(err.message || 'Failed to update org name');

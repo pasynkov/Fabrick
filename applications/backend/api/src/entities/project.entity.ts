@@ -19,6 +19,9 @@ export class Project {
   @ManyToOne(() => Organization, { onDelete: 'CASCADE' })
   org: Organization;
 
+  @Column({ nullable: true, type: 'text' })
+  anthropicApiKey: string | null;
+
   @Column({ default: 'idle' })
   synthStatus: string;
 

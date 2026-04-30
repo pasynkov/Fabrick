@@ -12,12 +12,13 @@ interface SynthesisJob {
   projectSlug: string;
   repos: { id: string; slug: string }[];
   callbackToken: string;
+  anthropicApiKey?: string;
 }
 
 @Injectable()
 export class SynthesisProcessor implements OnModuleInit {
   private readonly logger = new Logger(SynthesisProcessor.name);
-  private readonly anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  private readonly defaultAnthropicApiKey = process.env.ANTHROPIC_API_KEY;
   private readonly systemPrompt: string;
   private readonly apiBaseUrl = process.env.API_BASE_URL || 'http://localhost:3000';
 
@@ -39,10 +40,13 @@ export class SynthesisProcessor implements OnModuleInit {
   }
 
   private async processJob(job: SynthesisJob): Promise<void> {
-    const { projectId, orgSlug, projectSlug, repos, callbackToken } = job;
+    const { projectId, orgSlug, projectSlug, repos, callbackToken, anthropicApiKey } = job;
     try {
       this.logger.log(`[${projectSlug}] loading repos`);
       this.logger.log(`[${projectSlug}] found ${repos.length} repos`);
+
+      const apiKey = anthropicApiKey || this.defaultAnthropicApiKey;
+      const anthropic = new Anthropic({ apiKey });
 
       const contextBlocks: string[] = [];
       for (const repo of repos) {
@@ -70,7 +74,7 @@ export class SynthesisProcessor implements OnModuleInit {
       const userMessage = contextBlocks.join('\n\n');
       this.logger.log(`[${projectSlug}] calling Anthropic, input ~${userMessage.length} chars`);
 
-      const response = await this.anthropic.messages.create({
+      const response = await anthropic.messages.create({
         model: 'claude-opus-4-6',
         max_tokens: 16000,
         system: this.systemPrompt,

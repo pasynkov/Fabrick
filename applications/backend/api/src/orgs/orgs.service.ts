@@ -123,8 +123,13 @@ export class OrgsService {
     if (dto.anthropicApiKey !== undefined) {
       if (dto.anthropicApiKey === null) {
         if (org.anthropicApiKey) {
-          const decryptedKey = this.apiKeyEncryptionService.decrypt(org.anthropicApiKey);
-          const keyHash = this.apiKeyEncryptionService.generateKeyHash(decryptedKey);
+          let keyHash: string;
+          try {
+            const decryptedKey = this.apiKeyEncryptionService.decrypt(org.anthropicApiKey);
+            keyHash = this.apiKeyEncryptionService.generateKeyHash(decryptedKey);
+          } catch {
+            keyHash = 'decrypt-failed';
+          }
           await this.apiKeyAuditService.logApiKeyDelete(ApiKeyAuditLevel.ORGANIZATION, orgId, keyHash, context);
         }
         updates.anthropicApiKey = null;

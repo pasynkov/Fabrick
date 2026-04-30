@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { createCipheriv, createDecipheriv, randomBytes, createHash } from 'crypto';
+import { createCipheriv, createDecipheriv, randomBytes, createHmac } from 'crypto';
 
 @Injectable()
 export class ApiKeyEncryptionService {
@@ -51,11 +51,14 @@ export class ApiKeyEncryptionService {
   }
 
   generateKeyHash(apiKey: string): string {
-    return createHash('sha256').update(apiKey).digest('hex').slice(0, 16);
+    return createHmac('sha256', this.deriveKey()).update(apiKey).digest('hex');
   }
 
   private deriveKey(): Buffer {
-    const globalKey = process.env.ANTHROPIC_API_KEY || 'default-encryption-key-for-testing';
-    return Buffer.from(globalKey.padEnd(32, '0').slice(0, 32));
+    const encryptionKey = process.env.ENCRYPTION_KEY;
+    if (!encryptionKey) {
+      throw new Error('ENCRYPTION_KEY environment variable is not set');
+    }
+    return Buffer.from(encryptionKey, 'base64').slice(0, 32);
   }
 }

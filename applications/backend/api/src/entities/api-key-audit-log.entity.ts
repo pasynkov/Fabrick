@@ -34,7 +34,7 @@ export class ApiKeyAuditLog {
   @Column()
   userId: string;
 
-  @Column({ length: 16 })
+  @Column({ length: 64 })
   keyHash: string;
 
   @Column({ nullable: true, type: 'text' })

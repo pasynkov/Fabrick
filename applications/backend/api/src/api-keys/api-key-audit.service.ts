@@ -16,6 +16,7 @@ export interface ApiKeyOperationAudit {
   organizationId?: string;
   projectId?: string;
   apiKey?: string;
+  preComputedKeyHash?: string;
   details?: Record<string, any>;
   context: AuditContext;
 }
@@ -32,9 +33,11 @@ export class ApiKeyAuditService {
 
   async logOperation(audit: ApiKeyOperationAudit): Promise<void> {
     try {
-      const keyHash = audit.apiKey
-        ? this.encryptionService.generateKeyHash(audit.apiKey)
-        : 'no-key-000000000';
+      const keyHash = audit.preComputedKeyHash
+        ? audit.preComputedKeyHash
+        : audit.apiKey
+          ? this.encryptionService.generateKeyHash(audit.apiKey)
+          : 'no-key-000000000';
 
       const auditLog = this.auditRepo.create({
         action: audit.action,
@@ -42,7 +45,7 @@ export class ApiKeyAuditService {
         organizationId: audit.organizationId || null,
         projectId: audit.projectId || null,
         userId: audit.context.userId,
-        keyHash: keyHash.slice(0, 16),
+        keyHash: keyHash.slice(0, 64),
         details: audit.details ? JSON.stringify(audit.details) : null,
         ipAddress: audit.context.ipAddress || null,
         userAgent: audit.context.userAgent || null,
@@ -95,6 +98,7 @@ export class ApiKeyAuditService {
       level,
       organizationId: level === ApiKeyAuditLevel.ORGANIZATION ? resourceId : undefined,
       projectId: level === ApiKeyAuditLevel.PROJECT ? resourceId : undefined,
+      preComputedKeyHash: previousKeyHash,
       details: { previousKeyHash },
       context,
     });

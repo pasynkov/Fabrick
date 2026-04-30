@@ -78,9 +78,11 @@ export class OrgsController {
 
   @Get(':orgId/api-key/status')
   @UseGuards(IsAdminGuard)
-  getApiKeyStatus(
+  async getApiKeyStatus(
+    @Request() req: { user: { id: string } },
     @Param('orgId') orgId: string,
   ) {
+    await this.orgsService.requireAdmin(req.user.id, orgId);
     return this.orgsService.getOrgApiKeyStatus(orgId);
   }
 

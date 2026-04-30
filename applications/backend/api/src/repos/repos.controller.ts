@@ -107,7 +107,7 @@ export class ReposController {
   }
 
   @Get('projects/:projectId/api-key/status')
-  @UseGuards(FabrickAuthGuard)
+  @UseGuards(FabrickAuthGuard, IsAdminGuard)
   getProjectApiKeyStatus(
     @Param('projectId') projectId: string,
   ) {

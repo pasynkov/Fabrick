@@ -132,8 +132,13 @@ export class ReposService {
     if (dto.anthropicApiKey !== undefined) {
       if (dto.anthropicApiKey === null) {
         if (project.anthropicApiKey) {
-          const decryptedKey = this.apiKeyEncryptionService.decrypt(project.anthropicApiKey);
-          const keyHash = this.apiKeyEncryptionService.generateKeyHash(decryptedKey);
+          let keyHash: string;
+          try {
+            const decryptedKey = this.apiKeyEncryptionService.decrypt(project.anthropicApiKey);
+            keyHash = this.apiKeyEncryptionService.generateKeyHash(decryptedKey);
+          } catch {
+            keyHash = 'decrypt-failed';
+          }
           await this.apiKeyAuditService.logApiKeyDelete(ApiKeyAuditLevel.PROJECT, projectId, keyHash, context);
         }
         updates.anthropicApiKey = null;

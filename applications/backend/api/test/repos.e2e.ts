@@ -101,6 +101,70 @@ describe('Repos E2E', () => {
     });
   });
 
+  describe('PATCH /orgs/:orgId/projects/:projectId', () => {
+    it('admin can rename project and slug does not change', async () => {
+      const { token, orgId, projectId } = await setup();
+
+      const listRes = await request(app.getHttpServer())
+        .get(`/orgs/${orgId}/projects`)
+        .set('Authorization', `Bearer ${token}`);
+      const originalSlug = listRes.body.find((p: any) => p.id === projectId)?.slug;
+
+      const res = await request(app.getHttpServer())
+        .patch(`/orgs/${orgId}/projects/${projectId}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ name: 'Renamed Project' })
+        .expect(200);
+
+      expect(res.body.name).toBe('Renamed Project');
+      expect(res.body.slug).toBe(originalSlug);
+    });
+
+    it('non-admin cannot rename project (403)', async () => {
+      const { orgId, projectId } = await setup();
+
+      const memberReg = await request(app.getHttpServer())
+        .post('/auth/register')
+        .send({ email: 'proj-member@example.com', password: 'password123' });
+      const memberToken = memberReg.body.access_token;
+
+      const adminToken = (await request(app.getHttpServer())
+        .post('/auth/login')
+        .send({ email: 'repos@example.com', password: 'password123' })).body.access_token;
+
+      await request(app.getHttpServer())
+        .post(`/orgs/${orgId}/members`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ email: 'proj-member@example.com', password: 'password123' });
+
+      await request(app.getHttpServer())
+        .patch(`/orgs/${orgId}/projects/${projectId}`)
+        .set('Authorization', `Bearer ${memberToken}`)
+        .send({ name: 'Hacked' })
+        .expect(403);
+    });
+
+    it('rejects empty name (400)', async () => {
+      const { token, orgId, projectId } = await setup();
+
+      await request(app.getHttpServer())
+        .patch(`/orgs/${orgId}/projects/${projectId}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ name: '' })
+        .expect(400);
+    });
+
+    it('rejects name over 128 chars (400)', async () => {
+      const { token, orgId, projectId } = await setup();
+
+      await request(app.getHttpServer())
+        .patch(`/orgs/${orgId}/projects/${projectId}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ name: 'A'.repeat(129) })
+        .expect(400);
+    });
+  });
+
   describe('POST /repos/find-or-create', () => {
     it('creates repo on first call, finds on second', async () => {
       const { token, projectId } = await setup();

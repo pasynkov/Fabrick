@@ -32,15 +32,23 @@ export default function OrgList() {
         ) : (
           <ul className="space-y-2">
             {orgs.map((org) => (
-              <li key={org.id}>
+              <li key={org.id} className="flex items-center gap-2">
                 <Link
                   to={`/orgs/${org.slug}`}
-                  className="block bg-white border border-gray-200 rounded-lg px-4 py-3 hover:border-purple-400 transition"
+                  className="flex-1 block bg-white border border-gray-200 rounded-lg px-4 py-3 hover:border-purple-400 transition"
                 >
                   <span className="font-medium text-gray-900">{org.name}</span>
                   <span className="ml-2 text-xs text-gray-400">{org.slug}</span>
                   <span className="ml-2 text-xs text-purple-500">{org.role}</span>
                 </Link>
+                {org.role === 'admin' && (
+                  <Link
+                    to={`/orgs/${org.slug}/edit`}
+                    className="text-xs text-gray-500 border border-gray-200 rounded px-2 py-1 hover:border-purple-400 hover:text-purple-600 transition"
+                  >
+                    Edit
+                  </Link>
+                )}
               </li>
             ))}
           </ul>

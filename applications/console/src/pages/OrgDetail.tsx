@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api';
+import { ApiKeySection } from '../components/ApiKeySection';
+import { ApiKeyAuditLogs } from '../components/ApiKeyAuditLogs';
 
 interface Project { id: string; name: string; slug: string }
 interface Member { userId: string; email: string; role: string }
@@ -118,6 +120,17 @@ export default function OrgDetail() {
             </button>
           </form>
         </section>
+
+        {org.role === 'admin' && (
+          <section>
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">API Key</h2>
+            <div className="bg-white border border-gray-200 rounded-lg px-4 py-4 space-y-3">
+              <p className="text-xs text-gray-500">Configure the Anthropic API key used for synthesis. Projects can override this with their own key.</p>
+              <ApiKeySection orgId={org.id} isAdmin={org.role === 'admin'} />
+              <ApiKeyAuditLogs type="org" resourceId={org.id} />
+            </div>
+          </section>
+        )}
 
         {org.role === 'admin' && (
           <section>

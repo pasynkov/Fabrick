@@ -79,6 +79,17 @@ async function request<T>(path: string, options: RequestInit = {}, retry = true)
   return (text ? JSON.parse(text) : undefined) as T;
 }
 
+interface AuditLog {
+  id: string;
+  action: string;
+  level: string;
+  userId: string;
+  keyHash: string;
+  details: string | null;
+  ipAddress: string | null;
+  timestamp: string;
+}
+
 export const api = {
   register: (email: string, password: string, persistent?: boolean) =>
     request<{ access_token: string; refresh_token?: string; user: { id: string; email: string } }>('/auth/register', {
@@ -114,10 +125,10 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ name }),
       }),
-    update: (orgId: string, name: string) =>
-      request<{ id: string; name: string; slug: string }>(`/orgs/${orgId}`, {
+    update: (orgId: string, body: { name?: string; anthropicApiKey?: string | null }) =>
+      request<{ id: string; name: string; slug: string; hasApiKey: boolean }>(`/orgs/${orgId}`, {
         method: 'PATCH',
-        body: JSON.stringify({ name }),
+        body: JSON.stringify(body),
       }),
     members: {
       list: (orgId: string) =>
@@ -127,6 +138,12 @@ export const api = {
           method: 'POST',
           body: JSON.stringify({ email, password }),
         }),
+    },
+    apiKey: {
+      status: (orgId: string) =>
+        request<{ hasApiKey: boolean; source: 'organization'; keyHash?: string }>(`/orgs/${orgId}/api-key/status`),
+      auditLogs: (orgId: string, limit = 50, offset = 0) =>
+        request<{ logs: AuditLog[]; total: number }>(`/orgs/${orgId}/api-key/audit-logs?limit=${limit}&offset=${offset}`),
     },
   },
 
@@ -138,11 +155,22 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ name }),
       }),
-    update: (orgId: string, projectId: string, name: string) =>
-      request<{ id: string; name: string; slug: string; orgId: string }>(`/orgs/${orgId}/projects/${projectId}`, {
+    update: (orgId: string, projectId: string, body: { name?: string; anthropicApiKey?: string | null }) =>
+      request<{ id: string; name: string; slug: string; orgId: string; hasApiKey: boolean }>(`/orgs/${orgId}/projects/${projectId}`, {
         method: 'PATCH',
-        body: JSON.stringify({ name }),
+        body: JSON.stringify(body),
       }),
+    apiKey: {
+      status: (projectId: string) =>
+        request<{
+          hasProjectApiKey: boolean;
+          hasOrgApiKey: boolean;
+          effectiveSource: 'project' | 'organization' | 'none';
+          keyHashes: { project?: string; organization?: string };
+        }>(`/projects/${projectId}/api-key/status`),
+      auditLogs: (projectId: string, limit = 50, offset = 0) =>
+        request<{ logs: AuditLog[]; total: number }>(`/projects/${projectId}/api-key/audit-logs?limit=${limit}&offset=${offset}`),
+    },
   },
 
   repos: {

@@ -2,24 +2,31 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   HttpCode,
   Param,
   Patch,
   Post,
+  Query,
   Request,
   UseGuards,
 } from '@nestjs/common';
 import { FabrickAuthGuard } from '../auth/fabrick-auth.guard';
 import { IsAdminGuard } from '../auth/is-admin.guard';
+import { ApiKeyAuditService } from '../api-keys/api-key-audit.service';
+import { AuditLogsQueryDto } from '../api-keys/dto/audit-logs-query.dto';
 import { AddMemberDto } from './dto/add-member.dto';
 import { CreateOrgDto } from './dto/create-org.dto';
-import { UpdateOrgNameDto } from './dto/update-org-name.dto';
+import { UpdateOrgDto } from './dto/update-org.dto';
 import { OrgsService } from './orgs.service';
 
 @Controller('orgs')
 @UseGuards(FabrickAuthGuard)
 export class OrgsController {
-  constructor(private readonly orgsService: OrgsService) {}
+  constructor(
+    private readonly orgsService: OrgsService,
+    private readonly apiKeyAuditService: ApiKeyAuditService,
+  ) {}
 
   @Post()
   @HttpCode(201)
@@ -56,11 +63,35 @@ export class OrgsController {
 
   @Patch(':orgId')
   @UseGuards(IsAdminGuard)
-  updateName(
+  updateOrg(
+    @Request() req: { user: { id: string }; ip?: string },
+    @Param('orgId') orgId: string,
+    @Body() body: UpdateOrgDto,
+    @Headers('user-agent') userAgent?: string,
+  ) {
+    return this.orgsService.updateOrg(orgId, body, {
+      userId: req.user.id,
+      ipAddress: req.ip,
+      userAgent,
+    });
+  }
+
+  @Get(':orgId/api-key/status')
+  @UseGuards(IsAdminGuard)
+  async getApiKeyStatus(
     @Request() req: { user: { id: string } },
     @Param('orgId') orgId: string,
-    @Body() body: UpdateOrgNameDto,
   ) {
-    return this.orgsService.updateOrgName(orgId, body.name, req.user.id);
+    await this.orgsService.requireAdmin(req.user.id, orgId);
+    return this.orgsService.getOrgApiKeyStatus(orgId);
+  }
+
+  @Get(':orgId/api-key/audit-logs')
+  @UseGuards(IsAdminGuard)
+  getAuditLogs(
+    @Param('orgId') orgId: string,
+    @Query() query: AuditLogsQueryDto,
+  ) {
+    return this.apiKeyAuditService.getOrganizationAuditLogs(orgId, query.limit, query.offset);
   }
 }

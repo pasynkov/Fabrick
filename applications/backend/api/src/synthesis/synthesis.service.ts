@@ -9,6 +9,8 @@ import { Organization } from '../entities/organization.entity';
 import { Project } from '../entities/project.entity';
 import { Repository } from '../entities/repository.entity';
 import { StorageService } from '../storage/storage.service';
+import { ApiKeyResolutionService } from '../api-keys/api-key-resolution.service';
+import { ApiKeyAuditService } from '../api-keys/api-key-audit.service';
 
 @Injectable()
 export class SynthesisService {
@@ -26,6 +28,8 @@ export class SynthesisService {
     @Inject(QUEUE_SERVICE) private readonly queueService: QueueService,
     private readonly storageService: StorageService,
     private readonly jwtService: JwtService,
+    private readonly apiKeyResolutionService: ApiKeyResolutionService,
+    private readonly apiKeyAuditService: ApiKeyAuditService,
   ) {}
 
   async triggerForProject(projectId: string, userId: string): Promise<void> {
@@ -43,6 +47,15 @@ export class SynthesisService {
 
     const repos = await this.repoRepo.find({ where: { projectId } });
 
+    let anthropicApiKey: string | undefined;
+    try {
+      const resolution = await this.apiKeyResolutionService.resolveForProject(projectId);
+      anthropicApiKey = resolution.apiKey;
+      await this.apiKeyAuditService.logApiKeyUsage(resolution);
+    } catch {
+      anthropicApiKey = process.env.ANTHROPIC_API_KEY;
+    }
+
     const callbackToken = this.jwtService.sign(
       { sub: projectId, scope: 'synth-callback' },
       { expiresIn: '1h' },
@@ -57,6 +70,7 @@ export class SynthesisService {
       projectSlug: project.slug,
       repos: repos.map((r) => ({ id: r.id, slug: r.slug })),
       callbackToken,
+      anthropicApiKey,
     });
   }
 

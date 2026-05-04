@@ -60,7 +60,7 @@ However, critical production requirements remain unaddressed: comprehensive test
 
 **[Risk] Enhanced monitoring increases operational overhead** → Mitigation: Use existing logging infrastructure and focus on actionable alerts only
 
-**[Risk] Migration complexity for existing implementations** → Mitigation: Maintain backward compatibility and implement gradual rollout with feature flags
+**[Risk] Migration complexity for existing implementations** → Mitigation: Immediate enforcement; existing projects without API keys will explicitly fail synthesis
 
 **[Risk] Performance optimization may introduce security vulnerabilities** → Mitigation: Security review of caching layer and ensure encrypted data never cached in plaintext
 

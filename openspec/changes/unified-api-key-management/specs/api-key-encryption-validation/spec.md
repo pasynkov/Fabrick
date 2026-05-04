@@ -15,20 +15,16 @@ The system SHALL implement AES-256-GCM encryption for API keys with additional s
 - **WHEN** storing or retrieving encrypted API keys
 - **THEN** the system verifies encryption integrity using authentication tags and detects tampering attempts
 
-### Requirement: Advanced API key format validation with security checks
-The system SHALL implement enhanced API key validation including format verification, entropy analysis, and potential compromise detection.
+### Requirement: API key format validation
+The system SHALL validate API key format on form save by checking the sk-ant- prefix.
 
-#### Scenario: Anthropic API key format validation with security analysis
-- **WHEN** validating submitted API keys
-- **THEN** the system verifies sk-ant-apiXX-XXXXX format and analyzes key entropy to detect potentially invalid or compromised keys
+#### Scenario: Anthropic API key format validation
+- **WHEN** validating submitted API keys on form save
+- **THEN** the system verifies the sk-ant- prefix only
 
-#### Scenario: Known compromise detection
-- **WHEN** validating API keys during submission
-- **THEN** the system checks against known compromise patterns and warns users of potential security risks
-
-#### Scenario: Enhanced validation error reporting
+#### Scenario: Validation error reporting
 - **WHEN** API key validation fails
-- **THEN** the system provides specific guidance on format requirements, common errors, and security best practices
+- **THEN** the system returns a validation error to the form
 
 ### Requirement: Encryption key rotation and management
 The system SHALL implement encryption key rotation capabilities and secure key management for API key encryption.

@@ -11,8 +11,8 @@
 - [ ] 2.1 Implement encryption strength validation and monitoring
 - [ ] 2.2 Add secure memory handling for API key operations
 - [ ] 2.3 Implement encryption integrity verification with authentication tags
-- [ ] 2.4 Create known compromise detection system for API keys
-- [ ] 2.5 Add entropy analysis to API key validation
+- [ ] 2.4 Remove known compromise detection (validation is prefix-check only per stakeholder decision)
+- [ ] 2.5 Validate API key by checking sk-ant- prefix only on form save
 - [ ] 2.6 Implement encryption key rotation capabilities
 - [ ] 2.7 Create emergency encryption key rotation procedures
 
@@ -91,7 +91,7 @@
 - [ ] 10.4 Add API key source tracking in synthesis jobs
 - [ ] 10.5 Create synthesis operation monitoring by API key source
 - [ ] 10.6 Implement API key usage analytics for synthesis
-- [ ] 10.7 Add graceful degradation for API key resolution failures
+- [ ] 10.7 Ensure synthesis fails explicitly (no graceful degradation) when API key resolution fails
 
 ## 11. Comprehensive Testing Suite
 
@@ -106,7 +106,7 @@
 ## 12. Production Deployment
 
 - [ ] 12.1 Create deployment automation with proper rollback capabilities
-- [ ] 12.2 Implement feature flags for gradual rollout
+- [ ] 12.2 Validate immediate enforcement is active in production (no feature flags for gradual rollout)
 - [ ] 12.3 Add production monitoring and alerting configuration
 - [ ] 12.4 Create deployment runbook with validation procedures
 - [ ] 12.5 Implement automated backup validation in production

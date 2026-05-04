@@ -28,7 +28,7 @@ The previous org-project-api-key-management implementation was incomplete, leavi
 - `api-key-encryption-validation`: Strengthened encryption with security audits
 - `api-key-audit-logging`: Improved audit log security and retention policies
 - `ui-components-api-key-management`: Enhanced UX with guided setup flows
-- `synthesis-service-integration`: Improved error handling and fallback mechanisms
+- `synthesis-service-integration`: Remove environment variable fallback, enforce explicit API key requirement
 
 ## Impact
 

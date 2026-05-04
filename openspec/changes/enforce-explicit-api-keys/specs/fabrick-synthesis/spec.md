@@ -5,7 +5,7 @@ The system SHALL NOT use environment variables as a fallback for Anthropic API k
 
 #### Scenario: Synthesis fails without project-level API key
 - **WHEN** synthesis is triggered for a project with no API key configured at the project level and no API key at the organization level
-- **THEN** the system fails the synthesis job with HTTP 400 error message: "No Anthropic API key configured. Add API key in project settings."
+- **THEN** the system fails the synthesis job with an explicit error
 
 #### Scenario: Synthesis succeeds with project-level API key
 - **WHEN** synthesis is triggered for a project with an API key configured at the project level

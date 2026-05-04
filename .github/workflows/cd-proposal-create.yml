@@ -18,16 +18,12 @@ jobs:
           fetch-depth: 0
 
       - name: Fetch issue thread
-        id: thread
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          THREAD=$(gh issue view ${{ github.event.issue.number }} \
+          gh issue view ${{ github.event.issue.number }} \
             --json title,body,comments \
-            --repo "$GITHUB_REPOSITORY")
-          echo "thread<<EOF" >> $GITHUB_OUTPUT
-          echo "$THREAD" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+            --repo "$GITHUB_REPOSITORY" > /tmp/issue-thread.json
 
       - name: Install openspec
         run: npm install -g @fission-ai/openspec
@@ -37,6 +33,25 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
+      - name: Build generate prompt
+        run: |
+          ISSUE_NUMBER="${{ github.event.issue.number }}"
+          cat > /tmp/generate-prompt.txt << PROMPT_EOF
+          You are generating an OpenSpec proposal from a GitHub issue.
+
+          Full issue thread (JSON): read from /tmp/issue-thread.json
+
+          Issue number: ${ISSUE_NUMBER}
+
+          Steps:
+          1. Read /tmp/issue-thread.json and derive a concise kebab-case change name that accurately
+             reflects the final agreed scope (not just a slug of the title).
+          2. Use the Skill tool to invoke the "openspec-propose" skill with that name as the argument.
+             This will generate proposal.md, design.md, specs/, and tasks.md artifacts.
+          3. Write ONLY the change name (e.g. "persistent-refresh-token") to /tmp/change-name.txt.
+             Do NOT include the issue number or "proposal/" prefix.
+          PROMPT_EOF
+
       - name: Generate proposal artifacts
         uses: anthropics/claude-code-base-action@beta
         env:
@@ -45,27 +60,10 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           model: claude-haiku-4-5-20251001
           allowed_tools: "Bash,Read,Write,Glob,LS,Skill"
-          prompt: |
-            You are generating an OpenSpec proposal from a GitHub issue.
-
-            Full issue thread (JSON):
-            ${{ steps.thread.outputs.thread }}
-
-            Issue number: ${{ github.event.issue.number }}
-
-            Steps:
-            1. Read the issue thread and derive a concise kebab-case change name that accurately
-               reflects the final agreed scope (not just a slug of the title).
-            2. Use the Skill tool to invoke the "openspec-propose" skill with that name as the argument.
-               This will generate proposal.md, design.md, specs/, and tasks.md artifacts.
-            3. Write ONLY the change name (e.g. "persistent-refresh-token") to /tmp/change-name.txt.
-               Do NOT include the issue number or "proposal/" prefix.
+          prompt_file: /tmp/generate-prompt.txt
 
       - name: Build scope check prompt
-        env:
-          THREAD: ${{ steps.thread.outputs.thread }}
         run: |
-          printf '%s' "$THREAD" > /tmp/issue-thread.json
           CHANGE_NAME=$(cat /tmp/change-name.txt | tr -d '[:space:]')
           ISSUE_NUMBER="${{ github.event.issue.number }}"
           cat > /tmp/scope-check-prompt.txt << PROMPT_EOF

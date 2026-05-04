@@ -37,8 +37,8 @@ export default function OrgSettings() {
     }
     setLoading(true);
     try {
-      await api.orgs.update(orgId, { name: name.trim(), anthropicApiKey: trimmedKey || null });
-      navigate(`/orgs/${orgSlug}`);
+      const updated = await api.orgs.update(orgId, { name: name.trim(), anthropicApiKey: trimmedKey || null });
+      navigate(`/orgs/${updated.slug}`);
     } catch (err: any) {
       setError(err.message || 'Failed to save settings');
     } finally {

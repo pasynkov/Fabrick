@@ -12,7 +12,7 @@ interface SynthesisJob {
   projectSlug: string;
   repos: { id: string; slug: string }[];
   callbackToken: string;
-  anthropicApiKey?: string;
+  anthropicApiKey: string;
 }
 
 @Injectable()
@@ -44,6 +44,7 @@ export class SynthesisProcessor implements OnModuleInit {
       this.logger.log(`[${projectSlug}] loading repos`);
       this.logger.log(`[${projectSlug}] found ${repos.length} repos`);
 
+      if (!anthropicApiKey) throw new Error('No API key provided for synthesis job');
       const anthropic = new Anthropic({ apiKey: anthropicApiKey });
 
       const contextBlocks: string[] = [];

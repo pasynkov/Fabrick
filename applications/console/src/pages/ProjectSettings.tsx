@@ -22,13 +22,13 @@ export default function ProjectSettings() {
         return;
       }
       setOrgId(org.id);
-      api.projects.list(org.id).then((projects) => {
+      return api.projects.list(org.id).then((projects) => {
         const p = projects.find((pr) => pr.slug === projectSlug);
         if (!p) return;
         setProjectId(p.id);
         setName(p.name);
-      }).finally(() => setInitializing(false));
-    });
+      });
+    }).finally(() => setInitializing(false));
   }, [orgSlug, projectSlug, navigate]);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -43,8 +43,8 @@ export default function ProjectSettings() {
     }
     setLoading(true);
     try {
-      await api.projects.update(orgId, projectId, { name: name.trim(), anthropicApiKey: trimmedKey || null });
-      navigate(`/orgs/${orgSlug}/projects/${projectSlug}`);
+      const updated = await api.projects.update(orgId, projectId, { name: name.trim(), anthropicApiKey: trimmedKey || null });
+      navigate(`/orgs/${orgSlug}/projects/${updated.slug}`);
     } catch (err: any) {
       setError(err.message || 'Failed to save settings');
     } finally {

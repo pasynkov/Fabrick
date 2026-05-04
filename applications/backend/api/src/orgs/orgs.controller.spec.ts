@@ -3,6 +3,7 @@ import { OrgsController } from './orgs.controller';
 import { OrgsService } from './orgs.service';
 import { FabrickAuthGuard } from '../auth/fabrick-auth.guard';
 import { IsAdminGuard } from '../auth/is-admin.guard';
+import { ApiKeyAuditService } from '../api-keys/api-key-audit.service';
 
 const mockOrgsService = () => ({
   createOrg: jest.fn(),
@@ -20,7 +21,10 @@ describe('OrgsController', () => {
     const passGuard = { canActivate: () => true };
     const module = await Test.createTestingModule({
       controllers: [OrgsController],
-      providers: [{ provide: OrgsService, useFactory: mockOrgsService }],
+      providers: [
+        { provide: OrgsService, useFactory: mockOrgsService },
+        { provide: ApiKeyAuditService, useValue: {} },
+      ],
     })
       .overrideGuard(FabrickAuthGuard)
       .useValue(passGuard)

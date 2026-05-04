@@ -4,6 +4,7 @@ import { ReposService } from './repos.service';
 import { StorageService } from '../storage/storage.service';
 import { FabrickAuthGuard } from '../auth/fabrick-auth.guard';
 import { IsAdminGuard } from '../auth/is-admin.guard';
+import { ApiKeyAuditService } from '../api-keys/api-key-audit.service';
 
 const mockReposService = () => ({
   createProject: jest.fn(),
@@ -31,6 +32,7 @@ describe('ReposController', () => {
       providers: [
         { provide: ReposService, useFactory: mockReposService },
         { provide: StorageService, useFactory: mockStorageService },
+        { provide: ApiKeyAuditService, useValue: {} },
       ],
     })
       .overrideGuard(FabrickAuthGuard)

@@ -14,6 +14,7 @@ export default function ProjectDetail() {
   const [orgInfo, setOrgInfo] = useState<OrgInfo | null>(null);
   const [repos, setRepos] = useState<Repo[]>([]);
   const [loading, setLoading] = useState(true);
+  const [hasEffectiveApiKey, setHasEffectiveApiKey] = useState<boolean | null>(null);
 
   const [synthStatus, setSynthStatus] = useState<string>('idle');
   const [synthError, setSynthError] = useState<string | undefined>();
@@ -37,6 +38,11 @@ export default function ProjectDetail() {
           if (s.status === 'running') startPolling(p.id);
           if (s.status === 'done') loadFiles(p.id);
         }).catch(() => {});
+        api.projects.apiKey.status(p.id).then((s) => {
+          setHasEffectiveApiKey(s.effectiveSource !== 'none');
+        }).catch(() => {
+          setHasEffectiveApiKey(false);
+        });
       });
     });
     return () => stopPolling();
@@ -89,6 +95,9 @@ export default function ProjectDetail() {
 
   if (!project) return <div className="p-8 text-gray-400">Loading...</div>;
 
+  const noApiKey = hasEffectiveApiKey === false;
+  const synthButtonDisabled = synthTriggering || synthStatus === 'running' || noApiKey;
+
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white border-b border-gray-200 px-6 py-4">
@@ -138,13 +147,25 @@ export default function ProjectDetail() {
         <section>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-gray-900">Synthesis</h2>
-            <button
-              onClick={handleRunSynthesis}
-              disabled={synthTriggering || synthStatus === 'running'}
-              className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {synthStatus === 'running' ? 'Running...' : 'Run Synthesis'}
-            </button>
+            <div className="flex flex-col items-end gap-1">
+              <button
+                onClick={handleRunSynthesis}
+                disabled={synthButtonDisabled}
+                className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {synthStatus === 'running' ? 'Running...' : 'Run Synthesis'}
+              </button>
+              {noApiKey && (
+                <p className="text-xs text-gray-500">
+                  <Link
+                    to={`/orgs/${orgSlug}/projects/${projectSlug}/settings`}
+                    className="text-purple-600 hover:underline"
+                  >
+                    Add API key to enable synthesis
+                  </Link>
+                </p>
+              )}
+            </div>
           </div>
 
           {synthStatus === 'idle' && (

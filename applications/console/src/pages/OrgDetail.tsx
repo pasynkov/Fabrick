@@ -74,10 +74,10 @@ export default function OrgDetail() {
         </nav>
         {org.role === 'admin' && (
           <Link
-            to={`/orgs/${orgSlug}/edit`}
+            to={`/orgs/${orgSlug}/settings`}
             className="text-xs text-gray-500 border border-gray-200 rounded px-2 py-1 hover:border-purple-400 hover:text-purple-600 transition"
           >
-            Edit Name
+            Edit Settings
           </Link>
         )}
       </header>
@@ -98,10 +98,10 @@ export default function OrgDetail() {
                 </Link>
                 {org.role === 'admin' && (
                   <Link
-                    to={`/orgs/${orgSlug}/projects/${p.slug}/edit`}
+                    to={`/orgs/${orgSlug}/projects/${p.slug}/settings`}
                     className="text-xs text-gray-500 border border-gray-200 rounded px-2 py-1 hover:border-purple-400 hover:text-purple-600 transition"
                   >
-                    Edit
+                    Settings
                   </Link>
                 )}
               </li>

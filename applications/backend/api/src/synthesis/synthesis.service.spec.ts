@@ -32,6 +32,7 @@ const mockApiKeyResolution = () => ({
 });
 const mockApiKeyAudit = () => ({
   logOperation: jest.fn(),
+  logApiKeyUsage: jest.fn().mockResolvedValue(undefined),
 });
 
 describe('SynthesisService', () => {
@@ -42,6 +43,7 @@ describe('SynthesisService', () => {
   let repoRepo: ReturnType<typeof mockRepoRepo>;
   let queueService: ReturnType<typeof mockQueue>;
   let jwtService: ReturnType<typeof mockJwt>;
+  let apiKeyResolution: ReturnType<typeof mockApiKeyResolution>;
 
   beforeEach(async () => {
     const module = await Test.createTestingModule({
@@ -66,6 +68,7 @@ describe('SynthesisService', () => {
     repoRepo = module.get(getRepositoryToken(Repository));
     queueService = module.get(QUEUE_SERVICE);
     jwtService = module.get(JwtService);
+    apiKeyResolution = module.get(ApiKeyResolutionService);
   });
 
   describe('triggerForProject', () => {
@@ -76,6 +79,7 @@ describe('SynthesisService', () => {
       repoRepo.find.mockResolvedValue([{ id: 'repo1', slug: 'myrepo' }]);
       projectRepo.update.mockResolvedValue({});
       queueService.publish.mockResolvedValue(undefined);
+      apiKeyResolution.resolveForProject.mockResolvedValue({ apiKey: 'sk-ant-test', source: 'project' });
 
       await service.triggerForProject('proj1', 'uid1');
 
@@ -98,6 +102,16 @@ describe('SynthesisService', () => {
     it('throws NotFoundException if project not found', async () => {
       projectRepo.findOne.mockResolvedValue(null);
       await expect(service.triggerForProject('proj1', 'uid1')).rejects.toThrow(NotFoundException);
+    });
+
+    it('throws when no API key is configured (no fallback to env var)', async () => {
+      projectRepo.findOne.mockResolvedValue({ id: 'proj1', slug: 'myproject', orgId: 'org1', synthStatus: 'idle', synthError: null });
+      memberRepo.findOne.mockResolvedValue({ role: 'admin' });
+      orgRepo.findOne.mockResolvedValue({ id: 'org1', slug: 'myorg' });
+      repoRepo.find.mockResolvedValue([]);
+      apiKeyResolution.resolveForProject.mockRejectedValue(new Error('No API key available for project proj1. Please configure an API key for this project or organization.'));
+
+      await expect(service.triggerForProject('proj1', 'uid1')).rejects.toThrow('No API key available');
     });
   });
 

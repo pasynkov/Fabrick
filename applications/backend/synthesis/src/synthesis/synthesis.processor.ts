@@ -18,7 +18,6 @@ interface SynthesisJob {
 @Injectable()
 export class SynthesisProcessor implements OnModuleInit {
   private readonly logger = new Logger(SynthesisProcessor.name);
-  private readonly defaultAnthropicApiKey = process.env.ANTHROPIC_API_KEY;
   private readonly systemPrompt: string;
   private readonly apiBaseUrl = process.env.API_BASE_URL || 'http://localhost:3000';
 
@@ -45,8 +44,7 @@ export class SynthesisProcessor implements OnModuleInit {
       this.logger.log(`[${projectSlug}] loading repos`);
       this.logger.log(`[${projectSlug}] found ${repos.length} repos`);
 
-      const apiKey = anthropicApiKey || this.defaultAnthropicApiKey;
-      const anthropic = new Anthropic({ apiKey });
+      const anthropic = new Anthropic({ apiKey: anthropicApiKey });
 
       const contextBlocks: string[] = [];
       for (const repo of repos) {

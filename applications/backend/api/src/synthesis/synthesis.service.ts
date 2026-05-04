@@ -47,14 +47,9 @@ export class SynthesisService {
 
     const repos = await this.repoRepo.find({ where: { projectId } });
 
-    let anthropicApiKey: string | undefined;
-    try {
-      const resolution = await this.apiKeyResolutionService.resolveForProject(projectId);
-      anthropicApiKey = resolution.apiKey;
-      await this.apiKeyAuditService.logApiKeyUsage(resolution);
-    } catch {
-      anthropicApiKey = process.env.ANTHROPIC_API_KEY;
-    }
+    const resolution = await this.apiKeyResolutionService.resolveForProject(projectId);
+    const anthropicApiKey = resolution.apiKey;
+    await this.apiKeyAuditService.logApiKeyUsage(resolution);
 
     const callbackToken = this.jwtService.sign(
       { sub: projectId, scope: 'synth-callback' },

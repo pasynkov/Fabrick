@@ -9,6 +9,8 @@ import { Organization } from '../entities/organization.entity';
 import { Project } from '../entities/project.entity';
 import { Repository } from '../entities/repository.entity';
 import { StorageService } from '../storage/storage.service';
+import { ApiKeyResolutionService } from '../api-keys/api-key-resolution.service';
+import { ApiKeyAuditService } from '../api-keys/api-key-audit.service';
 
 const mockProjectRepo = () => ({
   findOne: jest.fn(),
@@ -23,6 +25,13 @@ const mockStorage = () => ({ putObject: jest.fn(), getObject: jest.fn(), listObj
 const mockJwt = () => ({
   sign: jest.fn().mockReturnValue('callback-token'),
   verify: jest.fn(),
+});
+const mockApiKeyResolution = () => ({
+  resolveForProject: jest.fn(),
+  resolveForOrganization: jest.fn(),
+});
+const mockApiKeyAudit = () => ({
+  logOperation: jest.fn(),
 });
 
 describe('SynthesisService', () => {
@@ -45,6 +54,8 @@ describe('SynthesisService', () => {
         { provide: QUEUE_SERVICE, useFactory: mockQueue },
         { provide: StorageService, useFactory: mockStorage },
         { provide: JwtService, useFactory: mockJwt },
+        { provide: ApiKeyResolutionService, useFactory: mockApiKeyResolution },
+        { provide: ApiKeyAuditService, useFactory: mockApiKeyAudit },
       ],
     }).compile();
 

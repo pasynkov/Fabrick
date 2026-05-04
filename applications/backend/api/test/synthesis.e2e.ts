@@ -15,6 +15,9 @@ describe('Synthesis E2E', () => {
 
   beforeAll(async () => {
     process.env.DB_NAME = process.env.DB_TEST_NAME || 'fabrick_test';
+    if (!process.env.ENCRYPTION_KEY) {
+      process.env.ENCRYPTION_KEY = Buffer.from('test-encryption-key-for-e2e-tests!!').toString('base64');
+    }
 
     const module = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(StorageService).useValue(mockStorage)
@@ -47,6 +50,11 @@ describe('Synthesis E2E', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({ name: 'Synth Org' });
     const orgId = orgRes.body.id;
+
+    await request(app.getHttpServer())
+      .patch(`/orgs/${orgId}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ anthropicApiKey: 'sk-ant-test-key-for-e2e-testing' });
 
     const projRes = await request(app.getHttpServer())
       .post(`/orgs/${orgId}/projects`)

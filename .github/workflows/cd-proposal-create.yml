@@ -62,12 +62,14 @@ jobs:
                Do NOT include the issue number or "proposal/" prefix.
 
       - name: Build scope check prompt
+        env:
+          THREAD: ${{ steps.thread.outputs.thread }}
         run: |
+          printf '%s' "$THREAD" > /tmp/issue-thread.json
           CHANGE_NAME=$(cat /tmp/change-name.txt | tr -d '[:space:]')
           ISSUE_NUMBER="${{ github.event.issue.number }}"
           cat > /tmp/scope-check-prompt.txt << PROMPT_EOF
-          Issue thread (JSON):
-          ${{ steps.thread.outputs.thread }}
+          Issue thread (JSON): read from /tmp/issue-thread.json
 
           Change name: ${CHANGE_NAME}
           Issue number: ${ISSUE_NUMBER}

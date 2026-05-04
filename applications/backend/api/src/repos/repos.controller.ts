@@ -93,15 +93,16 @@ export class ReposController {
   @Patch('orgs/:orgId/projects/:projectId')
   @UseGuards(FabrickAuthGuard, IsAdminGuard)
   updateProject(
-    @Request() req: { user: { id: string }; ip?: string },
+    @Request() req: { user: { id: string } },
     @Param('orgId') orgId: string,
     @Param('projectId') projectId: string,
     @Body() body: UpdateProjectDto,
     @Headers('user-agent') userAgent?: string,
+    @Headers('x-forwarded-for') forwardedFor?: string,
   ) {
     return this.reposService.updateProject(orgId, projectId, body, req.user.id, {
       userId: req.user.id,
-      ipAddress: req.ip,
+      ipAddress: forwardedFor?.split(',')[0]?.trim() || null,
       userAgent,
     });
   }

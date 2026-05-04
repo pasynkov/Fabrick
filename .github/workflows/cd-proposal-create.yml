@@ -61,6 +61,51 @@ jobs:
             3. Write ONLY the change name (e.g. "persistent-refresh-token") to /tmp/change-name.txt.
                Do NOT include the issue number or "proposal/" prefix.
 
+      - name: Build scope check prompt
+        run: |
+          CHANGE_NAME=$(cat /tmp/change-name.txt | tr -d '[:space:]')
+          ISSUE_NUMBER="${{ github.event.issue.number }}"
+          cat > /tmp/scope-check-prompt.txt << PROMPT_EOF
+          Issue thread (JSON):
+          ${{ steps.thread.outputs.thread }}
+
+          Change name: ${CHANGE_NAME}
+          Issue number: ${ISSUE_NUMBER}
+
+          Your task: identify capabilities in the generated proposal that are NOT traceable to the original issue body.
+
+          Steps:
+          1. Read openspec/changes/${CHANGE_NAME}/proposal.md and openspec/changes/${CHANGE_NAME}/tasks.md
+          2. Compare each capability against the original issue body (from the thread JSON above — field "body")
+          3. For each addon capability with >= 3 tasks that is not traceable to the issue body:
+             a. Configure git user if not already set:
+                git config user.name "github-actions[bot]"
+                git config user.email "github-actions[bot]@users.noreply.github.com"
+             b. Run: openspec new change "<addon-name>"
+             c. Generate proposal.md, design.md, specs/, and tasks.md for the addon change
+             d. Create and push the addon branch:
+                git checkout -b "proposal/${ISSUE_NUMBER}-<addon-name>"
+                git add "openspec/changes/<addon-name>/"
+                git commit -m "proposal: <addon-name>\n\nrefs #${ISSUE_NUMBER}"
+                git push origin "proposal/${ISSUE_NUMBER}-<addon-name>"
+             e. Return to the original branch: git checkout -
+             f. Remove the addon capability from openspec/changes/${CHANGE_NAME}/proposal.md and tasks.md
+             g. Append to the Impact section of openspec/changes/${CHANGE_NAME}/proposal.md:
+                "Scope note: \`<addon-name>\` extracted to separate proposal — see branch \`proposal/${ISSUE_NUMBER}-<addon-name>\`"
+          4. Do NOT push the original branch — that is handled by the commit-and-push step.
+          5. If no addons found (or all addons have < 3 tasks), do nothing.
+          PROMPT_EOF
+
+      - name: Scope check — split addons
+        uses: anthropics/claude-code-base-action@beta
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          model: claude-haiku-4-5-20251001
+          allowed_tools: "Bash,Read,Write,Glob"
+          prompt_file: /tmp/scope-check-prompt.txt
+
       - name: Commit and push proposal branch
         id: push
         env:

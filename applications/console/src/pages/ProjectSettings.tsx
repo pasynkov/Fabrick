@@ -2,12 +2,13 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api';
 
-export default function EditProjectName() {
+export default function ProjectSettings() {
   const { orgSlug, projectSlug } = useParams<{ orgSlug: string; projectSlug: string }>();
   const navigate = useNavigate();
   const [orgId, setOrgId] = useState('');
   const [projectId, setProjectId] = useState('');
   const [name, setName] = useState('');
+  const [apiKey, setApiKey] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [initializing, setInitializing] = useState(true);
@@ -16,27 +17,36 @@ export default function EditProjectName() {
     api.orgs.list().then((orgs) => {
       const org = orgs.find((o) => o.slug === orgSlug);
       if (!org) return;
+      if (org.role !== 'admin') {
+        navigate(`/orgs/${orgSlug}/projects/${projectSlug}`);
+        return;
+      }
       setOrgId(org.id);
-      api.projects.list(org.id).then((projects) => {
+      return api.projects.list(org.id).then((projects) => {
         const p = projects.find((pr) => pr.slug === projectSlug);
         if (!p) return;
         setProjectId(p.id);
         setName(p.name);
-      }).finally(() => setInitializing(false));
-    });
-  }, [orgSlug, projectSlug]);
+      });
+    }).finally(() => setInitializing(false));
+  }, [orgSlug, projectSlug, navigate]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
     if (!name.trim()) { setError('Name must not be empty'); return; }
     if (name.length > 128) { setError('Name must not exceed 128 characters'); return; }
+    const trimmedKey = apiKey.trim();
+    if (trimmedKey && !trimmedKey.startsWith('sk-ant-')) {
+      setError('API key must start with sk-ant-');
+      return;
+    }
     setLoading(true);
     try {
-      await api.projects.update(orgId, projectId, { name: name.trim() });
-      navigate(`/orgs/${orgSlug}/projects/${projectSlug}`);
+      const updated = await api.projects.update(orgId, projectId, { name: name.trim(), anthropicApiKey: trimmedKey || null });
+      navigate(`/orgs/${orgSlug}/projects/${updated.slug}`);
     } catch (err: any) {
-      setError(err.message || 'Failed to update project name');
+      setError(err.message || 'Failed to save settings');
     } finally {
       setLoading(false);
     }
@@ -54,11 +64,11 @@ export default function EditProjectName() {
           <span className="mx-2">/</span>
           <Link to={`/orgs/${orgSlug}/projects/${projectSlug}`} className="hover:underline">{projectSlug}</Link>
           <span className="mx-2">/</span>
-          <span className="text-gray-900 font-medium">Edit Name</span>
+          <span className="text-gray-900 font-medium">Settings</span>
         </nav>
       </header>
       <main className="max-w-md mx-auto py-10 px-4">
-        <h2 className="text-xl font-semibold mb-6 text-gray-900">Edit Project Name</h2>
+        <h2 className="text-xl font-semibold mb-6 text-gray-900">Project Settings</h2>
         {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -72,6 +82,17 @@ export default function EditProjectName() {
               className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
             />
             <p className="text-xs text-gray-400 mt-1">{name.length}/128</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Anthropic API Key</label>
+            <input
+              type="password"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              placeholder="sk-ant-... (leave empty to clear)"
+              className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+            />
+            <p className="text-xs text-gray-400 mt-1">Leave empty to use organization-level key or clear project key</p>
           </div>
           <div className="flex gap-2">
             <button

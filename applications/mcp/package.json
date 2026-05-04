@@ -1,6 +1,6 @@
 {
   "name": "@fabrick/mcp",
-  "version": "0.0.2",
+  "version": "0.8.0",
   "description": "Fabrick MCP server — exposes synthesis tools via stdio transport",
   "type": "module",
   "bin": {
@@ -30,13 +30,28 @@
   "jest": {
     "preset": "ts-jest/presets/default-esm",
     "testEnvironment": "node",
-    "roots": ["<rootDir>/src", "<rootDir>/test"],
-    "extensionsToTreatAsEsm": [".ts"],
+    "roots": [
+      "<rootDir>/src",
+      "<rootDir>/test"
+    ],
+    "extensionsToTreatAsEsm": [
+      ".ts"
+    ],
     "moduleNameMapper": {
       "^(\\.{1,2}/.*)\\.js$": "$1"
     },
     "transform": {
-      "^.+\\.tsx?$": ["ts-jest", { "useESM": true, "diagnostics": { "ignoreCodes": [151002] } }]
+      "^.+\\.tsx?$": [
+        "ts-jest",
+        {
+          "useESM": true,
+          "diagnostics": {
+            "ignoreCodes": [
+              151002
+            ]
+          }
+        }
+      ]
     }
   }
 }

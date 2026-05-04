@@ -5,6 +5,9 @@ import { ReposService } from './repos.service';
 import { OrgMember } from '../entities/org-member.entity';
 import { Project } from '../entities/project.entity';
 import { Repository } from '../entities/repository.entity';
+import { ApiKeyEncryptionService } from '../api-keys/api-key-encryption.service';
+import { ApiKeyValidationService } from '../api-keys/api-key-validation.service';
+import { ApiKeyAuditService } from '../api-keys/api-key-audit.service';
 
 const mockProjectRepo = () => ({
   findOne: jest.fn(),
@@ -35,6 +38,9 @@ describe('ReposService', () => {
         { provide: getRepositoryToken(Project), useFactory: mockProjectRepo },
         { provide: getRepositoryToken(Repository), useFactory: mockRepoRepo },
         { provide: getRepositoryToken(OrgMember), useFactory: mockMemberRepo },
+        { provide: ApiKeyEncryptionService, useValue: { encrypt: jest.fn(), decrypt: jest.fn(), generateKeyHash: jest.fn() } },
+        { provide: ApiKeyValidationService, useValue: { validateFormat: jest.fn() } },
+        { provide: ApiKeyAuditService, useValue: { logApiKeySet: jest.fn(), logApiKeyDelete: jest.fn(), logValidationFailure: jest.fn() } },
       ],
     }).compile();
 

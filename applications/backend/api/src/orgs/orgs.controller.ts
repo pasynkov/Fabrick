@@ -64,14 +64,15 @@ export class OrgsController {
   @Patch(':orgId')
   @UseGuards(IsAdminGuard)
   updateOrg(
-    @Request() req: { user: { id: string }; ip?: string },
+    @Request() req: { user: { id: string }; headers?: Record<string, string> },
     @Param('orgId') orgId: string,
     @Body() body: UpdateOrgDto,
     @Headers('user-agent') userAgent?: string,
+    @Headers('x-forwarded-for') forwardedFor?: string,
   ) {
     return this.orgsService.updateOrg(orgId, body, {
       userId: req.user.id,
-      ipAddress: req.ip,
+      ipAddress: forwardedFor?.split(',')[0]?.trim() || null,
       userAgent,
     });
   }

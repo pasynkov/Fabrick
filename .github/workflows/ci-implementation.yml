@@ -230,6 +230,121 @@ jobs:
         run: |
           git add -A
           git diff --staged --quiet || git commit -m "fix: review fixes for ${{ steps.name.outputs.name }}"
+      - name: Install app dependencies for build check
+        if: steps.check.outputs.exists == 'true'
+        run: |
+          npm ci --legacy-peer-deps
+        working-directory: applications/backend/api
+      - uses: actions/setup-node@v4
+        if: steps.check.outputs.exists == 'true'
+        with:
+          node-version: '24'
+      - name: Install synthesis dependencies
+        if: steps.check.outputs.exists == 'true'
+        run: npm install
+        working-directory: applications/backend/synthesis
+      - name: Install console dependencies
+        if: steps.check.outputs.exists == 'true'
+        run: npm ci
+        working-directory: applications/console
+      - name: Install cli dependencies
+        if: steps.check.outputs.exists == 'true'
+        run: npm ci
+        working-directory: applications/cli
+      - name: Install mcp dependencies
+        if: steps.check.outputs.exists == 'true'
+        run: npm ci
+        working-directory: applications/mcp
+      - uses: actions/setup-node@v4
+        if: steps.check.outputs.exists == 'true'
+        with:
+          node-version: '22'
+      - name: Install landing dependencies
+        if: steps.check.outputs.exists == 'true'
+        run: npm ci
+        working-directory: applications/landing
+      - name: Build all apps — collect results
+        if: steps.check.outputs.exists == 'true'
+        id: build_check
+        run: |
+          RESULTS=""
+          FAILED=0
+
+          run_build() {
+            local name="$1"
+            local dir="$2"
+            local extra_env="$3"
+            echo "--- Building $name ---"
+            output=$(cd "$dir" && env $extra_env npm run build 2>&1)
+            code=$?
+            if [ $code -ne 0 ]; then
+              FAILED=1
+              RESULTS="${RESULTS}\n\n=== FAILED: $name ===\nDir: $dir\n${output}"
+            else
+              echo "$name: OK"
+            fi
+          }
+
+          run_build "backend/api"       "applications/backend/api"       ""
+          run_build "backend/synthesis" "applications/backend/synthesis"  ""
+          run_build "console"           "applications/console"            "VITE_API_URL=https://api.fabrick.me"
+          run_build "landing"           "applications/landing"            ""
+          run_build "cli"               "applications/cli"                ""
+          run_build "mcp"               "applications/mcp"                ""
+
+          if [ $FAILED -eq 1 ]; then
+            printf "%b" "$RESULTS" > /tmp/build-failures.txt
+            echo "failed=true" >> $GITHUB_OUTPUT
+          else
+            echo "failed=false" >> $GITHUB_OUTPUT
+          fi
+      - name: Build build-fix prompt
+        if: steps.check.outputs.exists == 'true' && steps.build_check.outputs.failed == 'true'
+        run: |
+          cat > /tmp/build-fix-prompt.txt << 'PROMPT'
+          Some application builds failed. Fix the source code so all builds pass.
+
+          Failed builds and their error output:
+          PROMPT
+          cat /tmp/build-failures.txt >> /tmp/build-fix-prompt.txt
+          cat >> /tmp/build-fix-prompt.txt << 'PROMPT'
+
+          Instructions:
+          - Fix source code only. Do NOT modify package.json, tsconfig.json, or build config files.
+          - Do NOT modify files under .github/workflows/
+          - Do NOT modify test files (*.spec.ts, *.test.ts, *.e2e.ts, **/test/**)
+          - Do NOT run git commands.
+          - After fixing, verify by running the failed builds again:
+            - applications/backend/api: cd applications/backend/api && npm run build
+            - applications/backend/synthesis: cd applications/backend/synthesis && npm run build
+            - applications/console: cd applications/console && VITE_API_URL=https://api.fabrick.me npm run build
+            - applications/landing: cd applications/landing && npm run build
+            - applications/cli: cd applications/cli && npm run build
+            - applications/mcp: cd applications/mcp && npm run build
+          - Only re-run the builds that were failing.
+          - All previously failing builds must pass before you are done.
+          PROMPT
+      - name: Fix build failures
+        if: steps.check.outputs.exists == 'true' && steps.build_check.outputs.failed == 'true'
+        uses: anthropics/claude-code-base-action@beta
+        with:
+          anthropic_api_key: ${{ secrets.CLAUDE_CODE_API_TOKEN }}
+          model: claude-sonnet-4-6
+          allowed_tools: "Bash,Read,Write,Edit,Glob"
+          timeout_minutes: 30
+          settings: |
+            {
+              "permissions": {
+                "allow": ["Bash(*)", "Read(*)", "Write(*)", "Edit(*)", "Glob(*)"],
+                "deny": []
+              }
+            }
+          prompt_file: /tmp/build-fix-prompt.txt
+      - name: Commit build fixes
+        if: steps.check.outputs.exists == 'true' && steps.build_check.outputs.failed == 'true'
+        run: |
+          git add -A
+          git diff --staged --quiet || git commit -m "fix: build failures for ${{ steps.name.outputs.name }}"
       - name: Build archive prompt
         if: steps.check.outputs.exists == 'true'
         run: |

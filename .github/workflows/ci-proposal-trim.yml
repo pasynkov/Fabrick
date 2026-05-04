@@ -1,0 +1,121 @@
+name: AI Proposal Trim
+
+on:
+  pull_request_review_comment:
+    types: [created]
+
+concurrency:
+  group: proposal-trim-${{ github.event.pull_request.head.ref }}
+  cancel-in-progress: false
+
+jobs:
+  trim:
+    runs-on: ubuntu-latest
+    if: |
+      startsWith(github.event.pull_request.head.ref, 'proposal/') &&
+      github.event.comment.author_association == 'OWNER'
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Extract change name
+        id: meta
+        run: |
+          BRANCH="${{ github.event.pull_request.head.ref }}"
+          BRANCH_SUFFIX="${BRANCH#proposal/}"
+          NAME="${BRANCH_SUFFIX#*-}"
+          echo "name=$NAME" >> $GITHUB_OUTPUT
+          echo "branch=$BRANCH" >> $GITHUB_OUTPUT
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.meta.outputs.branch }}
+          fetch-depth: 0
+
+      - name: Build trim prompt
+        env:
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          COMMENT_PATH: ${{ github.event.comment.path }}
+          COMMENT_DIFF: ${{ github.event.comment.diff_hunk }}
+        run: |
+          NAME="${{ steps.meta.outputs.name }}"
+
+          # Write multiline values safely via env vars
+          printf '%s' "$COMMENT_BODY" > /tmp/comment-body.txt
+          printf '%s' "$COMMENT_DIFF" > /tmp/comment-diff.txt
+
+          cat > /tmp/trim-prompt.txt << PROMPT
+          You are editing an OpenSpec proposal in response to a review comment.
+
+          Change name: $NAME
+          Proposal directory: openspec/changes/$NAME/
+
+          Review comment:
+          - File: $COMMENT_PATH
+          - Diff context (file: /tmp/comment-diff.txt): read this file for line context
+          - Instruction (file: /tmp/comment-body.txt): read this file for the instruction
+
+          Your task:
+          1. Read all files in openspec/changes/$NAME/ (proposal.md, design.md, tasks.md, specs/**/spec.md)
+          2. Read /tmp/comment-body.txt (instruction) and /tmp/comment-diff.txt (line context)
+          3. Apply the instruction. This may mean:
+             - Deleting a spec file/directory (use Bash: rm -rf openspec/changes/$NAME/specs/<name>/)
+             - Rewriting a section in any artifact
+             - Adding new content
+             - Any combination of the above
+          4. Keep all artifacts consistent: if you remove a spec, also remove its tasks from tasks.md and its mention from proposal.md and design.md
+          5. Do NOT run git commands.
+
+          Constraints:
+          - Non-interactive CI environment. Do NOT use AskUserQuestion.
+          - Only modify files inside openspec/changes/$NAME/ (and read /tmp/comment-*.txt)
+          - Be surgical: apply exactly what the comment asks, nothing more
+          PROMPT
+
+      - name: Apply trim
+        uses: anthropics/claude-code-base-action@beta
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          model: claude-sonnet-4-6
+          allowed_tools: "Read,Write,Edit,Glob,Bash"
+          timeout_minutes: 10
+          settings: |
+            {
+              "permissions": {
+                "allow": [
+                  "Read(*)",
+                  "Write(*)",
+                  "Edit(*)",
+                  "Glob(*)",
+                  "Bash(rm -rf openspec/*)",
+                  "Bash(rm -f openspec/*)"
+                ],
+                "deny": ["Bash(git *)"]
+              }
+            }
+          prompt_file: /tmp/trim-prompt.txt
+
+      - name: Commit and push
+        env:
+          COMMENT_BODY: ${{ github.event.comment.body }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add openspec/changes/${{ steps.meta.outputs.name }}/
+          if ! git diff --staged --quiet; then
+            SUMMARY=$(printf '%s' "$COMMENT_BODY" | head -c 60 | tr '\n' ' ')
+            git commit -m "fix(proposal): $SUMMARY [review #${{ github.event.comment.id }}]"
+            git push
+          fi
+
+      - name: Mark comment resolved
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api \
+            repos/${{ github.repository }}/pulls/comments/${{ github.event.comment.id }}/reactions \
+            -X POST \
+            -f content='+1'

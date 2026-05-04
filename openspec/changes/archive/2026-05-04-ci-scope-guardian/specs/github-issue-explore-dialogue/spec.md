@@ -1,16 +1,4 @@
-## ADDED Requirements
-
-### Requirement: Start explore dialogue on proposal label
-When a GitHub issue receives the `proposal` label, the system SHALL automatically begin an AI-assisted explore dialogue by posting a first comment and adding the `proposal:exploring` label.
-
-#### Scenario: Issue labeled with proposal
-- **WHEN** a GitHub issue is labeled with `proposal`
-- **THEN** the system adds label `proposal:exploring` to the issue
-- **THEN** Claude posts a comment with initial analysis of the issue body and opening questions to explore the proposal space
-
-#### Scenario: Non-proposal issue labeled
-- **WHEN** a GitHub issue is labeled with any label other than `proposal`
-- **THEN** no explore workflow is triggered
+## MODIFIED Requirements
 
 ### Requirement: Continue dialogue on user comment
 When a user (non-bot) posts a comment on an issue with label `proposal:exploring`, the system SHALL read the full issue thread and continue the AI-assisted exploration. When the AI introduces a suggestion not present in the original issue body, it SHALL explicitly flag it as an addon recommendation.
@@ -33,10 +21,3 @@ When a user (non-bot) posts a comment on an issue with label `proposal:exploring
 - **THEN** Claude marks the suggestion with `⚠️ ADDON (not in original request):` prefix
 - **AND** Claude recommends: "Consider creating a separate issue for this to keep the current change focused"
 - **AND** Claude does NOT assume the addon is included in scope unless the user explicitly confirms and requests it be folded in
-
-### Requirement: Suggest readiness when exploration is complete
-When Claude determines the proposal is sufficiently explored, it SHALL signal readiness in its comment.
-
-#### Scenario: Claude deems proposal ready
-- **WHEN** Claude has gathered enough context to generate a solid proposal
-- **THEN** Claude's comment includes a suggestion to add label `proposal:ready` to trigger artifact generation

@@ -5,6 +5,9 @@ import { OrgsService } from './orgs.service';
 import { OrgMember } from '../entities/org-member.entity';
 import { Organization } from '../entities/organization.entity';
 import { User } from '../entities/user.entity';
+import { ApiKeyEncryptionService } from '../api-keys/api-key-encryption.service';
+import { ApiKeyValidationService } from '../api-keys/api-key-validation.service';
+import { ApiKeyAuditService } from '../api-keys/api-key-audit.service';
 
 const mockOrgRepo = () => ({
   findOne: jest.fn(),
@@ -36,6 +39,9 @@ describe('OrgsService', () => {
         { provide: getRepositoryToken(Organization), useFactory: mockOrgRepo },
         { provide: getRepositoryToken(OrgMember), useFactory: mockMemberRepo },
         { provide: getRepositoryToken(User), useFactory: mockUserRepo },
+        { provide: ApiKeyEncryptionService, useValue: {} },
+        { provide: ApiKeyValidationService, useValue: {} },
+        { provide: ApiKeyAuditService, useValue: {} },
       ],
     }).compile();
 

@@ -67,6 +67,10 @@ jobs:
             COMMENT_EOF
             ```
 
+            When you suggest a feature or capability not present in the original issue body,
+            prefix it with `⚠️ ADDON (not in original request):` and recommend the user
+            create a separate issue for it rather than including it in this proposal.
+
             If the proposal seems sufficiently explored and ready for implementation planning,
             include a suggestion to add the `proposal:ready` label in the comment.
 

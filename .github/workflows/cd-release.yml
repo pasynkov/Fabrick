@@ -69,7 +69,7 @@ jobs:
           node-version: '24'
       - name: Bump package versions
         run: |
-          for dir in applications/backend/api applications/backend/synthesis applications/console applications/landing; do
+          for dir in applications/backend/api applications/backend/synthesis applications/console applications/landing applications/cli applications/mcp; do
             npm --prefix "$dir" version "${{ steps.extract.outputs.version }}" --no-git-tag-version --allow-same-version
           done
       - name: Commit and push
@@ -80,7 +80,9 @@ jobs:
             applications/backend/api/package.json \
             applications/backend/synthesis/package.json \
             applications/console/package.json \
-            applications/landing/package.json
+            applications/landing/package.json \
+            applications/cli/package.json \
+            applications/mcp/package.json
           git diff --staged --quiet || git commit -m "chore: bump version to ${{ steps.extract.outputs.version }}"
           git push
 
@@ -203,6 +205,39 @@ jobs:
           skip_app_build: true
           output_location: ""
 
+  publish-npm:
+    needs: [version-bump]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        package: [cli, mcp]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+          cache: npm
+          cache-dependency-path: applications/${{ matrix.package }}/package-lock.json
+      - run: npm ci
+        working-directory: applications/${{ matrix.package }}
+      - run: npm run build
+        working-directory: applications/${{ matrix.package }}
+      - name: Publish to npm (skip if already published)
+        run: |
+          VERSION="${{ needs.version-bump.outputs.version }}"
+          PKG_NAME=$(node -p "require('./package.json').name")
+          if npm view "${PKG_NAME}@${VERSION}" version 2>/dev/null | grep -q "${VERSION}"; then
+            echo "${PKG_NAME}@${VERSION} already published, skipping"
+          else
+            npm publish --access public
+          fi
+        working-directory: applications/${{ matrix.package }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NODE_AUTH_TOKEN }}
+
   validate-versions:
     needs: [version-bump, deploy-api, deploy-console, deploy-landing]
     runs-on: ubuntu-latest
@@ -237,7 +272,7 @@ jobs:
           exit $failed
 
   open-pr-to-main:
-    needs: [validate-versions]
+    needs: [validate-versions, publish-npm]
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write

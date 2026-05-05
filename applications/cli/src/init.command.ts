@@ -1,4 +1,4 @@
-import { Command, CommandRunner } from 'nest-commander';
+import { Command, CommandRunner, Option } from 'nest-commander';
 import AdmZip from 'adm-zip';
 import { execSync } from 'child_process';
 import { existsSync, mkdirSync, writeFileSync } from 'fs';
@@ -24,7 +24,75 @@ export class InitCommand extends CommandRunner {
     super();
   }
 
-  async run(): Promise<void> {
+  @Option({
+    flags: '--non-interactive',
+    description: 'Skip interactive prompts',
+  })
+  parseNonInteractive(): boolean {
+    return true;
+  }
+
+  @Option({
+    flags: '--org <slug>',
+    description: 'Organization slug (required with --non-interactive)',
+  })
+  parseOrg(val: string): string {
+    return val;
+  }
+
+  @Option({
+    flags: '--project <slug>',
+    description: 'Project slug (required with --non-interactive)',
+  })
+  parseProject(val: string): string {
+    return val;
+  }
+
+  async run(_params: string[], options?: { nonInteractive?: boolean; org?: string; project?: string }): Promise<void> {
+    if (options?.nonInteractive) {
+      await this.runNonInteractive(options.org, options.project);
+      return;
+    }
+    await this.runInteractive();
+  }
+
+  private async runNonInteractive(orgSlug: string | undefined, projectSlug: string | undefined): Promise<void> {
+    const creds = this.credentials.requireAuth();
+
+    let gitRemote: string;
+    try {
+      gitRemote = execSync('git remote get-url origin', { encoding: 'utf8' }).trim();
+    } catch {
+      console.error('No git remote found. Is this a git repository with an origin remote?');
+      process.exit(1);
+    }
+
+    const orgs = await this.api.get<Org[]>(creds.api_url, '/orgs', creds.token);
+    const org = orgs.find((o) => o.slug === orgSlug);
+    if (!org) {
+      console.error(`Organization not found: ${orgSlug}`);
+      process.exit(1);
+    }
+
+    const projects = await this.api.get<Project[]>(creds.api_url, `/orgs/${org.id}/projects`, creds.token);
+    let project = projects.find((p) => p.slug === projectSlug);
+    if (!project) {
+      project = await this.api.post<Project>(creds.api_url, `/orgs/${org.id}/projects`, creds.token, { name: projectSlug });
+      console.log(`✓ Created project: ${project.name}`);
+    }
+
+    const result = await this.api.post<Repo>(
+      creds.api_url,
+      '/repos/find-or-create',
+      creds.token,
+      { gitRemote, projectId: project.id },
+    );
+
+    const aiTool: AiTool = 'claude';
+    await this.writeConfigAndMcp(creds, org, project, result, aiTool);
+  }
+
+  private async runInteractive(): Promise<void> {
     const creds = this.credentials.requireAuth();
 
     // Get git remote
@@ -78,6 +146,16 @@ export class InitCommand extends CommandRunner {
       (t) => t.charAt(0).toUpperCase() + t.slice(1),
     );
 
+    await this.writeConfigAndMcp(creds, org, project, result, aiTool);
+  }
+
+  private async writeConfigAndMcp(
+    creds: { token: string; api_url: string },
+    org: Org,
+    project: Project,
+    result: Repo,
+    aiTool: AiTool,
+  ): Promise<void> {
     // Write config
     mkdirSync('.fabrick', { recursive: true });
     writeFileSync(

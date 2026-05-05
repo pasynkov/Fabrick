@@ -1,4 +1,4 @@
-import { Command, CommandRunner } from 'nest-commander';
+import { Command, CommandRunner, Option } from 'nest-commander';
 import { createServer } from 'http';
 import { parse as parseUrl } from 'url';
 import { exec } from 'child_process';
@@ -14,7 +14,23 @@ export class LoginCommand extends CommandRunner {
     super();
   }
 
-  async run(): Promise<void> {
+  @Option({
+    flags: '-t, --token <token>',
+    description: 'Pre-issued CLI token; skips browser auth',
+  })
+  parseToken(val: string): string {
+    return val;
+  }
+
+  async run(_params: string[], options?: { token?: string }): Promise<void> {
+    if (options?.token) {
+      const apiUrl = process.env.FABRICK_API_URL || 'https://api.fabrick.me';
+      this.credentials.write({ token: options.token, api_url: apiUrl });
+      console.log('✓ Authenticated. Credentials saved to .fabrick/credentials.yaml');
+      process.exit(0);
+      return;
+    }
+
     const { port, close, waitForToken } = await this.startCallbackServer();
     const state = Math.random().toString(36).slice(2);
     const url = `${CONSOLE_URL}/cli-auth?port=${port}&state=${state}`;

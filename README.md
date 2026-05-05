@@ -111,6 +111,12 @@ fabrick login
 
 Opens your browser to complete authentication. Credentials are saved to `.fabrick/credentials.yaml` in your project directory.
 
+For CI or headless environments, pass a pre-issued CLI token:
+
+```bash
+fabrick login --token <your-cli-token>
+```
+
 ### Initialize a repository
 
 ```bash
@@ -122,6 +128,12 @@ fabrick init
 - Selects your AI tool (Claude)
 - Installs Fabrick skills into `.claude/skills/`
 - Writes `.mcp.json` to configure the Fabrick MCP server for Claude Code
+
+For non-interactive use (CI pipelines):
+
+```bash
+fabrick init --non-interactive --org <org-slug> --project <project-slug>
+```
 
 ### Analyze your codebase
 

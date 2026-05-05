@@ -27,6 +27,7 @@ jest.mock('archiver', () => {
 
 import { PushCommand } from '../src/push.command';
 import { CredentialsService } from '../src/credentials.service';
+import { ApiService } from '../src/api.service';
 
 const mockFetch = jest.fn();
 global.fetch = mockFetch;
@@ -34,6 +35,7 @@ global.fetch = mockFetch;
 describe('PushCommand e2e — upload flow', () => {
   let command: PushCommand;
   let credsService: jest.Mocked<CredentialsService>;
+  let apiService: jest.Mocked<ApiService>;
 
   const mockCreds = { token: 'fbrk_mytoken', api_url: 'http://localhost:3000' };
   const mockConfig = { repo_id: 'repo123', api_url: 'http://localhost:3000' };
@@ -45,7 +47,14 @@ describe('PushCommand e2e — upload flow', () => {
       write: jest.fn(),
     } as any;
 
-    command = new PushCommand(credsService);
+    apiService = {
+      get: jest.fn().mockRejectedValue(new Error('no project_id')),
+      post: jest.fn(),
+      request: jest.fn(),
+      download: jest.fn(),
+    } as any;
+
+    command = new PushCommand(credsService, apiService);
 
     (fs.existsSync as jest.Mock).mockImplementation((p: string) => {
       if (String(p).endsWith('config.yaml')) return true;

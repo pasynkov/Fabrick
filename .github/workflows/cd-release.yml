@@ -40,8 +40,73 @@ jobs:
           DB_SSL: 'false'
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
 
-  approve:
+  e2e-cli:
     needs: [e2e-api]
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: fabrick_test
+          POSTGRES_USER: fabrick
+          POSTGRES_PASSWORD: ci-test-pass
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_USER: fabrick
+      DB_PASS: ci-test-pass
+      DB_NAME: fabrick_test
+      DB_SSL: 'false'
+      JWT_SECRET: ci-test-secret-not-for-prod
+      AZURE_STORAGE_CONNECTION_STRING: 'DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://127.0.0.1:10000/devstoreaccount1;'
+      FABRICK_API_URL: 'http://localhost:3000'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Start Azurite
+        run: docker run -d -p 10000:10000 mcr.microsoft.com/azure-storage/azurite azurite-blob --blobHost 0.0.0.0 --skipApiVersionCheck
+      - name: Start NATS with JetStream
+        run: docker run -d -p 4222:4222 nats:2-alpine -js
+      - name: Build API
+        run: npm ci --legacy-peer-deps && npm run build
+        working-directory: applications/backend/api
+      - name: Start API
+        run: npm run start &
+        working-directory: applications/backend/api
+        env:
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_USER: fabrick
+          DB_PASS: ci-test-pass
+          DB_NAME: fabrick_test
+          DB_SSL: 'false'
+          JWT_SECRET: ci-test-secret-not-for-prod
+          AZURE_STORAGE_CONNECTION_STRING: 'DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://127.0.0.1:10000/devstoreaccount1;'
+      - name: Wait for services
+        run: npx wait-on tcp:10000 http://localhost:3000/health --timeout 60000
+      - name: Build CLI
+        run: npm ci --legacy-peer-deps && npm run build
+        working-directory: applications/cli
+      - name: Build MCP
+        run: npm ci --legacy-peer-deps && npm run build
+        working-directory: applications/mcp
+      - name: Run CLI e2e tests
+        run: npm run test:e2e
+        working-directory: applications/cli
+        env:
+          MCP_DIST_PATH: ${{ github.workspace }}/applications/mcp/dist/index.js
+
+  approve:
+    needs: [e2e-api, e2e-cli]
     runs-on: ubuntu-latest
     environment: production
     steps:
@@ -221,7 +286,7 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
           cache: npm
           cache-dependency-path: applications/${{ matrix.package }}/package-lock.json
-      - run: npm ci
+      - run: npm ci --legacy-peer-deps
         working-directory: applications/${{ matrix.package }}
       - run: npm run build
         working-directory: applications/${{ matrix.package }}

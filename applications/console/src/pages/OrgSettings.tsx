@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api';
+import { ApiKeyStatusDisplay } from '../components/ApiKeyStatusDisplay';
 
 export default function OrgSettings() {
   const { orgSlug } = useParams<{ orgSlug: string }>();
@@ -8,6 +9,8 @@ export default function OrgSettings() {
   const [orgId, setOrgId] = useState('');
   const [name, setName] = useState('');
   const [apiKey, setApiKey] = useState('');
+  const [apiKeyHash, setApiKeyHash] = useState<string | undefined>(undefined);
+  const [hasApiKey, setHasApiKey] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [initializing, setInitializing] = useState(true);
@@ -22,6 +25,10 @@ export default function OrgSettings() {
       }
       setOrgId(found.id);
       setName(found.name);
+      return api.orgs.apiKey.status(found.id).then((status) => {
+        setHasApiKey(status.hasApiKey);
+        setApiKeyHash(status.keyHash);
+      });
     }).finally(() => setInitializing(false));
   }, [orgSlug, navigate]);
 
@@ -37,7 +44,17 @@ export default function OrgSettings() {
     }
     setLoading(true);
     try {
-      const updated = await api.orgs.update(orgId, { name: name.trim(), anthropicApiKey: trimmedKey || null });
+      const payload: { name: string; anthropicApiKey?: string | null } = {
+        name: name.trim(),
+      };
+      if (trimmedKey) {
+        payload.anthropicApiKey = trimmedKey;
+      }
+      const updated = await api.orgs.update(orgId, payload);
+      const newStatus = await api.orgs.apiKey.status(orgId);
+      setHasApiKey(newStatus.hasApiKey);
+      setApiKeyHash(newStatus.keyHash);
+      setApiKey('');
       navigate(`/orgs/${updated.slug}`);
     } catch (err: any) {
       setError(err.message || 'Failed to save settings');
@@ -77,14 +94,17 @@ export default function OrgSettings() {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Anthropic API Key</label>
+            <div className="mb-1">
+              <ApiKeyStatusDisplay hasApiKey={hasApiKey} keyHash={apiKeyHash} />
+            </div>
             <input
               type="password"
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
-              placeholder="sk-ant-... (leave empty to clear)"
+              placeholder={hasApiKey ? 'Enter new key to replace current' : 'sk-ant-...'}
               className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
             />
-            <p className="text-xs text-gray-400 mt-1">Leave empty to clear the API key</p>
+            <p className="text-xs text-gray-400 mt-1">Leave empty to keep existing key</p>
           </div>
           <div className="flex gap-2">
             <button

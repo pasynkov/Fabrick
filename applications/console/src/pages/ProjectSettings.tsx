@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api';
+import { ApiKeyStatusDisplay } from '../components/ApiKeyStatusDisplay';
 
 export default function ProjectSettings() {
   const { orgSlug, projectSlug } = useParams<{ orgSlug: string; projectSlug: string }>();
@@ -9,6 +10,9 @@ export default function ProjectSettings() {
   const [projectId, setProjectId] = useState('');
   const [name, setName] = useState('');
   const [apiKey, setApiKey] = useState('');
+  const [autoSynthesisEnabled, setAutoSynthesisEnabled] = useState(false);
+  const [apiKeyHash, setApiKeyHash] = useState<string | undefined>(undefined);
+  const [hasApiKey, setHasApiKey] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [initializing, setInitializing] = useState(true);
@@ -27,6 +31,11 @@ export default function ProjectSettings() {
         if (!p) return;
         setProjectId(p.id);
         setName(p.name);
+        setAutoSynthesisEnabled(p.autoSynthesisEnabled ?? false);
+        return api.projects.apiKey.status(p.id).then((status) => {
+          setHasApiKey(status.hasProjectApiKey);
+          setApiKeyHash(status.keyHashes.project);
+        });
       });
     }).finally(() => setInitializing(false));
   }, [orgSlug, projectSlug, navigate]);
@@ -43,7 +52,18 @@ export default function ProjectSettings() {
     }
     setLoading(true);
     try {
-      const updated = await api.projects.update(orgId, projectId, { name: name.trim(), anthropicApiKey: trimmedKey || null });
+      const payload: { name: string; autoSynthesisEnabled: boolean; anthropicApiKey?: string | null } = {
+        name: name.trim(),
+        autoSynthesisEnabled,
+      };
+      if (trimmedKey) {
+        payload.anthropicApiKey = trimmedKey;
+      }
+      const updated = await api.projects.update(orgId, projectId, payload);
+      const newStatus = await api.projects.apiKey.status(projectId);
+      setHasApiKey(newStatus.hasProjectApiKey);
+      setApiKeyHash(newStatus.keyHashes.project);
+      setApiKey('');
       navigate(`/orgs/${orgSlug}/projects/${updated.slug}`);
     } catch (err: any) {
       setError(err.message || 'Failed to save settings');
@@ -85,14 +105,29 @@ export default function ProjectSettings() {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Anthropic API Key</label>
+            <div className="mb-1">
+              <ApiKeyStatusDisplay hasApiKey={hasApiKey} keyHash={apiKeyHash} />
+            </div>
             <input
               type="password"
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
-              placeholder="sk-ant-... (leave empty to clear)"
+              placeholder={hasApiKey ? 'Enter new key to replace current' : 'sk-ant-...'}
               className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
             />
-            <p className="text-xs text-gray-400 mt-1">Leave empty to use organization-level key or clear project key</p>
+            <p className="text-xs text-gray-400 mt-1">Leave empty to keep existing key or use organization-level key</p>
+          </div>
+          <div>
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={autoSynthesisEnabled}
+                onChange={(e) => setAutoSynthesisEnabled(e.target.checked)}
+                className="w-4 h-4 text-purple-600 rounded border-gray-300 focus:ring-purple-500"
+              />
+              <span className="text-sm font-medium text-gray-700">Run synthesis automatically on context update</span>
+            </label>
+            <p className="text-xs text-gray-400 mt-1 ml-7">When enabled, synthesis runs automatically after CLI push operations</p>
           </div>
           <div className="flex gap-2">
             <button

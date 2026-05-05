@@ -149,14 +149,14 @@ export const api = {
 
   projects: {
     list: (orgId: string) =>
-      request<{ id: string; name: string; slug: string }[]>(`/orgs/${orgId}/projects`),
+      request<{ id: string; name: string; slug: string; autoSynthesisEnabled?: boolean }[]>(`/orgs/${orgId}/projects`),
     create: (orgId: string, name: string) =>
       request<{ id: string; name: string; slug: string }>(`/orgs/${orgId}/projects`, {
         method: 'POST',
         body: JSON.stringify({ name }),
       }),
-    update: (orgId: string, projectId: string, body: { name?: string; anthropicApiKey?: string | null }) =>
-      request<{ id: string; name: string; slug: string; orgId: string; hasApiKey: boolean }>(`/orgs/${orgId}/projects/${projectId}`, {
+    update: (orgId: string, projectId: string, body: { name?: string; anthropicApiKey?: string | null; autoSynthesisEnabled?: boolean }) =>
+      request<{ id: string; name: string; slug: string; orgId: string; hasApiKey: boolean; autoSynthesisEnabled: boolean }>(`/orgs/${orgId}/projects/${projectId}`, {
         method: 'PATCH',
         body: JSON.stringify(body),
       }),

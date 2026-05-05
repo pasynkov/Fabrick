@@ -67,3 +67,10 @@ resource "azurerm_key_vault_secret" "anthropic_api_key" {
   key_vault_id = azurerm_key_vault.main.id
   depends_on   = [azurerm_key_vault_access_policy.deployer]
 }
+
+resource "azurerm_key_vault_secret" "encryption_key" {
+  name         = "encryption-key"
+  value        = random_bytes.encryption_key.base64
+  key_vault_id = azurerm_key_vault.main.id
+  depends_on   = [azurerm_key_vault_access_policy.deployer]
+}

@@ -67,6 +67,7 @@ resource "azurerm_function_app_flex_consumption" "api" {
     JWT_SECRET                      = "@Microsoft.KeyVault(VaultName=${azurerm_key_vault.main.name};SecretName=jwt-secret)"
     AZURE_STORAGE_CONNECTION_STRING = "@Microsoft.KeyVault(VaultName=${azurerm_key_vault.main.name};SecretName=storage-connection)"
     SERVICE_BUS_CONNECTION          = "@Microsoft.KeyVault(VaultName=${azurerm_key_vault.main.name};SecretName=servicebus-connection)"
+    ENCRYPTION_KEY                  = "@Microsoft.KeyVault(VaultName=${azurerm_key_vault.main.name};SecretName=encryption-key)"
   }
 
   tags = local.tags
@@ -76,6 +77,7 @@ resource "azurerm_function_app_flex_consumption" "api" {
     azurerm_key_vault_secret.jwt_secret,
     azurerm_key_vault_secret.storage_connection,
     azurerm_key_vault_secret.servicebus_connection,
+    azurerm_key_vault_secret.encryption_key,
   ]
 }
 

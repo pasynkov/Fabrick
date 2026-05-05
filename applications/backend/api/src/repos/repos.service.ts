@@ -171,12 +171,14 @@ export class ReposService {
     return this.updateProject(orgId, projectId, { name }, userId, { userId });
   }
 
-  async getProjectApiKeyStatus(projectId: string) {
+  async getProjectApiKeyStatus(userId: string, projectId: string) {
     const project = await this.projectRepo.findOne({
       where: { id: projectId },
       relations: ['org'],
     });
     if (!project) throw new NotFoundException('Project not found');
+
+    await this.requireOrgMember(userId, project.orgId);
 
     const org = (project as any).org;
     const hasProjectApiKey = !!project.anthropicApiKey;

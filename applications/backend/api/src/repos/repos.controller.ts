@@ -108,11 +108,12 @@ export class ReposController {
   }
 
   @Get('projects/:projectId/api-key/status')
-  @UseGuards(FabrickAuthGuard, IsAdminGuard)
+  @UseGuards(FabrickAuthGuard)
   getProjectApiKeyStatus(
+    @Request() req: { user: { id: string } },
     @Param('projectId') projectId: string,
   ) {
-    return this.reposService.getProjectApiKeyStatus(projectId);
+    return this.reposService.getProjectApiKeyStatus(req.user.id, projectId);
   }
 
   @Get('projects/:projectId/api-key/audit-logs')

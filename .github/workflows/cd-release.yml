@@ -57,10 +57,6 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-      azurite:
-        image: mcr.microsoft.com/azure-storage/azurite
-        ports:
-          - 10000:10000
     env:
       DB_HOST: localhost
       DB_PORT: 5432
@@ -76,6 +72,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
+      - name: Start Azurite
+        run: docker run -d -p 10000:10000 mcr.microsoft.com/azure-storage/azurite azurite-blob --blobHost 0.0.0.0 --skipApiVersionCheck
+      - name: Start NATS with JetStream
+        run: docker run -d -p 4222:4222 nats:2-alpine -js
       - name: Build API
         run: npm ci --legacy-peer-deps && npm run build
         working-directory: applications/backend/api
@@ -94,10 +94,10 @@ jobs:
       - name: Wait for services
         run: npx wait-on tcp:10000 http://localhost:3000/health --timeout 60000
       - name: Build CLI
-        run: npm ci && npm run build
+        run: npm ci --legacy-peer-deps && npm run build
         working-directory: applications/cli
       - name: Build MCP
-        run: npm ci && npm run build
+        run: npm ci --legacy-peer-deps && npm run build
         working-directory: applications/mcp
       - name: Run CLI e2e tests
         run: npm run test:e2e
@@ -286,7 +286,7 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
           cache: npm
           cache-dependency-path: applications/${{ matrix.package }}/package-lock.json
-      - run: npm ci
+      - run: npm ci --legacy-peer-deps
         working-directory: applications/${{ matrix.package }}
       - run: npm run build
         working-directory: applications/${{ matrix.package }}

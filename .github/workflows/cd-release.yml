@@ -61,6 +61,10 @@ jobs:
         image: mcr.microsoft.com/azure-storage/azurite
         ports:
           - 10000:10000
+      nats:
+        image: nats:2-alpine
+        ports:
+          - 4222:4222
     env:
       DB_HOST: localhost
       DB_PORT: 5432

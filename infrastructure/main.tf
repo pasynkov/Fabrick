@@ -41,3 +41,7 @@ resource "random_password" "jwt" {
   length  = 64
   special = false
 }
+
+resource "random_bytes" "encryption_key" {
+  length = 32
+}

@@ -31,7 +31,7 @@ Users must remember to manually run synthesis after code changes, leading to sta
 **Rationale:** The author explicitly requested this to be CLI-driven via `fabrick push`. No external webhook infrastructure is needed.
 
 ### Job Processing Strategy
-**Decision:** Enhance existing NATS/Service Bus queue system to handle auto-triggered jobs.
+**Decision:** Use existing NATS/Service Bus queue system as-is to handle auto-triggered jobs.
 **Rationale:** Reuses proven queue infrastructure and synthesis processing logic. Auto-triggered jobs follow same processing path as manual jobs.
 **Alternative considered:** Direct synthesis invocation was rejected due to loss of queue benefits (retry, monitoring, backpressure).
 

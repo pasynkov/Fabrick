@@ -47,7 +47,7 @@ export default function OrgSettings() {
       const payload: { name: string; anthropicApiKey?: string | null } = {
         name: name.trim(),
       };
-      if (trimmedKey !== '') {
+      if (trimmedKey) {
         payload.anthropicApiKey = trimmedKey;
       }
       const updated = await api.orgs.update(orgId, payload);

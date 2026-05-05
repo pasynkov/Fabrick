@@ -56,7 +56,7 @@ export default function ProjectSettings() {
         name: name.trim(),
         autoSynthesisEnabled,
       };
-      if (trimmedKey !== '') {
+      if (trimmedKey) {
         payload.anthropicApiKey = trimmedKey;
       }
       const updated = await api.projects.update(orgId, projectId, payload);

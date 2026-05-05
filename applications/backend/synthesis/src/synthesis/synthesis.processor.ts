@@ -86,7 +86,8 @@ export class SynthesisProcessor implements OnModuleInit {
         throw new Error('Anthropic response truncated (max_tokens reached) — increase max_tokens or reduce context');
       }
 
-      const text = rawText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
+      const codeBlockMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)```/i);
+      const text = codeBlockMatch ? codeBlockMatch[1].trim() : rawText.trim();
 
       let parsed: { files: Record<string, string> };
       try {

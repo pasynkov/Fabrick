@@ -7,7 +7,6 @@ Auto-synthesis on context updates is a highly requested workflow improvement tha
 - Add "Run synthesis automatically on context update" toggle to project settings (defaults to false)
 - Display API key hash in project and organization settings forms for immediate visibility
 - Implement hash-based API key change detection to avoid unnecessary revalidation
-- Update CLI push command to respect auto-synthesis setting when enabled
 - Extend organization settings to support API key updates (synthesis toggle remains project-only)
 
 ## Capabilities

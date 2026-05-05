@@ -76,8 +76,10 @@ export class PushCommand extends CommandRunner {
 
     if (!settings.hasApiKey) return;
 
-    const shouldRunSynthesis = settings.autoSynthesisEnabled || await this.promptSynthesis();
-    if (!shouldRunSynthesis) return;
+    if (!settings.autoSynthesisEnabled) {
+      const confirmed = await this.promptSynthesis();
+      if (!confirmed) return;
+    }
 
     try {
       await this.api.post<void>(apiUrl, `/projects/${projectId}/synthesis`, token, {});

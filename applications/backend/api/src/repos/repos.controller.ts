@@ -107,15 +107,6 @@ export class ReposController {
     });
   }
 
-  @Get('projects/:projectId')
-  @UseGuards(FabrickAuthGuard)
-  getProjectSettings(
-    @Request() req: { user: { id: string } },
-    @Param('projectId') projectId: string,
-  ) {
-    return this.reposService.getProjectSettings(req.user.id, projectId);
-  }
-
   @Get('projects/:projectId/api-key/status')
   @UseGuards(FabrickAuthGuard)
   getProjectApiKeyStatus(
@@ -132,6 +123,15 @@ export class ReposController {
     @Query() query: AuditLogsQueryDto,
   ) {
     return this.apiKeyAuditService.getProjectAuditLogs(projectId, query.limit, query.offset);
+  }
+
+  @Get('projects/:projectId')
+  @UseGuards(FabrickAuthGuard)
+  getProjectSettings(
+    @Request() req: { user: { id: string } },
+    @Param('projectId') projectId: string,
+  ) {
+    return this.reposService.getProjectSettings(req.user.id, projectId);
   }
 
   @Post('repos/:repoId/context')

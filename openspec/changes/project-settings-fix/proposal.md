@@ -1,28 +1,15 @@
 ## Why
 
-The project settings functionality has accumulated technical debt through incremental additions, leading to inconsistent validation, error handling, and API patterns. Recent changes for auto-synthesis and API key management introduced edge cases and user experience issues that need systematic fixes.
+Two issues were reported with the project frontend:
+1. The project main page lacks an "Edit Settings" button (unlike the Org main page).
+2. The "run synthesis automatically" toggle does not persist — turning it on and returning to the page shows it as off again.
 
 ## What Changes
 
-- Standardize API key validation across frontend and backend
-- Fix error handling and user feedback in the settings form  
-- Improve API consistency for project updates
-- Add proper input sanitization and validation
-- Fix navigation issues after settings updates
-- Enhance user experience with better loading states
+- Add "Edit Settings" button to the project main page header (admin-only, matching Org page pattern)
+- Fix auto-synthesis toggle persistence: ProjectSettings loads data from an endpoint that does not include `autoSynthesisEnabled`, causing the toggle to always appear off
 
 ## Capabilities
 
-### New Capabilities
-- `project-settings-validation`: Comprehensive input validation and error handling for project settings
-- `project-settings-api-consistency`: Standardized API patterns for project updates and responses
-
 ### Modified Capabilities
-- `project-settings`: Enhanced validation, error handling, and user experience improvements
-
-## Impact
-
-- Frontend: ProjectSettings.tsx component and related API calls
-- Backend: ReposController and ReposService project update methods
-- DTOs: UpdateProjectDto validation rules  
-- User experience: Better error messages and form validation feedback
+- `project-settings`: Fix toggle persistence and add header navigation button

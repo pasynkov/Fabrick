@@ -1,46 +1,42 @@
-## ADDED Requirements
+## MODIFIED Requirements
 
 ### Requirement: Project settings page access control
 The system SHALL provide a project settings page accessible only to organization administrators at `/orgs/:orgSlug/projects/:projectSlug/settings`.
 
 #### Scenario: Organization admin accesses project settings
 - **WHEN** an organization admin navigates to the project settings page
-- **THEN** page loads with current project settings form
+- **THEN** page loads with current project settings form, including the correct auto-synthesis toggle state
 
 #### Scenario: Non-admin user redirected from settings page
 - **WHEN** a non-admin user attempts to access project settings
-- **THEN** system redirects to project detail page with permission error
+- **THEN** system redirects to project detail page
 
 #### Scenario: Unauthenticated user blocked from settings
 - **WHEN** an unauthenticated user attempts to access project settings
 - **THEN** system redirects to login page
 
-### Requirement: Project settings form functionality
-The system SHALL provide a form for updating project name, API key, and auto-synthesis settings with proper validation and user feedback.
+### Requirement: Auto-synthesis toggle persistence
+The system SHALL correctly load and persist the auto-synthesis toggle state in the project settings form.
 
-#### Scenario: Settings form loads with current values
+#### Scenario: Toggle state is loaded from the correct endpoint
 - **WHEN** admin accesses project settings page
-- **THEN** form is pre-populated with current project name and auto-synthesis toggle state
+- **THEN** form is pre-populated with the current `autoSynthesisEnabled` value from the project settings endpoint
 
-#### Scenario: API key field shows status without revealing key
-- **WHEN** project has an API key configured
-- **THEN** form shows key status indicator and hash without displaying actual key
+#### Scenario: Toggle state persists after save
+- **WHEN** admin enables the auto-synthesis toggle and saves
+- **THEN** returning to the settings page shows the toggle in the enabled state
 
-#### Scenario: Successful settings update updates form state
-- **WHEN** admin successfully submits settings changes
-- **THEN** form updates to reflect new values and redirects to project detail page
+### Requirement: "Edit Settings" button on project main page
+The system SHALL provide an "Edit Settings" button in the project main page header for admin users.
 
-### Requirement: Enhanced user experience during updates
-The system SHALL provide clear feedback during settings operations with appropriate loading states and error handling.
+#### Scenario: Admin sees "Edit Settings" button in project header
+- **WHEN** an organization admin views the project main page
+- **THEN** an "Edit Settings" button is visible in the header area
 
-#### Scenario: Loading state shown during save operation
-- **WHEN** admin submits settings form
-- **THEN** submit button shows "Saving..." state and is disabled until completion
+#### Scenario: Non-admin does not see "Edit Settings" button
+- **WHEN** a non-admin user views the project main page
+- **THEN** no "Edit Settings" button is shown
 
-#### Scenario: Form validation prevents invalid submissions
-- **WHEN** form has validation errors
-- **THEN** submit button remains disabled and errors are highlighted
-
-#### Scenario: Navigation preserved after successful update
-- **WHEN** settings are successfully updated
-- **THEN** user is redirected to updated project detail page with success confirmation
+#### Scenario: "Edit Settings" button navigates to project settings
+- **WHEN** admin clicks "Edit Settings" button
+- **THEN** user is navigated to `/orgs/:orgSlug/projects/:projectSlug/settings`

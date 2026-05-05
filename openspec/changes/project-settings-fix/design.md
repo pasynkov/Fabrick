@@ -1,66 +1,38 @@
 ## Context
 
-The project settings functionality has grown through incremental changes, resulting in:
+Two bugs reported by project admin:
+1. No "Edit Settings" button on the project main page (unlike the Org main page).
+2. Auto-synthesis toggle does not persist: toggled ON, user returns to settings page, toggle shows OFF.
 
-1. **Validation inconsistency**: Frontend and backend have different validation rules for API keys and project names
-2. **Error handling gaps**: Users see generic errors instead of actionable feedback
-3. **API response inconsistency**: Update operations don't always return consistent data structures
-4. **Navigation issues**: Users experience unexpected redirects after settings updates
-5. **Loading state problems**: Poor UX during async operations
+Root cause for (2): ProjectSettings.tsx calls `api.projects.list()` which returns only `{ id, name, slug }` — it does not include `autoSynthesisEnabled`. The backend has a `getProjectSettings()` method that does return this field, but the frontend never calls it.
 
-Current architecture involves React frontend (ProjectSettings.tsx) communicating with NestJS backend (ReposController/ReposService) through a REST API with DTOs for validation.
+Current architecture: React frontend (ProjectSettings.tsx, ProjectDetail.tsx) communicating with NestJS backend (ReposController/ReposService) via REST.
 
 ## Goals / Non-Goals
 
 **Goals:**
-- Unify validation rules across frontend and backend
-- Provide clear, actionable error messages to users
-- Ensure consistent API response patterns
-- Fix navigation flow after successful updates
-- Improve loading state management
+- Add "Edit Settings" button to ProjectDetail header for admin users
+- Fix auto-synthesis toggle to load its state from the correct API endpoint
 
 **Non-Goals:**
-- Major architectural changes to the project settings system
-- New features beyond fixing existing functionality
+- Major architectural changes
+- New features beyond what is described above
 - Database schema modifications
 - Authentication or authorization changes
+- Validation refactoring, audit logging, or optimistic concurrency handling
 
 ## Decisions
 
-### Decision 1: Shared Validation Schema
-**What**: Extract validation rules into shared constants/utils that both frontend and backend can reference
-**Why**: Eliminates drift between client and server validation
-**Alternative considered**: Keep separate validation → rejected due to maintenance burden
+### Decision 1: Fix Toggle Persistence via Dedicated Settings Endpoint
+**What**: Create a frontend API method that calls the existing `getProjectSettings()` backend method; update ProjectSettings.tsx to use it instead of `projects.list()`
+**Why**: The existing backend method already returns `autoSynthesisEnabled`; no backend changes needed
+**Alternative considered**: Update `projects.list()` to include `autoSynthesisEnabled` → rejected to avoid changing the list endpoint contract
 
-### Decision 2: Enhanced Error Response Structure
-**What**: Standardize error responses with field-specific error details
-**Why**: Enables frontend to show specific field errors instead of generic messages
-**Alternative considered**: Keep current error handling → rejected due to poor UX
-
-### Decision 3: Optimistic UI Updates
-**What**: Update local state immediately while API call is in progress, rollback on error
-**Why**: Improves perceived performance and responsiveness
-**Alternative considered**: Wait for API response → rejected due to slow UX
-
-### Decision 4: Input Sanitization Pipeline
-**What**: Implement consistent trimming and normalization for all text inputs
-**Why**: Prevents edge cases with whitespace and ensures data consistency
-**Alternative considered**: Handle case-by-case → rejected due to complexity
+### Decision 2: "Edit Settings" Button in ProjectDetail Header
+**What**: Add an admin-only "Edit Settings" link button to the ProjectDetail page header
+**Why**: Matches the existing UX pattern from OrgDetail.tsx and makes settings discoverable
+**Pattern**: Follow OrgDetail.tsx (lines 75-82) — admin role check, link to `/orgs/${orgSlug}/projects/${projectSlug}/settings`
 
 ## Risks / Trade-offs
 
-**Risk**: Validation changes might break existing API contracts → **Mitigation**: Ensure backward compatibility with current DTO validation
-**Risk**: Optimistic updates could show incorrect state if API fails → **Mitigation**: Implement proper rollback and error recovery
-**Risk**: Shared validation logic increases coupling → **Mitigation**: Keep validation rules simple and stable
-
-## Migration Plan
-
-1. **Phase 1**: Update backend validation and error responses (no breaking changes)
-2. **Phase 2**: Update frontend to use enhanced error handling
-3. **Phase 3**: Implement shared validation constants
-4. **Rollback**: Each phase can be independently rolled back without affecting others
-
-## Open Questions
-
-- Should we add client-side API key validation beyond format checking?
-- Do we need to maintain audit logs for settings validation failures?
+**Risk**: Switching data source in ProjectSettings may reveal edge cases in the settings endpoint → **Mitigation**: The backend `getProjectSettings()` is already implemented and tested

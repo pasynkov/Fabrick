@@ -12,25 +12,23 @@ Users must remember to manually run synthesis after code changes, leading to sta
 ## Goals / Non-Goals
 
 **Goals:**
-- Automatically trigger synthesis when artifacts are pushed (when auto-synthesis setting is enabled)
+- Automatically trigger synthesis when `fabrick push` is used (when auto-synthesis setting is enabled)
 - Prompt user to run synthesis during `fabrick push` when auto-synthesis is disabled
 - Maintain existing synthesis quality and processing capabilities
 - Allow per-project configuration of auto-synthesis behavior (on/off)
 - Integrate seamlessly with existing synthesis service architecture
-- Provide reliable webhook processing with proper error handling
 
 **Non-Goals:**
 - Real-time synthesis (acceptable to have processing delay)
 - Complex branching logic or per-branch synthesis rules initially
-- Integration with other Git providers beyond GitHub
+- Integration with GitHub webhooks or push notifications
 - Modification of core synthesis algorithms or output formats
 
 ## Decisions
 
-### Webhook Architecture
-**Decision:** Add webhook endpoints to the existing backend API service rather than creating a separate webhook service.
-**Rationale:** Leverages existing authentication, logging, and error handling infrastructure. Simpler deployment and maintenance.
-**Alternative considered:** Standalone webhook service was rejected due to added complexity and duplication of auth/logging logic.
+### Trigger Mechanism
+**Decision:** Synthesis is triggered directly by the `fabrick push` CLI command, not by GitHub webhooks.
+**Rationale:** The author explicitly requested this to be CLI-driven via `fabrick push`. No external webhook infrastructure is needed.
 
 ### Job Processing Strategy
 **Decision:** Enhance existing NATS/Service Bus queue system to handle auto-triggered jobs.
@@ -42,20 +40,12 @@ Users must remember to manually run synthesis after code changes, leading to sta
 **Rationale:** Maintains transactional consistency with project data and leverages existing database infrastructure.
 **Alternative considered:** Redis/cache storage was rejected due to persistence requirements and complexity of cache invalidation.
 
-### Event Filtering
-**Decision:** Process all push events without file-type filtering. Any artifact push triggers synthesis when auto-synthesis is enabled.
-**Rationale:** Author explicitly requested synthesis to run for all artifacts on push with no conditions. No filtering by file type.
-
-### `fabrick push` CLI Prompt
-**Decision:** When auto-synthesis is disabled and user runs `fabrick push`, CLI prompts: "Run synthesis?" If user confirms, a flag is sent to trigger synthesis using the same flow as manual triggers.
+### `fabrick push` CLI Behavior
+**Decision:** When auto-synthesis is enabled, `fabrick push` triggers synthesis automatically after a successful push. When auto-synthesis is disabled, CLI prompts: "Run synthesis?" If user confirms, a flag is sent to trigger synthesis using the same flow as manual triggers.
 **Rationale:** Author added this requirement explicitly: "if automatically run synthesis is off and user uses fabrick push command we should ask him Run synthesis?"
 
 ## Risks / Trade-offs
 
-**Webhook reliability** → Implement webhook signature verification, idempotency handling, and dead letter queue for failed processing
-
 **Large repository processing** → Uses same flow as manual synthesis; no special optimization required
 
 **Queue backpressure** → Monitor queue depth and implement overflow handling to prevent system overload
-
-**GitHub API rate limits** → Cache repository metadata and use webhook payload data to minimize API calls

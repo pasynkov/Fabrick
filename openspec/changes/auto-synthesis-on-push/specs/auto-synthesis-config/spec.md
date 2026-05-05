@@ -5,11 +5,11 @@ The system SHALL allow configuration of auto-synthesis behavior per project.
 
 #### Scenario: Auto-synthesis enabled for project
 - **WHEN** project auto-synthesis is enabled in configuration
-- **THEN** push events for that project trigger synthesis
+- **THEN** `fabrick push` automatically triggers synthesis after a successful push
 
 #### Scenario: Auto-synthesis disabled for project
 - **WHEN** project auto-synthesis is disabled in configuration
-- **THEN** push events for that project are ignored
+- **THEN** `fabrick push` prompts the user to run synthesis instead of triggering automatically
 
 ### Requirement: Configuration API endpoints
 The system SHALL provide API endpoints for managing auto-synthesis configuration.

@@ -13,9 +13,9 @@ The `fabrick push` command SHALL prompt the user to run synthesis after a succes
 - **AND** user answers "no" to the synthesis prompt
 - **THEN** CLI skips synthesis and push completes normally
 
-#### Scenario: Auto-synthesis enabled skips prompt
+#### Scenario: Auto-synthesis enabled triggers automatically
 - **WHEN** auto-synthesis is enabled and user runs `fabrick push`
-- **THEN** CLI does not show synthesis prompt (synthesis runs automatically via webhook)
+- **THEN** CLI triggers synthesis automatically after a successful push without prompting the user
 
 #### Scenario: No API keys configured
 - **WHEN** project has no API keys configured

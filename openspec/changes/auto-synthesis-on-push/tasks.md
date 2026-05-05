@@ -1,6 +1,6 @@
 ## 1. Database Schema
 
-- [ ] 1.1 Create auto_synthesis_config table with project_id, enabled, file_filters, rate_limit columns
+- [ ] 1.1 Create auto_synthesis_config table with project_id, enabled columns
 - [ ] 1.2 Create webhook_deliveries table for idempotency tracking with delivery_id and processed_at columns
 - [ ] 1.3 Add database migration scripts for new tables
 - [ ] 1.4 Update TypeORM entities for auto_synthesis_config and webhook_deliveries
@@ -18,10 +18,7 @@
 
 - [ ] 3.1 Create service to map GitHub repositories to Fabrick projects
 - [ ] 3.2 Implement project auto-synthesis configuration lookup
-- [ ] 3.3 Add changed file analysis for synthesis relevance filtering
-- [ ] 3.4 Implement rate limiting logic per project
-- [ ] 3.5 Add branch filtering based on project configuration
-- [ ] 3.6 Create synthesis job queueing with auto-trigger metadata
+- [ ] 3.3 Create synthesis job queueing with auto-trigger metadata
 
 ## 4. Enhanced Synthesis Job Queue
 
@@ -49,11 +46,17 @@
 - [ ] 7.3 Update deployment scripts for new database tables
 - [ ] 7.5 Document auto-synthesis configuration options for users
 
-## 8. Testing and Validation
+## 8. fabrick push CLI Updates
 
-- [ ] 8.1 Create unit tests for webhook handler functionality
-- [ ] 8.2 Create unit tests for auto-synthesis trigger logic
-- [ ] 8.3 Create integration tests for end-to-end auto-synthesis flow
-- [ ] 8.4 Add tests for rate limiting and filtering behavior
-- [ ] 8.5 Create tests for configuration API endpoints
-- [ ] 8.6 Test webhook signature verification and security handling
+- [ ] 8.1 Add synthesis prompt to `fabrick push` command when auto-synthesis is disabled
+- [ ] 8.2 Pass synthesis flag to backend when user confirms synthesis prompt
+- [ ] 8.3 Skip synthesis prompt when no API keys configured
+
+## 9. Testing and Validation
+
+- [ ] 9.1 Create unit tests for webhook handler functionality
+- [ ] 9.2 Create unit tests for auto-synthesis trigger logic
+- [ ] 9.3 Create integration tests for end-to-end auto-synthesis flow
+- [ ] 9.4 Create tests for configuration API endpoints
+- [ ] 9.5 Test webhook signature verification and security handling
+- [ ] 9.6 Create tests for fabrick push synthesis prompt behavior

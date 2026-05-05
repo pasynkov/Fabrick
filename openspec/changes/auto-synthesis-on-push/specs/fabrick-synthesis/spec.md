@@ -22,17 +22,6 @@ The synthesis service SHALL use commit-specific repository context when processi
 - **WHEN** auto-triggered job lacks commit SHA
 - **THEN** synthesis service uses latest available context
 
-### Requirement: Incremental synthesis optimization
-The synthesis service SHALL support incremental analysis based on changed files for auto-triggered jobs.
-
-#### Scenario: Full synthesis for major changes
-- **WHEN** auto-triggered job indicates significant changes
-- **THEN** synthesis service performs complete repository analysis
-
-#### Scenario: Incremental synthesis for minor changes
-- **WHEN** auto-triggered job indicates limited file changes
-- **THEN** synthesis service performs targeted analysis of changed areas
-
 ### Requirement: Auto-synthesis output differentiation
 The synthesis service SHALL mark outputs from auto-triggered jobs to distinguish them from manual synthesis.
 

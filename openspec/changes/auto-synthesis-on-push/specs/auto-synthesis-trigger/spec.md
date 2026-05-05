@@ -22,39 +22,9 @@ The system SHALL map GitHub repository identifiers to Fabrick project entities.
 - **WHEN** push event repository does not match any configured project
 - **THEN** system logs unmapped repository and skips processing
 
-### Requirement: Filter based on changed files
-The system SHALL analyze changed files in push commits to determine synthesis relevance.
+### Requirement: Trigger synthesis for all push events
+The system SHALL trigger synthesis for every push event when auto-synthesis is enabled, without file-type filtering.
 
-#### Scenario: Code files changed triggers synthesis
-- **WHEN** push includes changes to source code files (.ts, .js, .py, etc.)
-- **THEN** system proceeds with synthesis trigger
-
-#### Scenario: Documentation-only changes skip synthesis
-- **WHEN** push only includes changes to markdown or documentation files
-- **THEN** system skips synthesis based on configuration
-
-#### Scenario: Configuration allows all changes
-- **WHEN** project is configured to synthesize on all changes
-- **THEN** system triggers synthesis regardless of changed file types
-
-### Requirement: Handle multiple commits
-The system SHALL process all commits in a push event to determine cumulative changes.
-
-#### Scenario: Multiple commits analyzed together
-- **WHEN** push event contains multiple commits
-- **THEN** system analyzes changed files across all commits
-
-#### Scenario: Empty commits ignored
-- **WHEN** push contains commits with no file changes
-- **THEN** system skips synthesis for those commits
-
-### Requirement: Rate limiting protection
-The system SHALL implement rate limiting to prevent synthesis spam from frequent pushes.
-
-#### Scenario: Normal push frequency allowed
-- **WHEN** pushes occur within configured rate limits
-- **THEN** synthesis is triggered normally
-
-#### Scenario: Excessive push frequency throttled
-- **WHEN** pushes exceed configured rate limit for a project
-- **THEN** synthesis requests are queued with delays or merged
+#### Scenario: Any push triggers synthesis
+- **WHEN** push event is received for repository with auto-synthesis enabled
+- **THEN** system queues synthesis job regardless of what files changed

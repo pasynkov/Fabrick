@@ -20,6 +20,7 @@ The current Fabrick system requires manual triggering of synthesis operations af
 
 ### Modified Capabilities
 - `synthesis-service`: Extend existing synthesis service to handle automated job requests
+- `fabrick-push-command`: Extend `fabrick push` CLI command to prompt user to run synthesis when auto-synthesis is disabled
 
 ## Impact
 

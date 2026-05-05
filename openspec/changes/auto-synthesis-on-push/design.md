@@ -12,9 +12,10 @@ Users must remember to manually run synthesis after code changes, leading to sta
 ## Goals / Non-Goals
 
 **Goals:**
-- Automatically trigger synthesis when code is pushed to GitHub repositories
+- Automatically trigger synthesis when artifacts are pushed (when auto-synthesis setting is enabled)
+- Prompt user to run synthesis during `fabrick push` when auto-synthesis is disabled
 - Maintain existing synthesis quality and processing capabilities
-- Allow per-project configuration of auto-synthesis behavior
+- Allow per-project configuration of auto-synthesis behavior (on/off)
 - Integrate seamlessly with existing synthesis service architecture
 - Provide reliable webhook processing with proper error handling
 
@@ -42,17 +43,18 @@ Users must remember to manually run synthesis after code changes, leading to sta
 **Alternative considered:** Redis/cache storage was rejected due to persistence requirements and complexity of cache invalidation.
 
 ### Event Filtering
-**Decision:** Process all push events but add intelligent filtering based on changed files and project configuration.
-**Rationale:** Ensures no important changes are missed while allowing optimization for irrelevant commits (docs-only, config-only).
-**Alternative considered:** GitHub webhook filtering was rejected as too limiting for future feature expansion.
+**Decision:** Process all push events without file-type filtering. Any artifact push triggers synthesis when auto-synthesis is enabled.
+**Rationale:** Author explicitly requested synthesis to run for all artifacts on push with no conditions. No filtering by file type.
+
+### `fabrick push` CLI Prompt
+**Decision:** When auto-synthesis is disabled and user runs `fabrick push`, CLI prompts: "Run synthesis?" If user confirms, a flag is sent to trigger synthesis using the same flow as manual triggers.
+**Rationale:** Author added this requirement explicitly: "if automatically run synthesis is off and user uses fabrick push command we should ask him Run synthesis?"
 
 ## Risks / Trade-offs
 
 **Webhook reliability** → Implement webhook signature verification, idempotency handling, and dead letter queue for failed processing
 
-**Increased synthesis load** → Add project-level rate limiting and allow users to disable auto-synthesis per project
-
-**Large repository processing** → Implement incremental synthesis based on changed files rather than full repo analysis
+**Large repository processing** → Uses same flow as manual synthesis; no special optimization required
 
 **Queue backpressure** → Monitor queue depth and implement overflow handling to prevent system overload
 

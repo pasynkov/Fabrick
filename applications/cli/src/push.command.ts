@@ -3,13 +3,19 @@ import { existsSync, readFileSync } from 'fs';
 import { parse } from 'yaml';
 import * as archiver from 'archiver';
 import { PassThrough } from 'stream';
+import * as readline from 'readline';
+import { ApiService } from './api.service';
 import { CredentialsService } from './credentials.service';
 
-interface Config { repo_id: string; api_url: string }
+interface Config { repo_id: string; project_id?: string; api_url: string }
+interface ProjectSettings { autoSynthesisEnabled: boolean; hasApiKey: boolean }
 
 @Command({ name: 'push', description: 'Upload context to Fabrick' })
 export class PushCommand extends CommandRunner {
-  constructor(private readonly credentials: CredentialsService) {
+  constructor(
+    private readonly credentials: CredentialsService,
+    private readonly api: ApiService,
+  ) {
     super();
   }
 
@@ -53,6 +59,44 @@ export class PushCommand extends CommandRunner {
       process.exit(1);
     }
     console.log('✓ Context uploaded successfully');
+
+    await this.handleSynthesis(config, apiUrl, creds.token);
+  }
+
+  async handleSynthesis(config: Config, apiUrl: string, token: string): Promise<void> {
+    const projectId = config.project_id;
+    if (!projectId) return;
+
+    let settings: ProjectSettings;
+    try {
+      settings = await this.api.get<ProjectSettings>(apiUrl, `/projects/${projectId}`, token);
+    } catch {
+      return;
+    }
+
+    if (!settings.hasApiKey) return;
+
+    if (!settings.autoSynthesisEnabled) {
+      const confirmed = await this.promptSynthesis();
+      if (!confirmed) return;
+    }
+
+    try {
+      await this.api.post<void>(apiUrl, `/projects/${projectId}/synthesis`, token, {});
+      console.log('✓ Synthesis triggered');
+    } catch (err: any) {
+      console.error(`Synthesis trigger failed: ${err.message}`);
+    }
+  }
+
+  promptSynthesis(): Promise<boolean> {
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    return new Promise((resolve) => {
+      rl.question('Run synthesis? (y/N) ', (answer) => {
+        rl.close();
+        resolve(answer.toLowerCase() === 'y');
+      });
+    });
   }
 
   private zipContext(): Promise<Buffer> {

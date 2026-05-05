@@ -125,6 +125,15 @@ export class ReposController {
     return this.apiKeyAuditService.getProjectAuditLogs(projectId, query.limit, query.offset);
   }
 
+  @Get('projects/:projectId')
+  @UseGuards(FabrickAuthGuard)
+  getProjectSettings(
+    @Request() req: { user: { id: string } },
+    @Param('projectId') projectId: string,
+  ) {
+    return this.reposService.getProjectSettings(req.user.id, projectId);
+  }
+
   @Post('repos/:repoId/context')
   @HttpCode(201)
   @UseGuards(FabrickAuthGuard)

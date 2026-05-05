@@ -160,7 +160,7 @@ export class InitCommand extends CommandRunner {
     mkdirSync('.fabrick', { recursive: true });
     writeFileSync(
       '.fabrick/config.yaml',
-      stringify({ repo_id: result.id, api_url: creds.api_url, ai_tool: aiTool }),
+      stringify({ repo_id: result.id, project_id: result.projectId, api_url: creds.api_url, ai_tool: aiTool }),
     );
     console.log(`✓ Initialized. Repo: ${result.name} (${result.gitRemote})`);
     console.log('✓ Written .fabrick/config.yaml');

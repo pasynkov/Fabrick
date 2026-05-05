@@ -22,6 +22,9 @@ export class Project {
   @Column({ nullable: true, type: 'text' })
   anthropicApiKey: string | null;
 
+  @Column({ default: false })
+  autoSynthesisEnabled: boolean;
+
   @Column({ default: 'idle' })
   synthStatus: string;
 

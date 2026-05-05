@@ -72,6 +72,14 @@ jobs:
           gh issue edit "${{ steps.name.outputs.issue }}" \
             --add-label "implementation:apply" \
             --repo "$GITHUB_REPOSITORY" 2>/dev/null || true
+      - name: Check which stages already done
+        id: stages
+        if: steps.check.outputs.exists == 'true'
+        run: |
+          NAME="${{ steps.name.outputs.name }}"
+          git log --oneline | grep -qF "feat: apply $NAME"       && echo "apply_done=true"      >> $GITHUB_OUTPUT || echo "apply_done=false"      >> $GITHUB_OUTPUT
+          git log --oneline | grep -qF "refactor: simplify $NAME" && echo "simplify_done=true"   >> $GITHUB_OUTPUT || echo "simplify_done=false"   >> $GITHUB_OUTPUT
+          git log --oneline | grep -qF "fix: review fixes for $NAME" && echo "review_done=true"  >> $GITHUB_OUTPUT || echo "review_done=false"  >> $GITHUB_OUTPUT
       - name: Install openspec
         if: steps.check.outputs.exists == 'true'
         run: npm install -g @fission-ai/openspec
@@ -80,7 +88,7 @@ jobs:
         run: npm ci --legacy-peer-deps
         working-directory: applications/backend/api
       - name: Build apply prompt
-        if: steps.check.outputs.exists == 'true'
+        if: steps.check.outputs.exists == 'true' && steps.stages.outputs.apply_done == 'false'
         run: |
           NAME="${{ steps.name.outputs.name }}"
           SKILL=".claude/skills/openspec-apply-change/SKILL.md"
@@ -100,7 +108,7 @@ jobs:
           - If tests fail, fix the code (including test files if needed) until all tests pass.
           PROMPT
       - name: Apply OpenSpec change
-        if: steps.check.outputs.exists == 'true'
+        if: steps.check.outputs.exists == 'true' && steps.stages.outputs.apply_done == 'false'
         uses: anthropics/claude-code-base-action@beta
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -117,14 +125,14 @@ jobs:
             }
           prompt_file: /tmp/apply-prompt.txt
       - name: Commit apply
-        if: steps.check.outputs.exists == 'true'
+        if: steps.check.outputs.exists == 'true' && steps.stages.outputs.apply_done == 'false'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -A
           git diff --staged --quiet || git commit -m "feat: apply ${{ steps.name.outputs.name }}"
       - name: Build simplify prompt
-        if: steps.check.outputs.exists == 'true'
+        if: steps.check.outputs.exists == 'true' && steps.stages.outputs.simplify_done == 'false'
         run: |
           SKILL=".claude/skills/simplify/SKILL.md"
           CONTENT=$(awk 'BEGIN{i=0} /^---$/{i++; next} i>=2{print}' "$SKILL")
@@ -140,7 +148,7 @@ jobs:
           - If tests fail, fix implementation code only. Do NOT modify test files.
           PROMPT
       - name: Simplify changed files
-        if: steps.check.outputs.exists == 'true'
+        if: steps.check.outputs.exists == 'true' && steps.stages.outputs.simplify_done == 'false'
         uses: anthropics/claude-code-base-action@beta
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -157,12 +165,12 @@ jobs:
             }
           prompt_file: /tmp/simplify-prompt.txt
       - name: Commit simplify
-        if: steps.check.outputs.exists == 'true'
+        if: steps.check.outputs.exists == 'true' && steps.stages.outputs.simplify_done == 'false'
         run: |
           git add -A
           git diff --staged --quiet || git commit -m "refactor: simplify ${{ steps.name.outputs.name }}"
       - name: Build review prompt
-        if: steps.check.outputs.exists == 'true'
+        if: steps.check.outputs.exists == 'true' && steps.stages.outputs.review_done == 'false'
         run: |
           SKILL=".claude/skills/review/SKILL.md"
           CONTENT=$(awk 'BEGIN{i=0} /^---$/{i++; next} i>=2{print}' "$SKILL")
@@ -176,7 +184,7 @@ jobs:
           - Stay on current branch. Do NOT run git commands.
           PROMPT
       - name: Review changed files
-        if: steps.check.outputs.exists == 'true'
+        if: steps.check.outputs.exists == 'true' && steps.stages.outputs.review_done == 'false'
         uses: anthropics/claude-code-base-action@beta
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -193,7 +201,7 @@ jobs:
             }
           prompt_file: /tmp/review-prompt.txt
       - name: Build review-fix prompt
-        if: steps.check.outputs.exists == 'true'
+        if: steps.check.outputs.exists == 'true' && steps.stages.outputs.review_done == 'false'
         run: |
           SKILL=".claude/skills/review-fix/SKILL.md"
           CONTENT=$(awk 'BEGIN{i=0} /^---$/{i++; next} i>=2{print}' "$SKILL")
@@ -209,7 +217,7 @@ jobs:
           - If tests fail, fix implementation code only. Do NOT modify test files.
           PROMPT
       - name: Apply review fixes
-        if: steps.check.outputs.exists == 'true'
+        if: steps.check.outputs.exists == 'true' && steps.stages.outputs.review_done == 'false'
         uses: anthropics/claude-code-base-action@beta
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -226,7 +234,7 @@ jobs:
             }
           prompt_file: /tmp/review-fix-prompt.txt
       - name: Commit review-fix
-        if: steps.check.outputs.exists == 'true'
+        if: steps.check.outputs.exists == 'true' && steps.stages.outputs.review_done == 'false'
         run: |
           git add -A
           git diff --staged --quiet || git commit -m "fix: review fixes for ${{ steps.name.outputs.name }}"
@@ -275,8 +283,7 @@ jobs:
             local dir="$2"
             local extra_env="$3"
             echo "--- Building $name ---"
-            output=$(cd "$dir" && env $extra_env npm run build 2>&1)
-            code=$?
+            output=$(cd "$dir" && env $extra_env npm run build 2>&1) && code=0 || code=$?
             if [ $code -ne 0 ]; then
               FAILED=1
               RESULTS="${RESULTS}\n\n=== FAILED: $name ===\nDir: $dir\n${output}"

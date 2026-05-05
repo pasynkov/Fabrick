@@ -154,6 +154,10 @@ export class ReposService {
       }
     }
 
+    if (dto.autoSynthesisEnabled !== undefined) {
+      updates.autoSynthesisEnabled = dto.autoSynthesisEnabled;
+    }
+
     await this.projectRepo.update(projectId, updates);
 
     return {
@@ -164,6 +168,7 @@ export class ReposService {
       hasApiKey: updates.anthropicApiKey !== undefined
         ? updates.anthropicApiKey !== null
         : !!project.anthropicApiKey,
+      autoSynthesisEnabled: updates.autoSynthesisEnabled ?? project.autoSynthesisEnabled,
     };
   }
 
@@ -204,6 +209,28 @@ export class ReposService {
             )
           : undefined,
       },
+    };
+  }
+
+  async getProjectSettings(userId: string, projectId: string) {
+    const project = await this.projectRepo.findOne({
+      where: { id: projectId },
+      relations: ['org'],
+    });
+    if (!project) throw new NotFoundException('Project not found');
+
+    await this.requireOrgMember(userId, project.orgId);
+
+    const org = (project as any).org;
+    const hasApiKey = !!(project.anthropicApiKey || (org && org.anthropicApiKey));
+
+    return {
+      id: project.id,
+      name: project.name,
+      slug: project.slug,
+      orgId: project.orgId,
+      autoSynthesisEnabled: project.autoSynthesisEnabled,
+      hasApiKey,
     };
   }
 

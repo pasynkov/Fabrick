@@ -120,4 +120,46 @@ describe('Synthesis E2E', () => {
       expect(res.body.status).toBe('running');
     });
   });
+
+  describe('Auto-synthesis end-to-end flow via push command', () => {
+    it('GET /projects/:id returns autoSynthesisEnabled false by default', async () => {
+      const { token, projectId } = await setup();
+
+      const res = await request(app.getHttpServer())
+        .get(`/projects/${projectId}`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+
+      expect(res.body.autoSynthesisEnabled).toBe(false);
+    });
+
+    it('synthesis can be triggered after enabling auto-synthesis on project', async () => {
+      mockQueue.publish.mockResolvedValue(undefined);
+      const { token, orgId, projectId } = await setup();
+
+      await request(app.getHttpServer())
+        .patch(`/orgs/${orgId}/projects/${projectId}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ autoSynthesisEnabled: true })
+        .expect(200);
+
+      await request(app.getHttpServer())
+        .post(`/projects/${projectId}/synthesis`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(202);
+
+      expect(mockQueue.publish).toHaveBeenCalledWith('synthesis-jobs', expect.objectContaining({ projectId }));
+    });
+
+    it('GET /projects/:id reflects hasApiKey true when org has API key', async () => {
+      const { token, projectId } = await setup();
+
+      const res = await request(app.getHttpServer())
+        .get(`/projects/${projectId}`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+
+      expect(res.body.hasApiKey).toBe(true);
+    });
+  });
 });

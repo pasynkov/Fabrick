@@ -107,6 +107,15 @@ export class ReposController {
     });
   }
 
+  @Get('projects/:projectId')
+  @UseGuards(FabrickAuthGuard)
+  getProjectSettings(
+    @Request() req: { user: { id: string } },
+    @Param('projectId') projectId: string,
+  ) {
+    return this.reposService.getProjectSettings(req.user.id, projectId);
+  }
+
   @Get('projects/:projectId/api-key/status')
   @UseGuards(FabrickAuthGuard)
   getProjectApiKeyStatus(

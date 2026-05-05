@@ -184,4 +184,62 @@ describe('Repos E2E', () => {
       expect(res1.body.id).toBe(res2.body.id);
     });
   });
+
+  describe('PATCH /orgs/:orgId/projects/:projectId — autoSynthesisEnabled', () => {
+    it('returns autoSynthesisEnabled: false by default from GET /projects/:projectId', async () => {
+      const { token, projectId } = await setup();
+
+      const res = await request(app.getHttpServer())
+        .get(`/projects/${projectId}`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+
+      expect(res.body.autoSynthesisEnabled).toBe(false);
+    });
+
+    it('admin can enable autoSynthesisEnabled', async () => {
+      const { token, orgId, projectId } = await setup();
+
+      const res = await request(app.getHttpServer())
+        .patch(`/orgs/${orgId}/projects/${projectId}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ autoSynthesisEnabled: true })
+        .expect(200);
+
+      expect(res.body.autoSynthesisEnabled).toBe(true);
+    });
+
+    it('admin can disable autoSynthesisEnabled after enabling it', async () => {
+      const { token, orgId, projectId } = await setup();
+
+      await request(app.getHttpServer())
+        .patch(`/orgs/${orgId}/projects/${projectId}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ autoSynthesisEnabled: true });
+
+      const res = await request(app.getHttpServer())
+        .patch(`/orgs/${orgId}/projects/${projectId}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ autoSynthesisEnabled: false })
+        .expect(200);
+
+      expect(res.body.autoSynthesisEnabled).toBe(false);
+    });
+
+    it('GET /projects/:projectId returns updated autoSynthesisEnabled after patch', async () => {
+      const { token, orgId, projectId } = await setup();
+
+      await request(app.getHttpServer())
+        .patch(`/orgs/${orgId}/projects/${projectId}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ autoSynthesisEnabled: true });
+
+      const res = await request(app.getHttpServer())
+        .get(`/projects/${projectId}`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+
+      expect(res.body.autoSynthesisEnabled).toBe(true);
+    });
+  });
 });

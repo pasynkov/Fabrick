@@ -36,9 +36,8 @@ Users must remember to manually run synthesis after code changes, leading to sta
 **Alternative considered:** Direct synthesis invocation was rejected due to loss of queue benefits (retry, monitoring, backpressure).
 
 ### Configuration Storage
-**Decision:** Store auto-synthesis settings in existing PostgreSQL database with new tables linked to projects.
-**Rationale:** Maintains transactional consistency with project data and leverages existing database infrastructure.
-**Alternative considered:** Redis/cache storage was rejected due to persistence requirements and complexity of cache invalidation.
+**Decision:** Add `auto_synthesis_enabled` column to the existing projects table; expose it via the project DTO and allow updating it through the existing project settings endpoint (alongside name and api key).
+**Rationale:** Keeps configuration co-located with the project record, avoids a new table and new endpoints, and reuses existing update flow.
 
 ### `fabrick push` CLI Behavior
 **Decision:** When auto-synthesis is enabled, `fabrick push` triggers synthesis automatically after a successful push. When auto-synthesis is disabled, CLI prompts: "Run synthesis?" If user confirms, a flag is sent to trigger synthesis using the same flow as manual triggers.

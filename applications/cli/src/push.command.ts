@@ -75,6 +75,9 @@ export class PushCommand extends CommandRunner {
       process.exit(1);
     }
     console.log('✓ Context uploaded successfully');
+    if (triggerSynthesis) {
+      console.log('✓ Synthesis triggered');
+    }
   }
 
   promptSynthesis(): Promise<boolean> {

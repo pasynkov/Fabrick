@@ -29,6 +29,7 @@ import { CreateRepoDto } from './dto/create-repo.dto';
 import { FindOrCreateRepoDto } from './dto/find-or-create-repo.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
 import { UploadContextDto } from './dto/upload-context.dto';
+import { Project } from '../entities/project.entity';
 import { ReposService } from './repos.service';
 
 @Controller()
@@ -167,12 +168,15 @@ export class ReposController {
       }
     }
 
-    const project = await this.reposService.getProjectByRepo(repoId);
+    const project = repo.project as unknown as Project;
     if (project.autoSynthesisEnabled || dto.triggerSynthesis) {
       try {
         await this.synthesisService.triggerForProject(project.id, req.user.id);
       } catch (err: any) {
         this.logger.error(`Synthesis trigger failed for project ${project.id}: ${err.message}`);
+        if (dto.triggerSynthesis) {
+          throw new BadRequestException(err.message);
+        }
       }
     }
   }

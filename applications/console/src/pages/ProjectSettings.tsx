@@ -30,11 +30,14 @@ export default function ProjectSettings() {
         const p = projects.find((pr) => pr.slug === projectSlug);
         if (!p) return;
         setProjectId(p.id);
-        setName(p.name);
-        setAutoSynthesisEnabled(p.autoSynthesisEnabled ?? false);
-        return api.projects.apiKey.status(p.id).then((status) => {
-          setHasApiKey(status.hasProjectApiKey);
-          setApiKeyHash(status.keyHashes.project);
+        return Promise.all([
+          api.projects.getSettings(p.id),
+          api.projects.apiKey.status(p.id),
+        ]).then(([settings, keyStatus]) => {
+          setName(settings.name);
+          setAutoSynthesisEnabled(settings.autoSynthesisEnabled);
+          setHasApiKey(keyStatus.hasProjectApiKey);
+          setApiKeyHash(keyStatus.keyHashes.project);
         });
       });
     }).finally(() => setInitializing(false));

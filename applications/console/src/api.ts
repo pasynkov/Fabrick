@@ -155,6 +155,8 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ name }),
       }),
+    getSettings: (projectId: string) =>
+      request<{ id: string; name: string; slug: string; orgId: string; autoSynthesisEnabled: boolean; hasApiKey: boolean }>(`/projects/${projectId}`),
     update: (orgId: string, projectId: string, body: { name?: string; anthropicApiKey?: string | null; autoSynthesisEnabled?: boolean }) =>
       request<{ id: string; name: string; slug: string; orgId: string; hasApiKey: boolean; autoSynthesisEnabled: boolean }>(`/orgs/${orgId}/projects/${projectId}`, {
         method: 'PATCH',

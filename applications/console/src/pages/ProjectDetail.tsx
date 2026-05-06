@@ -100,7 +100,7 @@ export default function ProjectDetail() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b border-gray-200 px-6 py-4">
+      <header className="bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
         <nav className="text-sm text-gray-500">
           <Link to="/" className="hover:underline">Orgs</Link>
           <span className="mx-2">/</span>
@@ -108,6 +108,14 @@ export default function ProjectDetail() {
           <span className="mx-2">/</span>
           <span className="text-gray-900 font-medium">{project.name}</span>
         </nav>
+        {orgInfo?.role === 'admin' && (
+          <Link
+            to={`/orgs/${orgSlug}/projects/${projectSlug}/settings`}
+            className="text-xs text-gray-500 border border-gray-200 rounded px-2 py-1 hover:border-purple-400 hover:text-purple-600 transition"
+          >
+            Edit Settings
+          </Link>
+        )}
       </header>
       <main className="max-w-2xl mx-auto py-10 px-4 space-y-8">
         <section>

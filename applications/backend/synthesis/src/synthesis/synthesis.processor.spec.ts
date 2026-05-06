@@ -38,6 +38,12 @@ function makeAnthropicResponse(text: string, stop_reason = 'end_turn') {
   };
 }
 
+function makeDelimiterResponse(files: Record<string, string>): string {
+  return Object.entries(files)
+    .map(([name, content]) => `=== FILE: ${name} ===\n${content}`)
+    .join('\n\n');
+}
+
 describe('SynthesisProcessor', () => {
   let processor: SynthesisProcessor;
   let storageService: ReturnType<typeof mockStorage>;
@@ -66,6 +72,7 @@ describe('SynthesisProcessor', () => {
     projectSlug: 'myproject',
     repos: [{ id: 'repo1', slug: 'myrepo' }],
     callbackToken: 'callback-token',
+    anthropicApiKey: 'test-api-key',
   };
 
   describe('processJob — happy path', () => {
@@ -74,11 +81,9 @@ describe('SynthesisProcessor', () => {
       storageService.getObject.mockResolvedValue(Buffer.from('# Summary content'));
       storageService.putObject.mockResolvedValue(undefined);
 
-      const synthesisOutput = JSON.stringify({
-        files: {
-          'index.md': '# Project Index',
-          'apps/api.md': '## API Details',
-        },
+      const synthesisOutput = makeDelimiterResponse({
+        'index.md': '# Project Index',
+        'apps/api.md': '## API Details',
       });
       mockMessagesCreate.mockResolvedValue(makeAnthropicResponse(synthesisOutput));
 
@@ -117,19 +122,6 @@ describe('SynthesisProcessor', () => {
       );
     });
 
-    it('handles JSON wrapped in code fences', async () => {
-      storageService.listObjects.mockResolvedValue(['myproject/myrepo/context/a.md']);
-      storageService.getObject.mockResolvedValue(Buffer.from('content'));
-      storageService.putObject.mockResolvedValue(undefined);
-
-      const raw = '```json\n' + JSON.stringify({ files: { 'index.md': 'hello' } }) + '\n```';
-      mockMessagesCreate.mockResolvedValue(makeAnthropicResponse(raw));
-
-      await (processor as any).processJob(baseJob);
-
-      expect(storageService.putObject).toHaveBeenCalledWith('myorg', 'myproject/synthesis/index.md', expect.any(Buffer));
-    });
-
     it('processes multiple repos, concatenates context blocks', async () => {
       const job = {
         ...baseJob,
@@ -145,7 +137,7 @@ describe('SynthesisProcessor', () => {
       storageService.getObject.mockResolvedValue(Buffer.from('file content'));
       storageService.putObject.mockResolvedValue(undefined);
 
-      mockMessagesCreate.mockResolvedValue(makeAnthropicResponse(JSON.stringify({ files: { 'index.md': 'ok' } })));
+      mockMessagesCreate.mockResolvedValue(makeAnthropicResponse(makeDelimiterResponse({ 'index.md': 'ok' })));
 
       await (processor as any).processJob(job);
 
@@ -171,10 +163,10 @@ describe('SynthesisProcessor', () => {
       );
     });
 
-    it('reports error when Anthropic returns non-JSON', async () => {
+    it('reports error when response has no === FILE: markers', async () => {
       storageService.listObjects.mockResolvedValue(['myproject/myrepo/context/a.md']);
       storageService.getObject.mockResolvedValue(Buffer.from('content'));
-      mockMessagesCreate.mockResolvedValue(makeAnthropicResponse('This is not JSON at all.'));
+      mockMessagesCreate.mockResolvedValue(makeAnthropicResponse('This is not delimiter format at all.'));
 
       await (processor as any).processJob(baseJob);
 
@@ -184,6 +176,8 @@ describe('SynthesisProcessor', () => {
           body: expect.stringContaining('"status":"error"'),
         }),
       );
+      const body = JSON.parse((mockFetch.mock.calls[0][1] as any).body);
+      expect(body.error).toBe('No files found in Claude response');
     });
 
     it('reports error when stop_reason is max_tokens', async () => {
@@ -220,13 +214,28 @@ describe('SynthesisProcessor', () => {
       storageService.listObjects.mockResolvedValue(['myproject/myrepo/context/a.md']);
       storageService.getObject.mockResolvedValue(Buffer.from('ctx'));
       storageService.putObject.mockResolvedValue(undefined);
-      mockMessagesCreate.mockResolvedValue(makeAnthropicResponse(JSON.stringify({ files: { 'index.md': 'x' } })));
+      mockMessagesCreate.mockResolvedValue(makeAnthropicResponse(makeDelimiterResponse({ 'index.md': 'x' })));
 
       await (processor as any).processJob(baseJob);
 
       expect(mockMessagesCreate).toHaveBeenCalledWith(expect.objectContaining({
         system: 'You are a synthesis assistant.',
       }));
+    });
+
+    it('parses file content containing quotes and newlines correctly', async () => {
+      storageService.listObjects.mockResolvedValue(['myproject/myrepo/context/a.md']);
+      storageService.getObject.mockResolvedValue(Buffer.from('content'));
+      storageService.putObject.mockResolvedValue(undefined);
+
+      const complexContent = `# Title\n\nSome "quoted" text\nand a backslash: \\\nand another line.`;
+      const response = `=== FILE: index.md ===\n${complexContent}`;
+      mockMessagesCreate.mockResolvedValue(makeAnthropicResponse(response));
+
+      await (processor as any).processJob(baseJob);
+
+      const [, , storedBuffer] = storageService.putObject.mock.calls[0];
+      expect(storedBuffer.toString('utf-8')).toBe(complexContent);
     });
   });
 

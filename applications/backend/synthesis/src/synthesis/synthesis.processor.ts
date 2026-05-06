@@ -86,23 +86,25 @@ export class SynthesisProcessor implements OnModuleInit {
         throw new Error('Anthropic response truncated (max_tokens reached) — increase max_tokens or reduce context');
       }
 
-      const codeBlockMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)```/i);
-      const text = codeBlockMatch ? codeBlockMatch[1].trim() : rawText.trim();
-
-      let parsed: { files: Record<string, string> };
-      try {
-        parsed = JSON.parse(text);
-      } catch (parseErr: any) {
-        this.logger.error(`[${projectSlug}] JSON parse failed: ${parseErr.message}`);
-        this.logger.debug(`[${projectSlug}] raw response (first 500): ${rawText.slice(0, 500)}`);
-        throw new Error(`Claude returned non-JSON: ${parseErr.message}`);
+      const chunks = rawText.split(/\n?=== FILE: /);
+      const files: Record<string, string> = {};
+      for (const chunk of chunks.slice(1)) {
+        const markerEnd = chunk.indexOf(' ===');
+        if (markerEnd === -1) continue;
+        const filename = chunk.slice(0, markerEnd).trim();
+        const content = chunk.slice(markerEnd + 4).replace(/^\r?\n/, '').trimEnd();
+        files[filename] = content;
       }
 
-      const fileCount = Object.keys(parsed.files).length;
+      if (Object.keys(files).length === 0) {
+        throw new Error('No files found in Claude response');
+      }
+
+      const fileCount = Object.keys(files).length;
       this.logger.log(`[${projectSlug}] parsed ${fileCount} synthesis files`);
 
       const synthPrefix = `${projectSlug}/synthesis/`;
-      for (const [path, content] of Object.entries(parsed.files)) {
+      for (const [path, content] of Object.entries(files)) {
         await this.storageService.putObject(
           orgSlug,
           `${synthPrefix}${path}`,

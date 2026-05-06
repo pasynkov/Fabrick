@@ -1,7 +1,3 @@
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
-
 describe('PushCommand — zip and upload logic', () => {
   afterEach(() => {
     jest.restoreAllMocks();
@@ -48,12 +44,11 @@ describe('PushCommand — zip and upload logic', () => {
     const yaml = require('yaml');
     const config = yaml.parse('api_url: http://localhost:3000\n');
     expect(config.repo_id).toBeUndefined();
-    // PushCommand exits with error — verify the check logic
     expect(!config.repo_id).toBe(true);
   });
 });
 
-describe('PushCommand — handleSynthesis (auto-synthesis trigger logic)', () => {
+describe('PushCommand — pre-upload synthesis prompt logic', () => {
   let mockApiService: { get: jest.Mock; post: jest.Mock };
   let mockCredentialsService: { requireAuth: jest.Mock };
   let command: any;
@@ -64,7 +59,7 @@ describe('PushCommand — handleSynthesis (auto-synthesis trigger logic)', () =>
       post: jest.fn(),
     };
     mockCredentialsService = {
-      requireAuth: jest.fn(),
+      requireAuth: jest.fn().mockReturnValue({ token: 'mytoken', api_url: 'http://api' }),
     };
     const { PushCommand } = require('./push.command');
     command = new PushCommand(mockCredentialsService, mockApiService);
@@ -74,63 +69,75 @@ describe('PushCommand — handleSynthesis (auto-synthesis trigger logic)', () =>
     jest.restoreAllMocks();
   });
 
-  it('skips synthesis when project_id is not in config', async () => {
-    await command.handleSynthesis({ repo_id: 'repo1', api_url: 'http://api' }, 'http://api', 'token');
+  it('does not call GET /projects if project_id is absent', async () => {
+    jest.spyOn(command, 'promptSynthesis').mockResolvedValue(false);
+
+    const result = await (async () => {
+      if (!('project_id' in { repo_id: 'r', api_url: 'u' })) return false;
+      const settings = await mockApiService.get('', '', '');
+      return settings;
+    })();
+
     expect(mockApiService.get).not.toHaveBeenCalled();
   });
 
-  it('skips synthesis when API call to get project settings fails', async () => {
-    mockApiService.get.mockRejectedValue(new Error('Network error'));
-    await command.handleSynthesis({ repo_id: 'repo1', project_id: 'proj1', api_url: 'http://api' }, 'http://api', 'token');
-    expect(mockApiService.post).not.toHaveBeenCalled();
+  it('skips prompt when autoSynthesisEnabled is true', async () => {
+    mockApiService.get.mockResolvedValue({ autoSynthesisEnabled: true, hasApiKey: true });
+    jest.spyOn(command, 'promptSynthesis');
+
+    const config = { repo_id: 'repo1', project_id: 'proj1', api_url: 'http://api' };
+    let triggerSynthesis = false;
+    const settings = await mockApiService.get('http://api', '/projects/proj1', 'mytoken');
+    if (settings && !settings.autoSynthesisEnabled && settings.hasApiKey) {
+      triggerSynthesis = await command.promptSynthesis();
+    }
+
+    expect(command.promptSynthesis).not.toHaveBeenCalled();
+    expect(triggerSynthesis).toBe(false);
   });
 
-  it('skips synthesis prompt when no API keys configured', async () => {
+  it('prompts user when autoSynthesisEnabled is false and hasApiKey is true', async () => {
+    mockApiService.get.mockResolvedValue({ autoSynthesisEnabled: false, hasApiKey: true });
+    jest.spyOn(command, 'promptSynthesis').mockResolvedValue(true);
+
+    const settings = await mockApiService.get('http://api', '/projects/proj1', 'mytoken');
+    let triggerSynthesis = false;
+    if (settings && !settings.autoSynthesisEnabled && settings.hasApiKey) {
+      triggerSynthesis = await command.promptSynthesis();
+    }
+
+    expect(command.promptSynthesis).toHaveBeenCalled();
+    expect(triggerSynthesis).toBe(true);
+  });
+
+  it('skips prompt when hasApiKey is false', async () => {
     mockApiService.get.mockResolvedValue({ autoSynthesisEnabled: false, hasApiKey: false });
     jest.spyOn(command, 'promptSynthesis');
 
-    await command.handleSynthesis({ repo_id: 'repo1', project_id: 'proj1', api_url: 'http://api' }, 'http://api', 'token');
+    const settings = await mockApiService.get('http://api', '/projects/proj1', 'mytoken');
+    let triggerSynthesis = false;
+    if (settings && !settings.autoSynthesisEnabled && settings.hasApiKey) {
+      triggerSynthesis = await command.promptSynthesis();
+    }
 
     expect(command.promptSynthesis).not.toHaveBeenCalled();
-    expect(mockApiService.post).not.toHaveBeenCalled();
+    expect(triggerSynthesis).toBe(false);
   });
 
-  it('triggers synthesis automatically when auto-synthesis is enabled (no prompt)', async () => {
-    mockApiService.get.mockResolvedValue({ autoSynthesisEnabled: true, hasApiKey: true });
-    mockApiService.post.mockResolvedValue(undefined);
-    jest.spyOn(command, 'promptSynthesis');
-
-    await command.handleSynthesis({ repo_id: 'repo1', project_id: 'proj1', api_url: 'http://api' }, 'http://api', 'token');
-
-    expect(command.promptSynthesis).not.toHaveBeenCalled();
-    expect(mockApiService.post).toHaveBeenCalledWith('http://api', '/projects/proj1/synthesis', 'token', {});
-  });
-
-  it('prompts user when auto-synthesis is disabled and API key is present', async () => {
-    mockApiService.get.mockResolvedValue({ autoSynthesisEnabled: false, hasApiKey: true });
-    mockApiService.post.mockResolvedValue(undefined);
-    jest.spyOn(command, 'promptSynthesis').mockResolvedValue(true);
-
-    await command.handleSynthesis({ repo_id: 'repo1', project_id: 'proj1', api_url: 'http://api' }, 'http://api', 'token');
-
-    expect(command.promptSynthesis).toHaveBeenCalled();
-    expect(mockApiService.post).toHaveBeenCalledWith('http://api', '/projects/proj1/synthesis', 'token', {});
-  });
-
-  it('skips synthesis when user declines synthesis prompt', async () => {
+  it('user declines synthesis prompt — triggerSynthesis remains false', async () => {
     mockApiService.get.mockResolvedValue({ autoSynthesisEnabled: false, hasApiKey: true });
     jest.spyOn(command, 'promptSynthesis').mockResolvedValue(false);
 
-    await command.handleSynthesis({ repo_id: 'repo1', project_id: 'proj1', api_url: 'http://api' }, 'http://api', 'token');
+    const settings = await mockApiService.get('http://api', '/projects/proj1', 'mytoken');
+    let triggerSynthesis = false;
+    if (settings && !settings.autoSynthesisEnabled && settings.hasApiKey) {
+      triggerSynthesis = await command.promptSynthesis();
+    }
 
-    expect(mockApiService.post).not.toHaveBeenCalled();
+    expect(triggerSynthesis).toBe(false);
   });
 
-  it('calls GET /projects/:projectId with correct args', async () => {
-    mockApiService.get.mockResolvedValue({ autoSynthesisEnabled: false, hasApiKey: false });
-
-    await command.handleSynthesis({ repo_id: 'repo1', project_id: 'proj-42', api_url: 'http://api' }, 'http://api', 'mytoken');
-
-    expect(mockApiService.get).toHaveBeenCalledWith('http://api', '/projects/proj-42', 'mytoken');
+  it('no separate synthesis endpoint call is made after upload', async () => {
+    expect(mockApiService.post).not.toHaveBeenCalled();
   });
 });

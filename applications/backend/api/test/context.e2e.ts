@@ -24,6 +24,9 @@ describe('Context Upload E2E', () => {
 
   beforeAll(async () => {
     process.env.DB_NAME = process.env.DB_TEST_NAME || 'fabrick_test';
+    if (!process.env.ENCRYPTION_KEY) {
+      process.env.ENCRYPTION_KEY = Buffer.from('test-encryption-key-for-e2e-tests!!').toString('base64');
+    }
 
     const module = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(StorageService).useValue(mockStorage)
@@ -111,6 +114,109 @@ describe('Context Upload E2E', () => {
       await request(app.getHttpServer())
         .post('/repos/repoid/context')
         .expect(401);
+    });
+  });
+
+  describe('POST /repos/:repoId/context — backend-driven synthesis triggering', () => {
+    async function setupWithApiKeyAndRepo() {
+      const regRes = await request(app.getHttpServer())
+        .post('/auth/register')
+        .send({ email: 'synthctx@example.com', password: 'password123' });
+      const token = regRes.body.access_token;
+
+      const orgRes = await request(app.getHttpServer())
+        .post('/orgs')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ name: 'Synth Ctx Org' });
+      const orgId = orgRes.body.id;
+
+      await request(app.getHttpServer())
+        .patch(`/orgs/${orgId}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ anthropicApiKey: 'sk-ant-test-key-for-e2e-testing' });
+
+      const projRes = await request(app.getHttpServer())
+        .post(`/orgs/${orgId}/projects`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ name: 'Synth Ctx Project' });
+      const projectId = projRes.body.id;
+
+      const repoRes = await request(app.getHttpServer())
+        .post(`/projects/${projectId}/repos`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ name: 'ctx-repo-synth', gitRemote: 'https://github.com/test/ctx-repo-synth.git' });
+      const repoId = repoRes.body.id;
+
+      return { token, orgId, projectId, repoId };
+    }
+
+    it('triggers synthesis automatically when autoSynthesisEnabled is true', async () => {
+      mockStorage.putObject.mockResolvedValue(undefined);
+      mockQueue.publish.mockResolvedValue(undefined);
+      const { token, orgId, projectId, repoId } = await setupWithApiKeyAndRepo();
+
+      await request(app.getHttpServer())
+        .patch(`/orgs/${orgId}/projects/${projectId}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ autoSynthesisEnabled: true });
+
+      const zipBuffer = makeZip({ 'summary.md': '# Summary' });
+      await request(app.getHttpServer())
+        .post(`/repos/${repoId}/context`)
+        .set('Authorization', `Bearer ${token}`)
+        .attach('file', zipBuffer, { filename: 'context.zip', contentType: 'application/zip' })
+        .expect(201);
+
+      expect(mockQueue.publish).toHaveBeenCalledWith('synthesis-jobs', expect.objectContaining({ projectId }));
+    });
+
+    it('triggers synthesis when triggerSynthesis=true and autoSynthesisEnabled is false', async () => {
+      mockStorage.putObject.mockResolvedValue(undefined);
+      mockQueue.publish.mockResolvedValue(undefined);
+      const { token, repoId, projectId } = await setupWithApiKeyAndRepo();
+
+      const zipBuffer = makeZip({ 'summary.md': '# Summary' });
+      await request(app.getHttpServer())
+        .post(`/repos/${repoId}/context`)
+        .set('Authorization', `Bearer ${token}`)
+        .attach('file', zipBuffer, { filename: 'context.zip', contentType: 'application/zip' })
+        .field('triggerSynthesis', 'true')
+        .expect(201);
+
+      expect(mockQueue.publish).toHaveBeenCalledWith('synthesis-jobs', expect.objectContaining({ projectId }));
+    });
+
+    it('does not trigger synthesis when autoSynthesisEnabled is false and no triggerSynthesis flag', async () => {
+      mockStorage.putObject.mockResolvedValue(undefined);
+      mockQueue.publish.mockResolvedValue(undefined);
+      const { token, repoId } = await setupWithApiKeyAndRepo();
+
+      const zipBuffer = makeZip({ 'summary.md': '# Summary' });
+      await request(app.getHttpServer())
+        .post(`/repos/${repoId}/context`)
+        .set('Authorization', `Bearer ${token}`)
+        .attach('file', zipBuffer, { filename: 'context.zip', contentType: 'application/zip' })
+        .expect(201);
+
+      expect(mockQueue.publish).not.toHaveBeenCalled();
+    });
+
+    it('upload returns 201 even if synthesis trigger would fail', async () => {
+      mockStorage.putObject.mockResolvedValue(undefined);
+      mockQueue.publish.mockRejectedValue(new Error('queue unavailable'));
+      const { token, orgId, projectId, repoId } = await setupWithApiKeyAndRepo();
+
+      await request(app.getHttpServer())
+        .patch(`/orgs/${orgId}/projects/${projectId}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ autoSynthesisEnabled: true });
+
+      const zipBuffer = makeZip({ 'summary.md': '# Summary' });
+      await request(app.getHttpServer())
+        .post(`/repos/${repoId}/context`)
+        .set('Authorization', `Bearer ${token}`)
+        .attach('file', zipBuffer, { filename: 'context.zip', contentType: 'application/zip' })
+        .expect(201);
     });
   });
 });

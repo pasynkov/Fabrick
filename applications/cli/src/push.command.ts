@@ -43,9 +43,25 @@ export class PushCommand extends CommandRunner {
     const apiUrl = config.api_url || creds.api_url;
     const url = `${apiUrl}/repos/${config.repo_id}/context`;
 
+    let triggerSynthesis = false;
+    if (config.project_id) {
+      let settings: ProjectSettings | null = null;
+      try {
+        settings = await this.api.get<ProjectSettings>(apiUrl, `/projects/${config.project_id}`, creds.token);
+      } catch {
+        // ignore — backend will handle based on its own settings
+      }
+      if (settings && !settings.autoSynthesisEnabled && settings.hasApiKey) {
+        triggerSynthesis = await this.promptSynthesis();
+      }
+    }
+
     const { Blob } = await import('node:buffer');
     const form = new FormData();
     form.append('file', new Blob([zipBuffer], { type: 'application/zip' }) as globalThis.Blob, 'context.zip');
+    if (triggerSynthesis) {
+      form.append('triggerSynthesis', 'true');
+    }
 
     const res = await fetch(url, {
       method: 'POST',
@@ -59,34 +75,6 @@ export class PushCommand extends CommandRunner {
       process.exit(1);
     }
     console.log('✓ Context uploaded successfully');
-
-    await this.handleSynthesis(config, apiUrl, creds.token);
-  }
-
-  async handleSynthesis(config: Config, apiUrl: string, token: string): Promise<void> {
-    const projectId = config.project_id;
-    if (!projectId) return;
-
-    let settings: ProjectSettings;
-    try {
-      settings = await this.api.get<ProjectSettings>(apiUrl, `/projects/${projectId}`, token);
-    } catch {
-      return;
-    }
-
-    if (!settings.hasApiKey) return;
-
-    if (!settings.autoSynthesisEnabled) {
-      const confirmed = await this.promptSynthesis();
-      if (!confirmed) return;
-    }
-
-    try {
-      await this.api.post<void>(apiUrl, `/projects/${projectId}/synthesis`, token, {});
-      console.log('✓ Synthesis triggered');
-    } catch (err: any) {
-      console.error(`Synthesis trigger failed: ${err.message}`);
-    }
   }
 
   promptSynthesis(): Promise<boolean> {

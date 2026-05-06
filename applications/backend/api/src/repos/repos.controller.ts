@@ -5,6 +5,7 @@ import {
   Get,
   Headers,
   HttpCode,
+  Logger,
   Param,
   Patch,
   Post,
@@ -22,18 +23,23 @@ import { IsAdminGuard } from '../auth/is-admin.guard';
 import { ApiKeyAuditService } from '../api-keys/api-key-audit.service';
 import { AuditLogsQueryDto } from '../api-keys/dto/audit-logs-query.dto';
 import { StorageService } from '../storage/storage.service';
+import { SynthesisService } from '../synthesis/synthesis.service';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { CreateRepoDto } from './dto/create-repo.dto';
 import { FindOrCreateRepoDto } from './dto/find-or-create-repo.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
+import { UploadContextDto } from './dto/upload-context.dto';
 import { ReposService } from './repos.service';
 
 @Controller()
 export class ReposController {
+  private readonly logger = new Logger(ReposController.name);
+
   constructor(
     private readonly reposService: ReposService,
     private readonly storageService: StorageService,
     private readonly apiKeyAuditService: ApiKeyAuditService,
+    private readonly synthesisService: SynthesisService,
   ) {}
 
   @Post('orgs/:orgId/projects')
@@ -142,6 +148,7 @@ export class ReposController {
     @Request() req: { user: { id: string } },
     @Param('repoId') repoId: string,
     @UploadedFile() file: Express.Multer.File,
+    @Body() dto: UploadContextDto,
   ): Promise<void> {
     if (!file) throw new BadRequestException('file field is required');
 
@@ -157,6 +164,15 @@ export class ReposController {
           `${projectSlug}/${repo.slug}/context/${entry.path}`,
           content,
         );
+      }
+    }
+
+    const project = await this.reposService.getProjectByRepo(repoId);
+    if (project.autoSynthesisEnabled || dto.triggerSynthesis) {
+      try {
+        await this.synthesisService.triggerForProject(project.id, req.user.id);
+      } catch (err: any) {
+        this.logger.error(`Synthesis trigger failed for project ${project.id}: ${err.message}`);
       }
     }
   }

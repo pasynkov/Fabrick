@@ -24,6 +24,3 @@ The current synthesis triggering is handled on the CLI side. Moving the decision
 - `applications/cli/src/` - Remove synthesis handling from push command
 - Synthesis triggering now respects project settings at backend
 
-## Scope Note
-
-The broader synthesis trigger automation framework with configurable triggers, schedulers, and webhook support has been extracted to a separate proposal — see branch `proposal/93-synthesis-trigger-automation`

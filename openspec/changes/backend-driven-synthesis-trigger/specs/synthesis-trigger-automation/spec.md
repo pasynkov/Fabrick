@@ -1,49 +1,29 @@
 ## ADDED Requirements
 
-### Requirement: Automatic synthesis triggering on events
-The system SHALL automatically initiate synthesis jobs based on configurable project events without requiring manual user intervention.
+### Requirement: Backend triggers synthesis on context upload
+After a context file is stored, the backend SHALL check project settings and trigger synthesis automatically without requiring a separate CLI call.
 
-#### Scenario: Push trigger activates synthesis
-- **WHEN** a repository push occurs and project has an active PUSH_TRIGGER configured
-- **THEN** synthesis job is published to the queue within 30 seconds
+#### Scenario: Auto-synthesis enabled — backend triggers automatically
+- **WHEN** CLI uploads context to `POST /repos/{repoId}/context`
+- **AND** project `autoSynthesisEnabled` is `true`
+- **THEN** backend calls `SynthesisService.triggerForProject` after storing context
+- **AND** synthesis trigger error does not fail the upload response
 
-#### Scenario: Scheduled trigger activates synthesis
-- **WHEN** scheduled time arrives for project with active SCHEDULE_TRIGGER
-- **THEN** synthesis job is published to the queue within 60 seconds of scheduled time
+#### Scenario: Auto-synthesis disabled, user confirmed via flag
+- **WHEN** CLI uploads context to `POST /repos/{repoId}/context` with `triggerSynthesis: true`
+- **AND** project `autoSynthesisEnabled` is `false`
+- **THEN** backend calls `SynthesisService.triggerForProject` after storing context
+- **AND** synthesis trigger error does not fail the upload response
 
-#### Scenario: Trigger respects rate limiting
-- **WHEN** trigger attempts to activate but project has exceeded rate limit (3 synthesis jobs per hour)
-- **THEN** trigger is skipped and failure is logged with rate limit reason
+#### Scenario: Auto-synthesis disabled, no user confirmation
+- **WHEN** CLI uploads context to `POST /repos/{repoId}/context` without `triggerSynthesis` flag (or `triggerSynthesis: false`)
+- **AND** project `autoSynthesisEnabled` is `false`
+- **THEN** backend stores context only and does not trigger synthesis
 
-### Requirement: Multiple trigger types per project
-Projects SHALL support multiple simultaneous trigger configurations with independent activation conditions.
+### Requirement: Fire and forget synthesis triggering
+The context upload endpoint SHALL return its response without waiting for synthesis to complete.
 
-#### Scenario: Multiple triggers can coexist
-- **WHEN** project has both PUSH_TRIGGER and SCHEDULE_TRIGGER configured
-- **THEN** both triggers operate independently without conflict
-
-#### Scenario: Trigger isolation
-- **WHEN** one trigger type fails activation
-- **THEN** other trigger types continue functioning normally
-
-### Requirement: Trigger lifecycle management
-The system SHALL manage trigger activation, deactivation, and cleanup based on project settings and system health.
-
-#### Scenario: Trigger automatically deactivates on repeated failures
-- **WHEN** trigger fails activation 5 consecutive times
-- **THEN** trigger is automatically disabled and admin is notified
-
-#### Scenario: Trigger respects project auto-synthesis setting
-- **WHEN** project auto-synthesis is disabled
-- **THEN** all automated triggers are suspended until re-enabled
-
-### Requirement: Event source integration
-The system SHALL integrate with repository push events and external scheduling systems to detect trigger conditions.
-
-#### Scenario: Repository push event detection
-- **WHEN** repository receives new commits via git push
-- **THEN** push event is captured and evaluated against project PUSH_TRIGGER conditions
-
-#### Scenario: Cron schedule evaluation
-- **WHEN** system evaluates scheduled triggers every minute
-- **THEN** projects with due SCHEDULE_TRIGGER have synthesis initiated
+#### Scenario: Synthesis trigger failure does not affect upload
+- **WHEN** `SynthesisService.triggerForProject` throws an error
+- **THEN** error is caught and logged
+- **AND** context upload response is still returned successfully

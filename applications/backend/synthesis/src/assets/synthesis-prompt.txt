@@ -20,17 +20,22 @@ You will receive context for each repository in this format:
 
 ## Output format
 
-Respond with ONLY a valid JSON object in this exact format (no markdown, no explanation, no code blocks):
+Respond with ONLY the file sections below — no JSON, no code blocks, no explanation.
 
-{
-  "files": {
-    "index.md": "...",
-    "overview.md": "...",
-    "apps/{repo-name}.md": "...",
-    "cross-cutting/integrations.md": "...",
-    "cross-cutting/envs.md": "..."
-  }
-}
+=== FILE: index.md ===
+<content>
+
+=== FILE: overview.md ===
+<content>
+
+=== FILE: apps/{repo-name}.md ===
+<content>
+
+=== FILE: cross-cutting/integrations.md ===
+<content>
+
+=== FILE: cross-cutting/envs.md ===
+<content>
 
 ## File content requirements
 
@@ -66,6 +71,5 @@ All environment variables across all repos:
 ## Rules
 
 - Be concise but complete. A reader should understand the system without reading source code.
-- Use markdown formatting within file content strings.
-- Escape all quotes and newlines in JSON string values correctly.
-- Do not include any text outside the JSON object.
+- Use markdown formatting within each file section.
+- Do not include any text outside the === FILE: === sections.

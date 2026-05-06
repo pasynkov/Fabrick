@@ -7,6 +7,7 @@ import { Project } from '../entities/project.entity';
 import { Repository } from '../entities/repository.entity';
 import { User } from '../entities/user.entity';
 import { StorageModule } from '../storage/storage.module';
+import { SynthesisModule } from '../synthesis/synthesis.module';
 import { ReposController } from './repos.controller';
 import { ReposService } from './repos.service';
 
@@ -16,6 +17,7 @@ import { ReposService } from './repos.service';
     StorageModule,
     AuthModule,
     ApiKeysModule,
+    SynthesisModule,
   ],
   controllers: [ReposController],
   providers: [ReposService],

@@ -21,5 +21,6 @@ import { SynthesisService } from './synthesis.service';
   ],
   controllers: [SynthesisController],
   providers: [SynthesisService],
+  exports: [SynthesisService],
 })
 export class SynthesisModule {}

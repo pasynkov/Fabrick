@@ -239,6 +239,11 @@ export class ReposService {
     await this.requireOrgMember(userId, (repo.project as any).orgId);
   }
 
+  async getProjectByRepo(repoId: string): Promise<Project> {
+    const { repo } = await this.getRepoWithContext(repoId);
+    return repo.project as unknown as Project;
+  }
+
   private async getProjectOrFail(projectId: string): Promise<Project> {
     const project = await this.projectRepo.findOne({ where: { id: projectId } });
     if (!project) throw new NotFoundException('Project not found');

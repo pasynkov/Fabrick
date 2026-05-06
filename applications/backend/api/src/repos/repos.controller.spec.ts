@@ -2,6 +2,7 @@ import { Test } from '@nestjs/testing';
 import { ReposController } from './repos.controller';
 import { ReposService } from './repos.service';
 import { StorageService } from '../storage/storage.service';
+import { SynthesisService } from '../synthesis/synthesis.service';
 import { FabrickAuthGuard } from '../auth/fabrick-auth.guard';
 import { IsAdminGuard } from '../auth/is-admin.guard';
 import { ApiKeyAuditService } from '../api-keys/api-key-audit.service';
@@ -14,11 +15,15 @@ const mockReposService = () => ({
   findOrCreateRepo: jest.fn(),
   requireOrgMemberByRepo: jest.fn(),
   getRepoWithContext: jest.fn(),
+  getProjectByRepo: jest.fn(),
 });
 const mockStorageService = () => ({
   putObject: jest.fn(),
   getObject: jest.fn(),
   listObjects: jest.fn(),
+});
+const mockSynthesisService = () => ({
+  triggerForProject: jest.fn(),
 });
 
 describe('ReposController', () => {
@@ -33,6 +38,7 @@ describe('ReposController', () => {
         { provide: ReposService, useFactory: mockReposService },
         { provide: StorageService, useFactory: mockStorageService },
         { provide: ApiKeyAuditService, useValue: {} },
+        { provide: SynthesisService, useFactory: mockSynthesisService },
       ],
     })
       .overrideGuard(FabrickAuthGuard)
@@ -76,5 +82,104 @@ describe('ReposController', () => {
 
     expect(reposService.findOrCreateRepo).toHaveBeenCalledWith('uid1', 'https://github.com/org/myrepo.git', 'proj1');
     expect(result).toBe(repo);
+  });
+});
+
+describe('ReposController — uploadContext synthesis triggering', () => {
+  let controller: ReposController;
+  let reposService: ReturnType<typeof mockReposService>;
+  let storageService: ReturnType<typeof mockStorageService>;
+  let synthesisService: ReturnType<typeof mockSynthesisService>;
+
+  const makeZip = (): Promise<Express.Multer.File> => {
+    return new Promise((resolve, reject) => {
+      const archiver = require('archiver');
+      const { PassThrough } = require('stream');
+      const chunks: Buffer[] = [];
+      const pass = new PassThrough();
+      pass.on('data', (chunk: Buffer) => chunks.push(chunk));
+      pass.on('end', () => {
+        const buffer = Buffer.concat(chunks);
+        resolve({ buffer, fieldname: 'file', originalname: 'context.zip', mimetype: 'application/zip', size: buffer.length } as Express.Multer.File);
+      });
+      pass.on('error', reject);
+      const archive = archiver.default('zip');
+      archive.pipe(pass);
+      archive.append('hello', { name: 'test.txt' });
+      archive.finalize().catch(reject);
+    });
+  };
+
+  beforeEach(async () => {
+    const passGuard = { canActivate: () => true };
+    const module = await Test.createTestingModule({
+      controllers: [ReposController],
+      providers: [
+        { provide: ReposService, useFactory: mockReposService },
+        { provide: StorageService, useFactory: mockStorageService },
+        { provide: ApiKeyAuditService, useValue: {} },
+        { provide: SynthesisService, useFactory: mockSynthesisService },
+      ],
+    })
+      .overrideGuard(FabrickAuthGuard)
+      .useValue(passGuard)
+      .overrideGuard(IsAdminGuard)
+      .useValue(passGuard)
+      .compile();
+
+    controller = module.get(ReposController);
+    reposService = module.get(ReposService);
+    storageService = module.get(StorageService);
+    synthesisService = module.get(SynthesisService);
+
+    reposService.requireOrgMemberByRepo.mockResolvedValue(undefined);
+    reposService.getRepoWithContext.mockResolvedValue({
+      orgSlug: 'org1',
+      projectSlug: 'proj1',
+      repo: { slug: 'repo1' },
+    });
+    storageService.putObject.mockResolvedValue(undefined);
+    synthesisService.triggerForProject.mockResolvedValue(undefined);
+  });
+
+  it('triggers synthesis when autoSynthesisEnabled is true', async () => {
+    reposService.getProjectByRepo.mockResolvedValue({ id: 'proj-id', autoSynthesisEnabled: true });
+    const file = await makeZip();
+    const req = { user: { id: 'uid1' } };
+
+    await controller.uploadContext(req as any, 'repo1', file, { triggerSynthesis: false } as any);
+
+    expect(synthesisService.triggerForProject).toHaveBeenCalledWith('proj-id', 'uid1');
+  });
+
+  it('triggers synthesis when triggerSynthesis flag is true and autoSynthesisEnabled is false', async () => {
+    reposService.getProjectByRepo.mockResolvedValue({ id: 'proj-id', autoSynthesisEnabled: false });
+    const file = await makeZip();
+    const req = { user: { id: 'uid1' } };
+
+    await controller.uploadContext(req as any, 'repo1', file, { triggerSynthesis: true } as any);
+
+    expect(synthesisService.triggerForProject).toHaveBeenCalledWith('proj-id', 'uid1');
+  });
+
+  it('does not trigger synthesis when autoSynthesisEnabled is false and no triggerSynthesis flag', async () => {
+    reposService.getProjectByRepo.mockResolvedValue({ id: 'proj-id', autoSynthesisEnabled: false });
+    const file = await makeZip();
+    const req = { user: { id: 'uid1' } };
+
+    await controller.uploadContext(req as any, 'repo1', file, { triggerSynthesis: false } as any);
+
+    expect(synthesisService.triggerForProject).not.toHaveBeenCalled();
+  });
+
+  it('upload succeeds even when synthesis trigger throws', async () => {
+    reposService.getProjectByRepo.mockResolvedValue({ id: 'proj-id', autoSynthesisEnabled: true });
+    synthesisService.triggerForProject.mockRejectedValue(new Error('queue down'));
+    const file = await makeZip();
+    const req = { user: { id: 'uid1' } };
+
+    await expect(
+      controller.uploadContext(req as any, 'repo1', file, { triggerSynthesis: false } as any),
+    ).resolves.toBeUndefined();
   });
 });

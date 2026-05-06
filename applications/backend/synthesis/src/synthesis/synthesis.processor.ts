@@ -89,10 +89,10 @@ export class SynthesisProcessor implements OnModuleInit {
       const chunks = rawText.split(/\n?=== FILE: /);
       const files: Record<string, string> = {};
       for (const chunk of chunks.slice(1)) {
-        const markerEnd = chunk.indexOf(' ===\n');
+        const markerEnd = chunk.indexOf(' ===');
         if (markerEnd === -1) continue;
-        const filename = chunk.slice(0, markerEnd);
-        const content = chunk.slice(markerEnd + 5).trimEnd();
+        const filename = chunk.slice(0, markerEnd).trim();
+        const content = chunk.slice(markerEnd + 4).replace(/^\r?\n/, '').trimEnd();
         files[filename] = content;
       }
 

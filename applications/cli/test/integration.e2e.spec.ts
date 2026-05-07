@@ -47,24 +47,24 @@ async function apiGet<T>(path: string, token: string): Promise<T> {
 beforeAll(async () => {
   // Register user — gets an auto-created org from the email slug
   const email = `ci-e2e-${Date.now()}@example.com`;
-  const reg = await apiPost<{ access_token: string }>('/auth/register', {
+  const reg = await apiPost<{ access_token: string }>('/v1/auth/register', {
     email,
     password: 'TestPassword123!',
   });
   const accessToken = reg.access_token;
 
   // Get CLI token (requires JWT access_token)
-  const cliTokenRes = await apiPost<{ token: string }>('/auth/cli-token', {}, accessToken);
+  const cliTokenRes = await apiPost<{ token: string }>('/v1/auth/cli-token', {}, accessToken);
   cliToken = cliTokenRes.token;
 
   // Get the auto-created org
-  const orgs = await apiGet<Array<{ id: string; slug: string }>>('/orgs', cliToken);
+  const orgs = await apiGet<Array<{ id: string; slug: string }>>('/v1/orgs', cliToken);
   const org = orgs[0];
   orgSlug = org.slug;
 
   // Create project
   const project = await apiPost<{ id: string; slug: string }>(
-    `/orgs/${org.id}/projects`,
+    `/v1/orgs/${org.id}/projects`,
     { name: 'ci-test-project' },
     cliToken,
   );
@@ -80,7 +80,7 @@ beforeAll(async () => {
 
   // Find-or-create repo
   const repo = await apiPost<{ id: string }>(
-    '/repos/find-or-create',
+    '/v1/repos/find-or-create',
     { gitRemote: 'https://github.com/test/repo.git', projectId: project.id },
     cliToken,
   );
@@ -88,7 +88,7 @@ beforeAll(async () => {
 
   // Get MCP token
   const mcpTokenRes = await apiPost<{ token: string }>(
-    '/auth/mcp-token',
+    '/v1/auth/mcp-token',
     { orgSlug, projectSlug, repoId },
     cliToken,
   );

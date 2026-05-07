@@ -53,7 +53,8 @@ async function request<T>(path: string, options: RequestInit = {}, retry = true)
     }
   }
 
-  const res = await fetch(`${API_URL}${path}`, {
+  const versionedPath = path.startsWith('/health') ? path : `/v1${path}`;
+  const res = await fetch(`${API_URL}${versionedPath}`, {
     ...options,
     headers: {
       'Content-Type': 'application/json',

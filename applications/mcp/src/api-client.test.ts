@@ -27,7 +27,7 @@ describe('getSynthesisFile', () => {
     await getSynthesisFile(apiUrl, 'my org', 'my project', 'cross-cutting/envs.md', token);
 
     const calledUrl = mockFetch.mock.calls[0][0] as string;
-    expect(calledUrl).toContain('/orgs/my%20org/projects/my%20project/synthesis/file');
+    expect(calledUrl).toContain('/v1/orgs/my%20org/projects/my%20project/synthesis/file');
     expect(calledUrl).toContain('path=cross-cutting%2Fenvs.md');
   });
 

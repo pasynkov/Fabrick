@@ -49,6 +49,6 @@ describe('MCP auth — fbrk_ token forwarding', () => {
     await getSynthesisFile('http://api.fabrick.me', 'myorg', 'myproject', 'index.md', 'fbrk_tok');
 
     const [url] = mockFetch.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe('http://api.fabrick.me/orgs/myorg/projects/myproject/synthesis/file?path=index.md');
+    expect(url).toBe('http://api.fabrick.me/v1/orgs/myorg/projects/myproject/synthesis/file?path=index.md');
   });
 });

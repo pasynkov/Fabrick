@@ -4,7 +4,7 @@ import { existsSync } from 'fs';
 import { join } from 'path';
 import { FabrickAuthGuard } from '../auth/fabrick-auth.guard';
 
-@Controller('skills')
+@Controller({ path: 'skills', version: '1' })
 @UseGuards(FabrickAuthGuard)
 export class SkillsController {
   @Get(':tool')

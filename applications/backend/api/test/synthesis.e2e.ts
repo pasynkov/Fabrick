@@ -1,4 +1,4 @@
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { INestApplication, ValidationPipe, VersioningType } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { DataSource } from 'typeorm';
 import * as request from 'supertest';
@@ -26,6 +26,7 @@ describe('Synthesis E2E', () => {
 
     app = module.createNestApplication();
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
+    app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });
     await app.init();
     dataSource = module.get(DataSource);
   });
@@ -41,23 +42,23 @@ describe('Synthesis E2E', () => {
 
   async function setup() {
     const regRes = await request(app.getHttpServer())
-      .post('/auth/register')
+      .post('/v1/auth/register')
       .send({ email: 'synth@example.com', password: 'password123' });
     const token = regRes.body.access_token;
 
     const orgRes = await request(app.getHttpServer())
-      .post('/orgs')
+      .post('/v1/orgs')
       .set('Authorization', `Bearer ${token}`)
       .send({ name: 'Synth Org' });
     const orgId = orgRes.body.id;
 
     await request(app.getHttpServer())
-      .patch(`/orgs/${orgId}`)
+      .patch(`/v1/orgs/${orgId}`)
       .set('Authorization', `Bearer ${token}`)
       .send({ anthropicApiKey: 'sk-ant-test-key-for-e2e-testing' });
 
     const projRes = await request(app.getHttpServer())
-      .post(`/orgs/${orgId}/projects`)
+      .post(`/v1/orgs/${orgId}/projects`)
       .set('Authorization', `Bearer ${token}`)
       .send({ name: 'Synth Project' });
     const projectId = projRes.body.id;
@@ -71,7 +72,7 @@ describe('Synthesis E2E', () => {
       const { token, projectId } = await setup();
 
       await request(app.getHttpServer())
-        .post(`/projects/${projectId}/synthesis`)
+        .post(`/v1/projects/${projectId}/synthesis`)
         .set('Authorization', `Bearer ${token}`)
         .expect(202);
 
@@ -86,19 +87,19 @@ describe('Synthesis E2E', () => {
       const { token, projectId } = await setup();
 
       await request(app.getHttpServer())
-        .post(`/projects/${projectId}/synthesis`)
+        .post(`/v1/projects/${projectId}/synthesis`)
         .set('Authorization', `Bearer ${token}`)
         .expect(202);
 
       await request(app.getHttpServer())
-        .post(`/projects/${projectId}/synthesis`)
+        .post(`/v1/projects/${projectId}/synthesis`)
         .set('Authorization', `Bearer ${token}`)
         .expect(409);
     });
 
     it('returns 401 without auth', async () => {
       await request(app.getHttpServer())
-        .post('/projects/proj1/synthesis')
+        .post('/v1/projects/proj1/synthesis')
         .expect(401);
     });
   });
@@ -109,11 +110,11 @@ describe('Synthesis E2E', () => {
       const { token, projectId } = await setup();
 
       await request(app.getHttpServer())
-        .post(`/projects/${projectId}/synthesis`)
+        .post(`/v1/projects/${projectId}/synthesis`)
         .set('Authorization', `Bearer ${token}`);
 
       const res = await request(app.getHttpServer())
-        .get(`/projects/${projectId}/synthesis/status`)
+        .get(`/v1/projects/${projectId}/synthesis/status`)
         .set('Authorization', `Bearer ${token}`)
         .expect(200);
 
@@ -126,7 +127,7 @@ describe('Synthesis E2E', () => {
       const { token, projectId } = await setup();
 
       const res = await request(app.getHttpServer())
-        .get(`/projects/${projectId}`)
+        .get(`/v1/projects/${projectId}`)
         .set('Authorization', `Bearer ${token}`)
         .expect(200);
 
@@ -138,13 +139,13 @@ describe('Synthesis E2E', () => {
       const { token, orgId, projectId } = await setup();
 
       await request(app.getHttpServer())
-        .patch(`/orgs/${orgId}/projects/${projectId}`)
+        .patch(`/v1/orgs/${orgId}/projects/${projectId}`)
         .set('Authorization', `Bearer ${token}`)
         .send({ autoSynthesisEnabled: true })
         .expect(200);
 
       await request(app.getHttpServer())
-        .post(`/projects/${projectId}/synthesis`)
+        .post(`/v1/projects/${projectId}/synthesis`)
         .set('Authorization', `Bearer ${token}`)
         .expect(202);
 
@@ -155,7 +156,7 @@ describe('Synthesis E2E', () => {
       const { token, projectId } = await setup();
 
       const res = await request(app.getHttpServer())
-        .get(`/projects/${projectId}`)
+        .get(`/v1/projects/${projectId}`)
         .set('Authorization', `Bearer ${token}`)
         .expect(200);
 

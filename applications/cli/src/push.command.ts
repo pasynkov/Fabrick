@@ -41,7 +41,7 @@ export class PushCommand extends CommandRunner {
     const zipBuffer = await this.zipContext();
 
     const apiUrl = config.api_url || creds.api_url;
-    const url = `${apiUrl}/repos/${config.repo_id}/context`;
+    const url = `${apiUrl}/v1/repos/${config.repo_id}/context`;
 
     let triggerSynthesis = false;
     if (config.project_id) {

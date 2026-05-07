@@ -81,7 +81,7 @@ describe('PushCommand e2e — upload flow', () => {
     await command.run();
 
     expect(mockFetch).toHaveBeenCalledWith(
-      'http://localhost:3000/repos/repo123/context',
+      'http://localhost:3000/v1/repos/repo123/context',
       expect.objectContaining({
         method: 'POST',
         headers: expect.objectContaining({ Authorization: 'Bearer fbrk_mytoken' }),
@@ -97,7 +97,7 @@ describe('PushCommand e2e — upload flow', () => {
     await command.run();
 
     const [url] = mockFetch.mock.calls[0] as [string, any];
-    expect(url).toBe('http://localhost:3000/repos/repo123/context');
+    expect(url).toBe('http://localhost:3000/v1/repos/repo123/context');
   });
 
   it('exits 1 when config.yaml missing', async () => {

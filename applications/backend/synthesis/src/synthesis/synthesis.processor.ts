@@ -125,7 +125,7 @@ export class SynthesisProcessor implements OnModuleInit {
     try {
       const body: Record<string, string> = { projectId, status };
       if (error) body.error = error;
-      const res = await fetch(`${this.apiBaseUrl}/internal/synthesis/status`, {
+      const res = await fetch(`${this.apiBaseUrl}/v1/internal/synthesis/status`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -26,7 +26,7 @@ describe('ApiService', () => {
       await service.get('  http://localhost:3000  ', '/orgs', 'token');
 
       const [url] = (global.fetch as jest.Mock).mock.calls[0];
-      expect(url).toBe('http://localhost:3000/orgs');
+      expect(url).toBe('http://localhost:3000/v1/orgs');
     });
 
     it('removes trailing slash from apiUrl', async () => {
@@ -34,7 +34,7 @@ describe('ApiService', () => {
       await service.get('http://localhost:3000/', '/orgs', 'token');
 
       const [url] = (global.fetch as jest.Mock).mock.calls[0];
-      expect(url).toBe('http://localhost:3000/orgs');
+      expect(url).toBe('http://localhost:3000/v1/orgs');
     });
 
     it('handles clean URL without modification', async () => {
@@ -42,7 +42,7 @@ describe('ApiService', () => {
       await service.get('http://localhost:3000', '/orgs', 'token');
 
       const [url] = (global.fetch as jest.Mock).mock.calls[0];
-      expect(url).toBe('http://localhost:3000/orgs');
+      expect(url).toBe('http://localhost:3000/v1/orgs');
     });
 
     it('sends Authorization header with Bearer token', async () => {

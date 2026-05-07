@@ -1,8 +1,8 @@
-import { Controller, Get, HttpCode } from '@nestjs/common';
+import { Controller, Get, HttpCode, VERSION_NEUTRAL } from '@nestjs/common';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
-@Controller('health')
+@Controller({ path: 'health', version: VERSION_NEUTRAL })
 export class HealthController {
   private readonly version: string;
 

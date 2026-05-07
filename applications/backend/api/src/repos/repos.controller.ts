@@ -31,7 +31,7 @@ import { UpdateProjectDto } from './dto/update-project.dto';
 import { UploadContextDto } from './dto/upload-context.dto';
 import { ReposService } from './repos.service';
 
-@Controller()
+@Controller({ version: '1' })
 export class ReposController {
   private readonly logger = new Logger(ReposController.name);
 

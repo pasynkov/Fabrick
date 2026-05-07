@@ -7,7 +7,6 @@ Update the Fabrick MCP (Model Context Protocol) server to support versioned API 
 
 ### Functional Requirements
 - All synthesis API calls must use `/v1` prefix
-- Support for version parameter in API client functions
 - Maintain existing MCP tool functionality
 - Error handling for version compatibility issues
 
@@ -28,22 +27,14 @@ export async function getSynthesisFile(
   project: string,
   path: string,
   token: string,
-  version: string = 'v1', // Add version parameter with default
 ): Promise<string> {
-  const versionPrefix = `/v${version}`;
-  const url = `${apiUrl}${versionPrefix}/orgs/${encodeURIComponent(org)}/projects/${encodeURIComponent(project)}/synthesis/file?path=${encodeURIComponent(path)}`;
+  const url = `${apiUrl}/v1/orgs/${encodeURIComponent(org)}/projects/${encodeURIComponent(project)}/synthesis/file?path=${encodeURIComponent(path)}`;
   
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${token}` },
   });
   
   if (!res.ok) {
-    if (res.status === 404) {
-      const body = await res.json().catch(() => ({}));
-      if (body.message?.includes('version')) {
-        throw new Error(`API version ${version} not supported`);
-      }
-    }
     throw new Error(`API returned ${res.status}`);
   }
   
@@ -51,55 +42,10 @@ export async function getSynthesisFile(
 }
 ```
 
-### Additional API Functions
-```typescript
-// Add version support to other API functions as needed
-export async function triggerSynthesis(
-  apiUrl: string,
-  org: string,
-  project: string,
-  token: string,
-  version: string = 'v1',
-): Promise<void> {
-  const versionPrefix = `/v${version}`;
-  const url = `${apiUrl}${versionPrefix}/orgs/${encodeURIComponent(org)}/projects/${encodeURIComponent(project)}/synthesis`;
-  
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  
-  if (!res.ok) {
-    throw new Error(`Synthesis trigger failed: ${res.status}`);
-  }
-}
-
-export async function getSynthesisStatus(
-  apiUrl: string,
-  org: string,
-  project: string,
-  token: string,
-  version: string = 'v1',
-): Promise<{ status: string; error?: string }> {
-  const versionPrefix = `/v${version}`;
-  const url = `${apiUrl}${versionPrefix}/orgs/${encodeURIComponent(org)}/projects/${encodeURIComponent(project)}/synthesis/status`;
-  
-  const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  
-  if (!res.ok) {
-    throw new Error(`Status check failed: ${res.status}`);
-  }
-  
-  return res.json();
-}
-```
-
 ### MCP Tool Handler Updates
 ```typescript
 // index.ts - Update tool handlers to use versioned API
-import { getSynthesisFile, triggerSynthesis, getSynthesisStatus } from './api-client.js';
+import { getSynthesisFile } from './api-client.js';
 
 // Tool handlers use versioned API functions
 server.setRequestHandler(ListToolsRequestSchema, async () => {
@@ -112,7 +58,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           type: 'object',
           properties: {
             path: { type: 'string' },
-            version: { type: 'string', default: 'v1' }, // Add version parameter
           },
           required: ['path'],
         },
@@ -126,7 +71,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
   
   if (name === 'get_synthesis_file') {
-    const { path, version = 'v1' } = args as { path: string; version?: string };
+    const { path } = args as { path: string };
     
     try {
       const content = await getSynthesisFile(
@@ -135,7 +80,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         project,
         path,
         token,
-        version
       );
       
       return {
@@ -158,22 +102,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
 ## Configuration Management
 
-### Environment Configuration
-```typescript
-// Support for API version configuration
-const apiVersion = process.env.FABRICK_API_VERSION || 'v1';
-
-// Use in API client calls
-const content = await getSynthesisFile(
-  apiUrl,
-  organization,
-  project,
-  path,
-  token,
-  apiVersion
-);
-```
-
 ### MCP Server Configuration
 ```json
 {
@@ -183,7 +111,6 @@ const content = await getSynthesisFile(
       "args": ["@fabrick/mcp-server"],
       "env": {
         "FABRICK_API_URL": "https://api.fabrick.me",
-        "FABRICK_API_VERSION": "v1",
         "FABRICK_ORGANIZATION": "your-org",
         "FABRICK_PROJECT": "your-project",
         "FABRICK_TOKEN": "your-token"
@@ -196,27 +123,16 @@ const content = await getSynthesisFile(
 ## Tool Interface Updates
 
 ### Tool Definitions
-- Add optional version parameter to tool schemas
-- Maintain backward compatibility with existing tools
-- Default to v1 for all version-aware operations
+- Maintain existing tool schemas unchanged
+- All API calls use `/v1` prefix internally
 
 ### Error Handling
 ```typescript
-// Enhanced error handling for version issues
+// Error handling for API issues
 try {
-  const result = await getSynthesisFile(apiUrl, org, project, path, token, version);
+  const result = await getSynthesisFile(apiUrl, org, project, path, token);
   return { content: [{ type: 'text', text: result }] };
 } catch (error) {
-  if (error instanceof Error && error.message.includes('version')) {
-    return {
-      content: [{ 
-        type: 'text', 
-        text: `API version error: ${error.message}. Try using version 'v1' or check with your administrator.` 
-      }],
-      isError: true,
-    };
-  }
-  
   return {
     content: [{ 
       type: 'text', 
@@ -240,7 +156,7 @@ describe('getSynthesisFile', () => {
     });
     global.fetch = mockFetch;
 
-    await getSynthesisFile('https://api.test.com', 'org', 'project', 'file.txt', 'token', 'v1');
+    await getSynthesisFile('https://api.test.com', 'org', 'project', 'file.txt', 'token');
 
     expect(mockFetch).toHaveBeenCalledWith(
       'https://api.test.com/v1/orgs/org/projects/project/synthesis/file?path=file.txt',
@@ -249,26 +165,12 @@ describe('getSynthesisFile', () => {
       })
     );
   });
-
-  it('should handle version-related errors', async () => {
-    const mockFetch = jest.fn().mockResolvedValue({
-      ok: false,
-      status: 404,
-      json: () => Promise.resolve({ message: 'API version v2 not supported' }),
-    });
-    global.fetch = mockFetch;
-
-    await expect(
-      getSynthesisFile('https://api.test.com', 'org', 'project', 'file.txt', 'token', 'v2')
-    ).rejects.toThrow('API version v2 not supported');
-  });
 });
 ```
 
 ### Integration Tests
 - Test MCP tools with versioned API endpoints
-- Verify error handling for invalid versions
-- Test tool parameter validation including version
+- Verify error handling for API errors
 
 ### E2E Tests
 - Test full MCP workflow with versioned backend
@@ -291,18 +193,6 @@ describe('getSynthesisFile', () => {
 - Update installation and configuration guides
 - Document version compatibility matrix
 - Provide migration instructions for existing setups
-
-## Backward Compatibility
-
-### Existing Installations
-- Default to v1 for existing MCP server configurations
-- No breaking changes to tool interfaces
-- Graceful handling of missing version parameters
-
-### Migration Path
-- Existing tools continue to work without modification
-- Optional version parameter for future compatibility
-- Clear upgrade path documentation
 
 ## Security Considerations
 

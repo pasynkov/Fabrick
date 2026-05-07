@@ -39,26 +39,15 @@
 **Estimate**: 45 minutes
 **Files**: `applications/cli/src/api.service.ts`
 
-- [ ] Add version prefix logic to `request` method
+- [ ] Add `/v1` prefix logic to `request` method
 - [ ] Keep health endpoints unversioned
-- [ ] Add optional version configuration support
-- [ ] Update method signatures if needed
 
-### Task 2.2: Update CLI Configuration
-**Estimate**: 15 minutes
-**Files**: `applications/cli/src/config.js` or related config files
-
-- [ ] Add optional `apiVersion` configuration parameter
-- [ ] Default to 'v1' if not specified
-- [ ] Document configuration option
-
-### Task 2.3: Update CLI Tests
+### Task 2.2: Update CLI Tests
 **Estimate**: 30 minutes
 **Files**: `applications/cli/test/`, `applications/cli/src/*.spec.ts`
 
 - [ ] Update API service tests for versioned endpoints
 - [ ] Update integration tests to use `/v1` prefix
-- [ ] Verify configuration parsing works correctly
 
 ## Phase 3: Console Client Updates
 
@@ -92,25 +81,20 @@
 **Estimate**: 30 minutes
 **Files**: `applications/mcp/src/api-client.ts`
 
-- [ ] Add version parameter to `getSynthesisFile` function
-- [ ] Add other synthesis-related API functions with version support
-- [ ] Default to 'v1' for backward compatibility
+- [ ] Update `getSynthesisFile` to use `/v1` prefix in URL
 
 ### Task 4.2: Update MCP Tool Handlers
 **Estimate**: 30 minutes
 **Files**: `applications/mcp/src/index.ts`
 
-- [ ] Update tool handlers to use versioned API functions
-- [ ] Add version parameter to tool schemas
-- [ ] Enhance error handling for version issues
+- [ ] Update tool handlers to use updated versioned API functions
 
 ### Task 4.3: Update MCP Tests
 **Estimate**: 45 minutes
 **Files**: `applications/mcp/src/*.test.ts`, `applications/mcp/test/`
 
 - [ ] Update API client tests for versioned endpoints
-- [ ] Test tool handlers with version parameters
-- [ ] Add integration tests for version compatibility
+- [ ] Test tool handlers with versioned API
 
 ## Dependencies and Ordering
 

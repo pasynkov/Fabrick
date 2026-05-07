@@ -111,9 +111,9 @@ export class HealthController {
 - Future versions can be enabled/disabled via feature flags
 
 ### Client Configuration
-- CLI: Version can be configured via config file or environment variable
-- Console: Version hardcoded to v1 initially
-- MCP: Version parameter in API client functions
+- CLI: Version hardcoded to v1
+- Console: Version hardcoded to v1
+- MCP: Version hardcoded to v1
 
 ## Error Handling
 

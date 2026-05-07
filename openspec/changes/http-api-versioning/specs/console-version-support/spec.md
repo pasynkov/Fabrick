@@ -90,8 +90,8 @@ projects: {
 ```typescript
 // tokenRefresh.ts - ensure compatibility with versioned endpoints
 export async function doRefresh(refreshToken: string): Promise<TokenResponse> {
-  // Uses /v1/auth/refresh automatically via request function
-  const response = await fetch(`${API_URL}/auth/refresh`, {
+  // Must use /v1/auth/refresh - update to include version prefix
+  const response = await fetch(`${API_URL}/v1/auth/refresh`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ refresh_token: refreshToken }),

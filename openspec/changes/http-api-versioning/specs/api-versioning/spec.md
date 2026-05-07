@@ -16,7 +16,6 @@ Implement NestJS URI-based API versioning to support future API evolution while 
 - No performance impact on API response times
 - Backward compatibility not required (initial versioning implementation)
 - Must work with existing authentication and authorization mechanisms
-- Support for OpenAPI/Swagger documentation per version
 
 ## Implementation Details
 
@@ -85,18 +84,6 @@ export class HealthController {
 ### Version Mismatch
 - Graceful handling of client-server version mismatches
 - Informative error responses for debugging
-
-## Documentation
-
-### OpenAPI/Swagger
-- Generate versioned API documentation
-- Clear indication of supported versions
-- Migration guides for future versions
-
-### Client Documentation
-- Update API documentation with versioned endpoints
-- Provide migration guide for existing clients
-- Version compatibility matrix
 
 ## Deployment Considerations
 

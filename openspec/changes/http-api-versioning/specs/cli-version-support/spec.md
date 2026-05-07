@@ -7,8 +7,6 @@ Update the Fabrick CLI to support versioned API endpoints, ensuring compatibilit
 
 ### Functional Requirements
 - All API calls must use `/v1` prefix except health checks
-- Support configurable API version in CLI configuration
-- Maintain backward compatibility through configuration options
 - Error handling for unsupported API versions
 
 ### Non-Functional Requirements
@@ -23,12 +21,6 @@ Update the Fabrick CLI to support versioned API endpoints, ensuring compatibilit
 ```typescript
 // api.service.ts modifications
 export class ApiService {
-  private readonly apiVersion: string;
-
-  constructor(private readonly configService?: ConfigService) {
-    this.apiVersion = configService?.get('apiVersion') || 'v1';
-  }
-
   async request<T>(
     apiUrl: string,
     path: string,
@@ -38,22 +30,12 @@ export class ApiService {
     // Add version prefix to path unless it's health endpoint
     const versionedPath = path.startsWith('/health') 
       ? path 
-      : `/v${this.apiVersion}${path}`;
+      : `/v1${path}`;
     
     const base = apiUrl.trim().replace(/\/$/, '');
     const url = `${base}${versionedPath}`;
     // ... rest of implementation
   }
-}
-```
-
-### Configuration Support
-```typescript
-// Add to CLI configuration
-interface CliConfig {
-  apiUrl: string;
-  apiVersion?: string; // defaults to 'v1'
-  // ... other config options
 }
 ```
 
@@ -80,26 +62,6 @@ No changes required to command interfaces - version handling is transparent at t
 | Operation | Path | Notes |
 |-----------|------|-------|
 | Service health | `/health` | Remains unversioned |
-
-## Configuration Management
-
-### Environment Variables
-```bash
-# Optional API version override
-FABRICK_API_VERSION=v1
-
-# Existing variables remain unchanged
-FABRICK_API_URL=https://api.fabrick.me
-```
-
-### Config File Support
-```yaml
-# .fabrick/config.yaml
-apiUrl: https://api.fabrick.me
-apiVersion: v1  # optional, defaults to v1
-project: my-project
-organization: my-org
-```
 
 ## Error Handling
 
@@ -129,29 +91,14 @@ organization: my-org
 - Test all major CLI operations (init, login, push)
 - Verify configuration options work correctly
 
-## Backward Compatibility
-
-### Configuration Migration
-- Existing configurations without version specification use v1
-- No breaking changes to existing CLI installations
-- Smooth upgrade path for users
-
-### Command Interface
-- All CLI commands work identically
-- No changes to command syntax or options
-- Version handling transparent to end users
-
 ## Documentation Updates
 
 ### CLI Help Text
 - Update any hardcoded API endpoint references
 - Ensure help text reflects versioned API usage
-- Document new configuration options
 
 ### README and Guides
 - Update API endpoint examples
-- Document version configuration options
-- Provide troubleshooting for version issues
 
 ## Security Considerations
 

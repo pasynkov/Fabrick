@@ -29,7 +29,6 @@ import { CreateRepoDto } from './dto/create-repo.dto';
 import { FindOrCreateRepoDto } from './dto/find-or-create-repo.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
 import { UploadContextDto } from './dto/upload-context.dto';
-import { Project } from '../entities/project.entity';
 import { ReposService } from './repos.service';
 
 @Controller()
@@ -168,7 +167,7 @@ export class ReposController {
       }
     }
 
-    const project = repo.project as unknown as Project;
+    const project = await this.reposService.getProjectByRepo(repoId);
     if (project.autoSynthesisEnabled || dto.triggerSynthesis) {
       try {
         await this.synthesisService.triggerForProject(project.id, req.user.id);

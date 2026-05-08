@@ -15,7 +15,7 @@ import { FabrickAuthGuard } from './fabrick-auth.guard';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { RefreshAuthGuard } from './refresh-auth.guard';
 
-@Controller('auth')
+@Controller({ path: 'auth', version: '1' })
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 

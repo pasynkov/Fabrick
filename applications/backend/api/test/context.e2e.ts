@@ -1,4 +1,4 @@
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { INestApplication, ValidationPipe, VersioningType } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { DataSource } from 'typeorm';
 import * as request from 'supertest';
@@ -35,6 +35,7 @@ describe('Context Upload E2E', () => {
 
     app = module.createNestApplication();
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
+    app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });
     await app.init();
     dataSource = module.get(DataSource);
   });
@@ -50,24 +51,24 @@ describe('Context Upload E2E', () => {
 
   async function setup() {
     const regRes = await request(app.getHttpServer())
-      .post('/auth/register')
+      .post('/v1/auth/register')
       .send({ email: 'ctx@example.com', password: 'password123' });
     const token = regRes.body.access_token;
 
     const orgRes = await request(app.getHttpServer())
-      .post('/orgs')
+      .post('/v1/orgs')
       .set('Authorization', `Bearer ${token}`)
       .send({ name: 'Ctx Org' });
     const orgId = orgRes.body.id;
 
     const projRes = await request(app.getHttpServer())
-      .post(`/orgs/${orgId}/projects`)
+      .post(`/v1/orgs/${orgId}/projects`)
       .set('Authorization', `Bearer ${token}`)
       .send({ name: 'Ctx Project' });
     const projectId = projRes.body.id;
 
     const repoRes = await request(app.getHttpServer())
-      .post(`/projects/${projectId}/repos`)
+      .post(`/v1/projects/${projectId}/repos`)
       .set('Authorization', `Bearer ${token}`)
       .send({ name: 'ctx-repo', gitRemote: 'https://github.com/test/ctx-repo.git' });
     const repoId = repoRes.body.id;
@@ -83,7 +84,7 @@ describe('Context Upload E2E', () => {
       const zipBuffer = makeZip({ 'summary.md': '# Summary', 'details/arch.md': '## Arch' });
 
       await request(app.getHttpServer())
-        .post(`/repos/${repoId}/context`)
+        .post(`/v1/repos/${repoId}/context`)
         .set('Authorization', `Bearer ${token}`)
         .attach('file', zipBuffer, { filename: 'context.zip', contentType: 'application/zip' })
         .expect(201);
@@ -105,14 +106,14 @@ describe('Context Upload E2E', () => {
       const { token, repoId } = await setup();
 
       await request(app.getHttpServer())
-        .post(`/repos/${repoId}/context`)
+        .post(`/v1/repos/${repoId}/context`)
         .set('Authorization', `Bearer ${token}`)
         .expect(400);
     });
 
     it('returns 401 without auth', async () => {
       await request(app.getHttpServer())
-        .post('/repos/repoid/context')
+        .post('/v1/repos/repoid/context')
         .expect(401);
     });
   });
@@ -120,29 +121,29 @@ describe('Context Upload E2E', () => {
   describe('POST /repos/:repoId/context — backend-driven synthesis triggering', () => {
     async function setupWithApiKeyAndRepo() {
       const regRes = await request(app.getHttpServer())
-        .post('/auth/register')
+        .post('/v1/auth/register')
         .send({ email: 'synthctx@example.com', password: 'password123' });
       const token = regRes.body.access_token;
 
       const orgRes = await request(app.getHttpServer())
-        .post('/orgs')
+        .post('/v1/orgs')
         .set('Authorization', `Bearer ${token}`)
         .send({ name: 'Synth Ctx Org' });
       const orgId = orgRes.body.id;
 
       await request(app.getHttpServer())
-        .patch(`/orgs/${orgId}`)
+        .patch(`/v1/orgs/${orgId}`)
         .set('Authorization', `Bearer ${token}`)
         .send({ anthropicApiKey: 'sk-ant-test-key-for-e2e-testing' });
 
       const projRes = await request(app.getHttpServer())
-        .post(`/orgs/${orgId}/projects`)
+        .post(`/v1/orgs/${orgId}/projects`)
         .set('Authorization', `Bearer ${token}`)
         .send({ name: 'Synth Ctx Project' });
       const projectId = projRes.body.id;
 
       const repoRes = await request(app.getHttpServer())
-        .post(`/projects/${projectId}/repos`)
+        .post(`/v1/projects/${projectId}/repos`)
         .set('Authorization', `Bearer ${token}`)
         .send({ name: 'ctx-repo-synth', gitRemote: 'https://github.com/test/ctx-repo-synth.git' });
       const repoId = repoRes.body.id;
@@ -156,13 +157,13 @@ describe('Context Upload E2E', () => {
       const { token, orgId, projectId, repoId } = await setupWithApiKeyAndRepo();
 
       await request(app.getHttpServer())
-        .patch(`/orgs/${orgId}/projects/${projectId}`)
+        .patch(`/v1/orgs/${orgId}/projects/${projectId}`)
         .set('Authorization', `Bearer ${token}`)
         .send({ autoSynthesisEnabled: true });
 
       const zipBuffer = makeZip({ 'summary.md': '# Summary' });
       await request(app.getHttpServer())
-        .post(`/repos/${repoId}/context`)
+        .post(`/v1/repos/${repoId}/context`)
         .set('Authorization', `Bearer ${token}`)
         .attach('file', zipBuffer, { filename: 'context.zip', contentType: 'application/zip' })
         .expect(201);
@@ -177,7 +178,7 @@ describe('Context Upload E2E', () => {
 
       const zipBuffer = makeZip({ 'summary.md': '# Summary' });
       await request(app.getHttpServer())
-        .post(`/repos/${repoId}/context`)
+        .post(`/v1/repos/${repoId}/context`)
         .set('Authorization', `Bearer ${token}`)
         .attach('file', zipBuffer, { filename: 'context.zip', contentType: 'application/zip' })
         .field('triggerSynthesis', 'true')
@@ -193,7 +194,7 @@ describe('Context Upload E2E', () => {
 
       const zipBuffer = makeZip({ 'summary.md': '# Summary' });
       await request(app.getHttpServer())
-        .post(`/repos/${repoId}/context`)
+        .post(`/v1/repos/${repoId}/context`)
         .set('Authorization', `Bearer ${token}`)
         .attach('file', zipBuffer, { filename: 'context.zip', contentType: 'application/zip' })
         .expect(201);
@@ -207,13 +208,13 @@ describe('Context Upload E2E', () => {
       const { token, orgId, projectId, repoId } = await setupWithApiKeyAndRepo();
 
       await request(app.getHttpServer())
-        .patch(`/orgs/${orgId}/projects/${projectId}`)
+        .patch(`/v1/orgs/${orgId}/projects/${projectId}`)
         .set('Authorization', `Bearer ${token}`)
         .send({ autoSynthesisEnabled: true });
 
       const zipBuffer = makeZip({ 'summary.md': '# Summary' });
       await request(app.getHttpServer())
-        .post(`/repos/${repoId}/context`)
+        .post(`/v1/repos/${repoId}/context`)
         .set('Authorization', `Bearer ${token}`)
         .attach('file', zipBuffer, { filename: 'context.zip', contentType: 'application/zip' })
         .expect(201);

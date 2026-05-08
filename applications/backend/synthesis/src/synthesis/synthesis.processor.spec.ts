@@ -113,7 +113,7 @@ describe('SynthesisProcessor', () => {
 
       // Reported done via callback
       expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('/internal/synthesis/status'),
+        expect.stringContaining('/v1/internal/synthesis/status'),
         expect.objectContaining({
           method: 'POST',
           headers: expect.objectContaining({ Authorization: 'Bearer callback-token' }),

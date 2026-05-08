@@ -103,7 +103,7 @@ describe('ReposController — uploadContext synthesis triggering', () => {
         resolve({ buffer, fieldname: 'file', originalname: 'context.zip', mimetype: 'application/zip', size: buffer.length } as Express.Multer.File);
       });
       pass.on('error', reject);
-      const archive = archiver.default('zip');
+      const archive = archiver('zip');
       archive.pipe(pass);
       archive.append('hello', { name: 'test.txt' });
       archive.finalize().catch(reject);

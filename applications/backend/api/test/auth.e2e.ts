@@ -1,4 +1,4 @@
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { INestApplication, ValidationPipe, VersioningType } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { DataSource } from 'typeorm';
 import * as request from 'supertest';
@@ -23,6 +23,7 @@ describe('Auth E2E', () => {
 
     app = module.createNestApplication();
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
+    app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });
     await app.init();
     dataSource = module.get(DataSource);
   });
@@ -35,10 +36,10 @@ describe('Auth E2E', () => {
     await dataSource.query('TRUNCATE users, organizations, org_members, projects, repositories CASCADE');
   });
 
-  describe('POST /auth/register', () => {
+  describe('POST /v1/auth/register', () => {
     it('returns 201 with access_token and user (no refresh_token in session mode)', async () => {
       const res = await request(app.getHttpServer())
-        .post('/auth/register')
+        .post('/v1/auth/register')
         .send({ email: 'test@example.com', password: 'password123' })
         .expect(201);
 
@@ -50,7 +51,7 @@ describe('Auth E2E', () => {
 
     it('returns 201 with access_token, refresh_token and user when persistent=true', async () => {
       const res = await request(app.getHttpServer())
-        .post('/auth/register')
+        .post('/v1/auth/register')
         .send({ email: 'test@example.com', password: 'password123', persistent: true })
         .expect(201);
 
@@ -62,31 +63,31 @@ describe('Auth E2E', () => {
 
     it('returns 400 when password too short', async () => {
       await request(app.getHttpServer())
-        .post('/auth/register')
+        .post('/v1/auth/register')
         .send({ email: 'test@example.com', password: 'short' })
         .expect(400);
     });
 
     it('returns 409 on duplicate email', async () => {
       await request(app.getHttpServer())
-        .post('/auth/register')
+        .post('/v1/auth/register')
         .send({ email: 'dup@example.com', password: 'password123' });
 
       await request(app.getHttpServer())
-        .post('/auth/register')
+        .post('/v1/auth/register')
         .send({ email: 'dup@example.com', password: 'password123' })
         .expect(409);
     });
   });
 
-  describe('POST /auth/login', () => {
+  describe('POST /v1/auth/login', () => {
     it('returns 200 with access_token and no refresh_token in session mode', async () => {
       await request(app.getHttpServer())
-        .post('/auth/register')
+        .post('/v1/auth/register')
         .send({ email: 'login@example.com', password: 'password123' });
 
       const res = await request(app.getHttpServer())
-        .post('/auth/login')
+        .post('/v1/auth/login')
         .send({ email: 'login@example.com', password: 'password123' })
         .expect(200);
 
@@ -96,11 +97,11 @@ describe('Auth E2E', () => {
 
     it('returns 200 with refresh_token when persistent=true', async () => {
       await request(app.getHttpServer())
-        .post('/auth/register')
+        .post('/v1/auth/register')
         .send({ email: 'login-p@example.com', password: 'password123' });
 
       const res = await request(app.getHttpServer())
-        .post('/auth/login')
+        .post('/v1/auth/login')
         .send({ email: 'login-p@example.com', password: 'password123', persistent: true })
         .expect(200);
 
@@ -110,31 +111,31 @@ describe('Auth E2E', () => {
 
     it('returns 401 on wrong password', async () => {
       await request(app.getHttpServer())
-        .post('/auth/register')
+        .post('/v1/auth/register')
         .send({ email: 'login2@example.com', password: 'password123' });
 
       await request(app.getHttpServer())
-        .post('/auth/login')
+        .post('/v1/auth/login')
         .send({ email: 'login2@example.com', password: 'wrongpass' })
         .expect(401);
     });
 
     it('returns 401 on unknown email', async () => {
       await request(app.getHttpServer())
-        .post('/auth/login')
+        .post('/v1/auth/login')
         .send({ email: 'nobody@example.com', password: 'password123' })
         .expect(401);
     });
   });
 
-  describe('POST /auth/refresh', () => {
+  describe('POST /v1/auth/refresh', () => {
     it('returns 200 with new access_token and refresh_token on valid refresh token', async () => {
       const reg = await request(app.getHttpServer())
-        .post('/auth/register')
+        .post('/v1/auth/register')
         .send({ email: 'refresh@example.com', password: 'password123', persistent: true });
 
       const res = await request(app.getHttpServer())
-        .post('/auth/refresh')
+        .post('/v1/auth/refresh')
         .send({ refresh_token: reg.body.refresh_token })
         .expect(200);
 
@@ -145,44 +146,44 @@ describe('Auth E2E', () => {
 
     it('returns 401 on invalid refresh token', async () => {
       await request(app.getHttpServer())
-        .post('/auth/refresh')
+        .post('/v1/auth/refresh')
         .send({ refresh_token: 'invalid-token' })
         .expect(401);
     });
 
     it('returns 401 when refresh_token is missing', async () => {
       await request(app.getHttpServer())
-        .post('/auth/refresh')
+        .post('/v1/auth/refresh')
         .send({})
         .expect(401);
     });
   });
 
-  describe('POST /auth/logout', () => {
+  describe('POST /v1/auth/logout', () => {
     it('returns 200 with success: true', async () => {
       const res = await request(app.getHttpServer())
-        .post('/auth/logout')
+        .post('/v1/auth/logout')
         .expect(200);
 
       expect(res.body.success).toBe(true);
     });
   });
 
-  describe('POST /auth/revoke', () => {
+  describe('POST /v1/auth/revoke', () => {
     it('returns 200 when authenticated', async () => {
       const reg = await request(app.getHttpServer())
-        .post('/auth/register')
+        .post('/v1/auth/register')
         .send({ email: 'revoke@example.com', password: 'password123' });
 
       await request(app.getHttpServer())
-        .post('/auth/revoke')
+        .post('/v1/auth/revoke')
         .set('Authorization', `Bearer ${reg.body.access_token}`)
         .expect(200);
     });
 
     it('returns 401 when not authenticated', async () => {
       await request(app.getHttpServer())
-        .post('/auth/revoke')
+        .post('/v1/auth/revoke')
         .expect(401);
     });
   });

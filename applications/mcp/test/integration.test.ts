@@ -57,7 +57,7 @@ describe('MCP integration — getSynthesisFile against real HTTP', () => {
 
       expect(result).toBe('# Project Index\n\nSection 1');
       expect(requests[0].headers['authorization']).toBe('Bearer fbrk_test-token');
-      expect(requests[0].url).toContain('/orgs/myorg/projects/myproject/synthesis/file');
+      expect(requests[0].url).toContain('/v1/orgs/myorg/projects/myproject/synthesis/file');
       expect(requests[0].url).toContain('path=index.md');
     } finally {
       close();
@@ -98,7 +98,7 @@ describe('MCP integration — getSynthesisFile against real HTTP', () => {
     try {
       await getSynthesisFile(url, 'my org', 'my project', 'cross-cutting/envs.md', 'tok');
 
-      expect(requests[0].url).toContain('/orgs/my%20org/projects/my%20project/synthesis/file');
+      expect(requests[0].url).toContain('/v1/orgs/my%20org/projects/my%20project/synthesis/file');
       expect(requests[0].url).toContain('path=cross-cutting%2Fenvs.md');
     } finally {
       close();

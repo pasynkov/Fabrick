@@ -5,7 +5,7 @@ export async function getSynthesisFile(
   path: string,
   token: string,
 ): Promise<string> {
-  const url = `${apiUrl}/orgs/${encodeURIComponent(org)}/projects/${encodeURIComponent(project)}/synthesis/file?path=${encodeURIComponent(path)}`;
+  const url = `${apiUrl}/v1/orgs/${encodeURIComponent(org)}/projects/${encodeURIComponent(project)}/synthesis/file?path=${encodeURIComponent(path)}`;
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${token}` },
   });

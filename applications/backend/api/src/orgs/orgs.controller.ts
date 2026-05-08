@@ -20,7 +20,7 @@ import { CreateOrgDto } from './dto/create-org.dto';
 import { UpdateOrgDto } from './dto/update-org.dto';
 import { OrgsService } from './orgs.service';
 
-@Controller('orgs')
+@Controller({ path: 'orgs', version: '1' })
 @UseGuards(FabrickAuthGuard)
 export class OrgsController {
   constructor(

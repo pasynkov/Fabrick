@@ -33,7 +33,7 @@ describe('InitCommand — API call patterns', () => {
     const result = await apiService.get('http://localhost:3000', '/orgs', 'token');
 
     expect(global.fetch).toHaveBeenCalledWith(
-      'http://localhost:3000/orgs',
+      'http://localhost:3000/v1/orgs',
       expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer token' }) }),
     );
     expect(result).toEqual(orgs);
@@ -46,7 +46,7 @@ describe('InitCommand — API call patterns', () => {
     const result = await apiService.post('http://localhost:3000', '/orgs/org1/projects', 'token', { name: 'My Project' });
 
     expect(global.fetch).toHaveBeenCalledWith(
-      'http://localhost:3000/orgs/org1/projects',
+      'http://localhost:3000/v1/orgs/org1/projects',
       expect.objectContaining({ method: 'POST' }),
     );
     expect(result).toEqual(project);
@@ -64,7 +64,7 @@ describe('InitCommand — API call patterns', () => {
     );
 
     const [url, opts] = (global.fetch as jest.Mock).mock.calls[0];
-    expect(url).toBe('http://localhost:3000/repos/find-or-create');
+    expect(url).toBe('http://localhost:3000/v1/repos/find-or-create');
     expect(JSON.parse(opts.body)).toMatchObject({ gitRemote: 'https://github.com/org/myrepo.git', projectId: 'proj1' });
     expect(result).toEqual(repo);
   });

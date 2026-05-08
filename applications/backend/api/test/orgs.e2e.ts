@@ -1,4 +1,4 @@
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { INestApplication, ValidationPipe, VersioningType } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { DataSource } from 'typeorm';
 import * as request from 'supertest';
@@ -11,7 +11,7 @@ const mockQueue = { publish: jest.fn(), subscribe: jest.fn() };
 
 async function registerAndGetToken(server: any, email: string): Promise<string> {
   const res = await request(server)
-    .post('/auth/register')
+    .post('/v1/auth/register')
     .send({ email, password: 'password123' });
   return res.body.access_token;
 }
@@ -30,6 +30,7 @@ describe('Orgs E2E', () => {
 
     app = module.createNestApplication();
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
+    app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });
     await app.init();
     dataSource = module.get(DataSource);
   });
@@ -47,7 +48,7 @@ describe('Orgs E2E', () => {
       const token = await registerAndGetToken(app.getHttpServer(), 'user@example.com');
 
       const res = await request(app.getHttpServer())
-        .post('/orgs')
+        .post('/v1/orgs')
         .set('Authorization', `Bearer ${token}`)
         .send({ name: 'My Company' })
         .expect(201);
@@ -59,7 +60,7 @@ describe('Orgs E2E', () => {
 
     it('returns 401 without auth', async () => {
       await request(app.getHttpServer())
-        .post('/orgs')
+        .post('/v1/orgs')
         .send({ name: 'Unauthorized Org' })
         .expect(401);
     });
@@ -70,7 +71,7 @@ describe('Orgs E2E', () => {
       const token = await registerAndGetToken(app.getHttpServer(), 'rename@example.com');
 
       const orgRes = await request(app.getHttpServer())
-        .post('/orgs')
+        .post('/v1/orgs')
         .set('Authorization', `Bearer ${token}`)
         .send({ name: 'Old Name' })
         .expect(201);
@@ -79,7 +80,7 @@ describe('Orgs E2E', () => {
       const originalSlug = orgRes.body.slug;
 
       const res = await request(app.getHttpServer())
-        .patch(`/orgs/${orgId}`)
+        .patch(`/v1/orgs/${orgId}`)
         .set('Authorization', `Bearer ${token}`)
         .send({ name: 'New Name' })
         .expect(200);
@@ -93,19 +94,19 @@ describe('Orgs E2E', () => {
       const memberToken = await registerAndGetToken(app.getHttpServer(), 'member-rename@example.com');
 
       const orgRes = await request(app.getHttpServer())
-        .post('/orgs')
+        .post('/v1/orgs')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ name: 'Test Org' })
         .expect(201);
       const orgId = orgRes.body.id;
 
       await request(app.getHttpServer())
-        .post(`/orgs/${orgId}/members`)
+        .post(`/v1/orgs/${orgId}/members`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ email: 'member-rename@example.com', password: 'password123' });
 
       await request(app.getHttpServer())
-        .patch(`/orgs/${orgId}`)
+        .patch(`/v1/orgs/${orgId}`)
         .set('Authorization', `Bearer ${memberToken}`)
         .send({ name: 'Hacked Name' })
         .expect(403);
@@ -114,13 +115,13 @@ describe('Orgs E2E', () => {
     it('rejects empty name (400)', async () => {
       const token = await registerAndGetToken(app.getHttpServer(), 'emptyname@example.com');
       const orgRes = await request(app.getHttpServer())
-        .post('/orgs')
+        .post('/v1/orgs')
         .set('Authorization', `Bearer ${token}`)
         .send({ name: 'My Org' })
         .expect(201);
 
       await request(app.getHttpServer())
-        .patch(`/orgs/${orgRes.body.id}`)
+        .patch(`/v1/orgs/${orgRes.body.id}`)
         .set('Authorization', `Bearer ${token}`)
         .send({ name: '' })
         .expect(400);
@@ -129,13 +130,13 @@ describe('Orgs E2E', () => {
     it('rejects name over 128 chars (400)', async () => {
       const token = await registerAndGetToken(app.getHttpServer(), 'longname@example.com');
       const orgRes = await request(app.getHttpServer())
-        .post('/orgs')
+        .post('/v1/orgs')
         .set('Authorization', `Bearer ${token}`)
         .send({ name: 'My Org' })
         .expect(201);
 
       await request(app.getHttpServer())
-        .patch(`/orgs/${orgRes.body.id}`)
+        .patch(`/v1/orgs/${orgRes.body.id}`)
         .set('Authorization', `Bearer ${token}`)
         .send({ name: 'A'.repeat(129) })
         .expect(400);
@@ -147,7 +148,7 @@ describe('Orgs E2E', () => {
       const token = await registerAndGetToken(app.getHttpServer(), 'user2@example.com');
 
       const res = await request(app.getHttpServer())
-        .get('/orgs')
+        .get('/v1/orgs')
         .set('Authorization', `Bearer ${token}`)
         .expect(200);
 
@@ -158,7 +159,7 @@ describe('Orgs E2E', () => {
 
     it('returns 401 without auth', async () => {
       await request(app.getHttpServer())
-        .get('/orgs')
+        .get('/v1/orgs')
         .expect(401);
     });
   });

@@ -1,4 +1,4 @@
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { INestApplication, ValidationPipe, VersioningType } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { DataSource } from 'typeorm';
 import * as request from 'supertest';
@@ -23,6 +23,7 @@ describe('Repos E2E', () => {
 
     app = module.createNestApplication();
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
+    app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });
     await app.init();
     dataSource = module.get(DataSource);
   });
@@ -38,18 +39,18 @@ describe('Repos E2E', () => {
 
   async function setup() {
     const regRes = await request(app.getHttpServer())
-      .post('/auth/register')
+      .post('/v1/auth/register')
       .send({ email: 'repos@example.com', password: 'password123' });
     const token = regRes.body.access_token;
 
     const orgRes = await request(app.getHttpServer())
-      .post('/orgs')
+      .post('/v1/orgs')
       .set('Authorization', `Bearer ${token}`)
       .send({ name: 'Test Org' });
     const orgId = orgRes.body.id;
 
     const projRes = await request(app.getHttpServer())
-      .post(`/orgs/${orgId}/projects`)
+      .post(`/v1/orgs/${orgId}/projects`)
       .set('Authorization', `Bearer ${token}`)
       .send({ name: 'My Project' });
     const projectId = projRes.body.id;
@@ -60,17 +61,17 @@ describe('Repos E2E', () => {
   describe('POST /orgs/:orgId/projects', () => {
     it('creates project', async () => {
       const regRes = await request(app.getHttpServer())
-        .post('/auth/register')
+        .post('/v1/auth/register')
         .send({ email: 'proj@example.com', password: 'password123' });
       const token = regRes.body.access_token;
 
       const orgRes = await request(app.getHttpServer())
-        .post('/orgs')
+        .post('/v1/orgs')
         .set('Authorization', `Bearer ${token}`)
         .send({ name: 'Proj Org' });
 
       const res = await request(app.getHttpServer())
-        .post(`/orgs/${orgRes.body.id}/projects`)
+        .post(`/v1/orgs/${orgRes.body.id}/projects`)
         .set('Authorization', `Bearer ${token}`)
         .send({ name: 'My Project' })
         .expect(201);
@@ -85,7 +86,7 @@ describe('Repos E2E', () => {
       const { token, projectId } = await setup();
 
       const res = await request(app.getHttpServer())
-        .post(`/projects/${projectId}/repos`)
+        .post(`/v1/projects/${projectId}/repos`)
         .set('Authorization', `Bearer ${token}`)
         .send({ name: 'myrepo', gitRemote: 'https://github.com/test/myrepo.git' })
         .expect(201);
@@ -96,7 +97,7 @@ describe('Repos E2E', () => {
 
     it('returns 401 without auth', async () => {
       await request(app.getHttpServer())
-        .post('/projects/proj1/repos')
+        .post('/v1/projects/proj1/repos')
         .send({ name: 'myrepo', gitRemote: 'https://github.com/test/myrepo.git' })
         .expect(401);
     });
@@ -107,12 +108,12 @@ describe('Repos E2E', () => {
       const { token, orgId, projectId } = await setup();
 
       const listRes = await request(app.getHttpServer())
-        .get(`/orgs/${orgId}/projects`)
+        .get(`/v1/orgs/${orgId}/projects`)
         .set('Authorization', `Bearer ${token}`);
       const originalSlug = listRes.body.find((p: any) => p.id === projectId)?.slug;
 
       const res = await request(app.getHttpServer())
-        .patch(`/orgs/${orgId}/projects/${projectId}`)
+        .patch(`/v1/orgs/${orgId}/projects/${projectId}`)
         .set('Authorization', `Bearer ${token}`)
         .send({ name: 'Renamed Project' })
         .expect(200);
@@ -125,21 +126,21 @@ describe('Repos E2E', () => {
       const { orgId, projectId } = await setup();
 
       const memberReg = await request(app.getHttpServer())
-        .post('/auth/register')
+        .post('/v1/auth/register')
         .send({ email: 'proj-member@example.com', password: 'password123' });
       const memberToken = memberReg.body.access_token;
 
       const adminToken = (await request(app.getHttpServer())
-        .post('/auth/login')
+        .post('/v1/auth/login')
         .send({ email: 'repos@example.com', password: 'password123' })).body.access_token;
 
       await request(app.getHttpServer())
-        .post(`/orgs/${orgId}/members`)
+        .post(`/v1/orgs/${orgId}/members`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ email: 'proj-member@example.com', password: 'password123' });
 
       await request(app.getHttpServer())
-        .patch(`/orgs/${orgId}/projects/${projectId}`)
+        .patch(`/v1/orgs/${orgId}/projects/${projectId}`)
         .set('Authorization', `Bearer ${memberToken}`)
         .send({ name: 'Hacked' })
         .expect(403);
@@ -149,7 +150,7 @@ describe('Repos E2E', () => {
       const { token, orgId, projectId } = await setup();
 
       await request(app.getHttpServer())
-        .patch(`/orgs/${orgId}/projects/${projectId}`)
+        .patch(`/v1/orgs/${orgId}/projects/${projectId}`)
         .set('Authorization', `Bearer ${token}`)
         .send({ name: '' })
         .expect(400);
@@ -159,7 +160,7 @@ describe('Repos E2E', () => {
       const { token, orgId, projectId } = await setup();
 
       await request(app.getHttpServer())
-        .patch(`/orgs/${orgId}/projects/${projectId}`)
+        .patch(`/v1/orgs/${orgId}/projects/${projectId}`)
         .set('Authorization', `Bearer ${token}`)
         .send({ name: 'A'.repeat(129) })
         .expect(400);
@@ -172,12 +173,12 @@ describe('Repos E2E', () => {
       const gitRemote = 'https://github.com/test/findorcreate.git';
 
       const res1 = await request(app.getHttpServer())
-        .post('/repos/find-or-create')
+        .post('/v1/repos/find-or-create')
         .set('Authorization', `Bearer ${token}`)
         .send({ gitRemote, projectId });
 
       const res2 = await request(app.getHttpServer())
-        .post('/repos/find-or-create')
+        .post('/v1/repos/find-or-create')
         .set('Authorization', `Bearer ${token}`)
         .send({ gitRemote, projectId });
 
@@ -190,7 +191,7 @@ describe('Repos E2E', () => {
       const { token, projectId } = await setup();
 
       const res = await request(app.getHttpServer())
-        .get(`/projects/${projectId}`)
+        .get(`/v1/projects/${projectId}`)
         .set('Authorization', `Bearer ${token}`)
         .expect(200);
 
@@ -201,7 +202,7 @@ describe('Repos E2E', () => {
       const { token, orgId, projectId } = await setup();
 
       const res = await request(app.getHttpServer())
-        .patch(`/orgs/${orgId}/projects/${projectId}`)
+        .patch(`/v1/orgs/${orgId}/projects/${projectId}`)
         .set('Authorization', `Bearer ${token}`)
         .send({ autoSynthesisEnabled: true })
         .expect(200);
@@ -213,12 +214,12 @@ describe('Repos E2E', () => {
       const { token, orgId, projectId } = await setup();
 
       await request(app.getHttpServer())
-        .patch(`/orgs/${orgId}/projects/${projectId}`)
+        .patch(`/v1/orgs/${orgId}/projects/${projectId}`)
         .set('Authorization', `Bearer ${token}`)
         .send({ autoSynthesisEnabled: true });
 
       const res = await request(app.getHttpServer())
-        .patch(`/orgs/${orgId}/projects/${projectId}`)
+        .patch(`/v1/orgs/${orgId}/projects/${projectId}`)
         .set('Authorization', `Bearer ${token}`)
         .send({ autoSynthesisEnabled: false })
         .expect(200);
@@ -230,12 +231,12 @@ describe('Repos E2E', () => {
       const { token, orgId, projectId } = await setup();
 
       await request(app.getHttpServer())
-        .patch(`/orgs/${orgId}/projects/${projectId}`)
+        .patch(`/v1/orgs/${orgId}/projects/${projectId}`)
         .set('Authorization', `Bearer ${token}`)
         .send({ autoSynthesisEnabled: true });
 
       const res = await request(app.getHttpServer())
-        .get(`/projects/${projectId}`)
+        .get(`/v1/projects/${projectId}`)
         .set('Authorization', `Bearer ${token}`)
         .expect(200);
 

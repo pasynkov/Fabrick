@@ -13,8 +13,8 @@ describe('PushCommand — zip and upload logic', () => {
   it('constructs correct upload URL from config', () => {
     const apiUrl = 'http://localhost:3000';
     const repoId = 'repo123';
-    const url = `${apiUrl}/repos/${repoId}/context`;
-    expect(url).toBe('http://localhost:3000/repos/repo123/context');
+    const url = `${apiUrl}/v1/repos/${repoId}/context`;
+    expect(url).toBe('http://localhost:3000/v1/repos/repo123/context');
   });
 
   it('sends POST with Authorization header', async () => {
@@ -28,14 +28,14 @@ describe('PushCommand — zip and upload logic', () => {
     const form = new FormData();
     form.append('file', new Blob([Buffer.from('zipdata')], { type: 'application/zip' }) as globalThis.Blob, 'context.zip');
 
-    await fetch(`${apiUrl}/repos/${repoId}/context`, {
+    await fetch(`${apiUrl}/v1/repos/${repoId}/context`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
       body: form,
     });
 
     const [calledUrl, opts] = (global.fetch as jest.Mock).mock.calls[0];
-    expect(calledUrl).toBe('http://localhost:3000/repos/repo123/context');
+    expect(calledUrl).toBe('http://localhost:3000/v1/repos/repo123/context');
     expect(opts.headers['Authorization']).toBe('Bearer mytoken');
     expect(opts.method).toBe('POST');
   });

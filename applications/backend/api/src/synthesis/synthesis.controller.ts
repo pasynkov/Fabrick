@@ -19,7 +19,7 @@ import { FabrickAuthGuard } from '../auth/fabrick-auth.guard';
 import { SynthesisCallbackDto } from './dto/synthesis-callback.dto';
 import { SynthesisService } from './synthesis.service';
 
-@Controller()
+@Controller({ version: '1' })
 export class SynthesisController {
   constructor(private readonly synthesisService: SynthesisService) {}
 

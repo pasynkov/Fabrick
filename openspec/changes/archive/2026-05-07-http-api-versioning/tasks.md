@@ -6,32 +6,32 @@
 **Estimate**: 30 minutes
 **Files**: `applications/backend/api/src/main.ts`, `applications/backend/api/src/main.azure.ts`
 
-- [ ] Import `VersioningType` from `@nestjs/common`
-- [ ] Add versioning configuration with default version 'v1'
-- [ ] Update both local and Azure main files
+- [x] Import `VersioningType` from `@nestjs/common`
+- [x] Add versioning configuration with default version 'v1'
+- [x] Update both local and Azure main files
 
 ### Task 1.2: Add Version Decorators to Controllers
 **Estimate**: 45 minutes
 **Files**: All controller files except `health.controller.ts`
 
-- [ ] Add `@Version('1')` decorator to `AuthController`
-- [ ] Add `@Version('1')` decorator to `OrgsController`  
-- [ ] Add `@Version('1')` decorator to `ReposController`
-- [ ] Add `@Version('1')` decorator to `SynthesisController`
-- [ ] Add `@Version('1')` decorator to `ContextController`
-- [ ] Add `@Version('1')` decorator to `SkillsController`
-- [ ] Verify `HealthController` remains unversioned
+- [x] Add `@Version('1')` decorator to `AuthController`
+- [x] Add `@Version('1')` decorator to `OrgsController`  
+- [x] Add `@Version('1')` decorator to `ReposController`
+- [x] Add `@Version('1')` decorator to `SynthesisController`
+- [x] Add `@Version('1')` decorator to `ContextController`
+- [x] Add `@Version('1')` decorator to `SkillsController`
+- [x] Verify `HealthController` remains unversioned
 
 ### Task 1.3: Update Backend Tests
 **Estimate**: 60 minutes
 **Files**: All test files in `applications/backend/api/test/`
 
-- [ ] Update auth.e2e.ts to use `/v1/auth` endpoints
-- [ ] Update orgs.e2e.ts to use `/v1/orgs` endpoints
-- [ ] Update repos.e2e.ts to use `/v1` prefixed endpoints
-- [ ] Update synthesis.e2e.ts to use `/v1` prefixed endpoints
-- [ ] Update context.e2e.ts to use `/v1` prefixed endpoints
-- [ ] Ensure health.e2e.ts continues to use `/health` (unversioned)
+- [x] Update auth.e2e.ts to use `/v1/auth` endpoints
+- [x] Update orgs.e2e.ts to use `/v1/orgs` endpoints
+- [x] Update repos.e2e.ts to use `/v1` prefixed endpoints
+- [x] Update synthesis.e2e.ts to use `/v1` prefixed endpoints
+- [x] Update context.e2e.ts to use `/v1` prefixed endpoints
+- [x] Ensure health.e2e.ts continues to use `/health` (unversioned)
 
 ## Phase 2: CLI Client Updates
 
@@ -39,15 +39,15 @@
 **Estimate**: 45 minutes
 **Files**: `applications/cli/src/api.service.ts`
 
-- [ ] Add `/v1` prefix logic to `request` method
-- [ ] Keep health endpoints unversioned
+- [x] Add `/v1` prefix logic to `request` method
+- [x] Keep health endpoints unversioned
 
 ### Task 2.2: Update CLI Tests
 **Estimate**: 30 minutes
 **Files**: `applications/cli/test/`, `applications/cli/src/*.spec.ts`
 
-- [ ] Update API service tests for versioned endpoints
-- [ ] Update integration tests to use `/v1` prefix
+- [x] Update API service tests for versioned endpoints
+- [x] Update integration tests to use `/v1` prefix
 
 ## Phase 3: Console Client Updates
 
@@ -55,25 +55,25 @@
 **Estimate**: 45 minutes
 **Files**: `applications/console/src/api.ts`
 
-- [ ] Add version prefix logic to `request` function
-- [ ] Update all API endpoint calls to include `/v1`
-- [ ] Maintain existing error handling and token refresh
+- [x] Add version prefix logic to `request` function
+- [x] Update all API endpoint calls to include `/v1`
+- [x] Maintain existing error handling and token refresh
 
 ### Task 3.2: Update Token Refresh Logic
 **Estimate**: 15 minutes
 **Files**: `applications/console/src/tokenRefresh.ts`
 
-- [ ] Ensure refresh endpoints use versioned URLs
-- [ ] Test token refresh flow with versioned API
-- [ ] Verify session management compatibility
+- [x] Ensure refresh endpoints use versioned URLs
+- [x] Test token refresh flow with versioned API
+- [x] Verify session management compatibility
 
 ### Task 3.3: Update Console Tests
 **Estimate**: 30 minutes
 **Files**: Any test files in `applications/console/`
 
-- [ ] Update API mocks to use versioned endpoints
-- [ ] Test authentication flows with versioned API
-- [ ] Verify error handling with version changes
+- [x] Update API mocks to use versioned endpoints
+- [x] Test authentication flows with versioned API
+- [x] Verify error handling with version changes
 
 ## Phase 4: MCP Server Updates
 
@@ -81,20 +81,20 @@
 **Estimate**: 30 minutes
 **Files**: `applications/mcp/src/api-client.ts`
 
-- [ ] Update `getSynthesisFile` to use `/v1` prefix in URL
+- [x] Update `getSynthesisFile` to use `/v1` prefix in URL
 
 ### Task 4.2: Update MCP Tool Handlers
 **Estimate**: 30 minutes
 **Files**: `applications/mcp/src/index.ts`
 
-- [ ] Update tool handlers to use updated versioned API functions
+- [x] Update tool handlers to use updated versioned API functions
 
 ### Task 4.3: Update MCP Tests
 **Estimate**: 45 minutes
 **Files**: `applications/mcp/src/*.test.ts`, `applications/mcp/test/`
 
-- [ ] Update API client tests for versioned endpoints
-- [ ] Test tool handlers with versioned API
+- [x] Update API client tests for versioned endpoints
+- [x] Test tool handlers with versioned API
 
 ## Dependencies and Ordering
 
@@ -120,9 +120,9 @@
 - Rollback plan if version-related issues arise
 
 ### Validation Checklist
-- [ ] All versioned endpoints return expected responses
-- [ ] Health endpoint remains unversioned and functional
-- [ ] Authentication and authorization work with versioned endpoints
-- [ ] Client applications can authenticate and perform operations
-- [ ] Token refresh flows work correctly
-- [ ] Error handling provides clear messages for version issues
+- [x] All versioned endpoints return expected responses
+- [x] Health endpoint remains unversioned and functional
+- [x] Authentication and authorization work with versioned endpoints
+- [x] Client applications can authenticate and perform operations
+- [x] Token refresh flows work correctly
+- [x] Error handling provides clear messages for version issues

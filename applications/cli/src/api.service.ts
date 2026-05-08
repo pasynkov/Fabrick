@@ -14,7 +14,8 @@ export class ApiService {
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
     const base = apiUrl.trim().replace(/\/$/, '');
-    const url = `${base}${path}`;
+    const versionedPath = path.startsWith('/health') ? path : `/v1${path}`;
+    const url = `${base}${versionedPath}`;
     let res: Response;
     try {
       res = await fetch(url, {
@@ -40,7 +41,8 @@ export class ApiService {
 
   async download(apiUrl: string, path: string, token: string): Promise<Buffer> {
     const base = apiUrl.trim().replace(/\/$/, '');
-    const url = `${base}${path}`;
+    const versionedPath = path.startsWith('/health') ? path : `/v1${path}`;
+    const url = `${base}${versionedPath}`;
     let res: Response;
     try {
       res = await fetch(url, {

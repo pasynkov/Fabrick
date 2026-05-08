@@ -1,5 +1,5 @@
 import * as appInsights from 'applicationinsights';
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { INestApplication, ValidationPipe, VersioningType } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 
@@ -14,6 +14,7 @@ export async function createApp(): Promise<INestApplication> {
     },
   });
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
+  app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });
   await app.init();
   return app;
 }

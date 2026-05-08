@@ -5,21 +5,17 @@ import { AuthModule } from '../auth/auth.module';
 import { OrgMember } from '../entities/org-member.entity';
 import { Organization } from '../entities/organization.entity';
 import { Project } from '../entities/project.entity';
-import { Repository } from '../entities/repository.entity';
 import { WikiPage } from '../entities/wiki-page.entity';
-import { QueueModule } from '../queue/queue.module';
-import { SynthesisController } from './synthesis.controller';
-import { SynthesisService } from './synthesis.service';
+import { SearchController } from './search.controller';
+import { SearchService } from './search.service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Project, Organization, OrgMember, Repository, WikiPage]),
-    QueueModule,
-    AuthModule,
+    TypeOrmModule.forFeature([Organization, Project, WikiPage, OrgMember]),
     ApiKeysModule,
+    AuthModule,
   ],
-  controllers: [SynthesisController],
-  providers: [SynthesisService],
-  exports: [SynthesisService],
+  controllers: [SearchController],
+  providers: [SearchService],
 })
-export class SynthesisModule {}
+export class SearchModule {}

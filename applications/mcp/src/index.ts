@@ -3,7 +3,7 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { decode } from 'jsonwebtoken';
-import { getSynthesisFile } from './api-client.js';
+import { searchProject, getToolDescription } from './api-client.js';
 
 const token = process.env.FABRICK_TOKEN;
 const apiUrl = process.env.FABRICK_API_URL;
@@ -28,6 +28,15 @@ if (!payload || typeof payload.org !== 'string' || typeof payload.project !== 's
 const org = payload.org;
 const project = payload.project;
 
+const FALLBACK_DESCRIPTION = 'Search the project knowledge base. Ask any question about architecture, APIs, entities, flows, configuration.';
+
+let toolDescription = FALLBACK_DESCRIPTION;
+try {
+  toolDescription = await getToolDescription(apiUrl, org, project, token);
+} catch {
+  // Use fallback if no synthesis yet
+}
+
 const server = new Server(
   { name: 'fabrick', version: '1.0.0' },
   { capabilities: { tools: {} } },
@@ -36,19 +45,14 @@ const server = new Server(
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: [
     {
-      name: 'get_synthesis_index',
-      description: 'Get the synthesis index for the current project. Always call this first to understand what files are available.',
-      inputSchema: { type: 'object', properties: {} },
-    },
-    {
-      name: 'get_synthesis_file',
-      description: 'Get a specific synthesis file by path (e.g. "apps/backend.md", "cross-cutting/envs.md").',
+      name: 'fabrick_search',
+      description: toolDescription,
       inputSchema: {
         type: 'object',
         properties: {
-          path: { type: 'string', description: 'File path relative to synthesis root' },
+          question: { type: 'string', description: 'Your question about the project' },
         },
-        required: ['path'],
+        required: ['question'],
       },
     },
   ],
@@ -57,23 +61,15 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
 
-  if (name === 'get_synthesis_index') {
+  if (name === 'fabrick_search') {
+    const question = (args as Record<string, unknown>)?.question as string | undefined;
+    if (!question) return { content: [{ type: 'text', text: 'Error: question argument is required' }] };
     try {
-      const text = await getSynthesisFile(apiUrl!, org, project, 'index.md', token!);
-      return { content: [{ type: 'text', text }] };
-    } catch {
-      return { content: [{ type: 'text', text: `Synthesis not available for project '${project}'. Run synthesis first.` }] };
-    }
-  }
-
-  if (name === 'get_synthesis_file') {
-    const path = (args as Record<string, unknown>)?.path as string | undefined;
-    if (!path) return { content: [{ type: 'text', text: 'Error: path argument is required' }] };
-    try {
-      const text = await getSynthesisFile(apiUrl!, org, project, path, token!);
-      return { content: [{ type: 'text', text }] };
-    } catch {
-      return { content: [{ type: 'text', text: `File '${path}' not found in synthesis for project '${project}'.` }] };
+      const result = await searchProject(apiUrl!, org, project, question, token!);
+      const sourcesText = result.sources.length > 0 ? `\n\n**Sources:** ${result.sources.join(', ')}` : '';
+      return { content: [{ type: 'text', text: result.answer + sourcesText }] };
+    } catch (err: any) {
+      return { content: [{ type: 'text', text: `Search failed: ${err?.message ?? 'Unknown error'}` }] };
     }
   }
 

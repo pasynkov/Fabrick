@@ -1,115 +1,142 @@
 ---
 name: fabrick-analyze
-description: Extract structured context from a repository into .fabrick/context/ — framework detection, connection points (inbound + outbound, all protocols), env vars, domain entities and business rules, AI-generated summaries. Supports polyglot and DevOps repos. Handles monorepos. Use when the user wants to analyze their repo before pushing context to Fabrick.
+description: Build or update the repo wiki (.fabrick/wiki/). Uses CLI for hash-based
+  change detection, then LLM reads source code and generates wiki pages directly.
+  Supports monorepos — produces per-app wikis.
 ---
 
-Analyze the current repository and produce structured context in `.fabrick/context/`. Run in the root of the target repository.
-
-**Do not read README files — intentionally excluded as stale source.**
-
----
-
-## Phase 0: Setup
-
-1. Get repo name:
-   ```bash
-   basename $(pwd)
-   ```
-
-2. Read patterns library (may be empty):
-   ```
-   .claude/skills/fabrick-analyze/patterns.md
-   ```
-
-3. Detect monorepo:
-   - Check for `nx.json`, `turbo.json`, `lerna.json` → confirmed
-   - Check for `go.work` → Go monorepo
-   - Check `apps/` or `packages/` for 2+ subdirs each with manifest
-   - Check `pom.xml` for `<modules>` → Java multi-module
-
-   If monorepo: enumerate apps (subdirs with own manifests under `apps/`/`packages/` or `<modules>` entries).
-
-4. Create output dirs:
-   - Single app: `mkdir -p .fabrick/context .fabrick/tmp`
-   - Monorepo: `mkdir -p .fabrick/context/apps/<app-name> .fabrick/tmp` for each app
-
-5. Write `.fabrick/config.yaml`:
-   ```yaml
-   project: <folder-name>
-   repo: <folder-name>
-   backendUrl: http://localhost:3000
-   ```
+Analyze the current repository and produce a wiki in `.fabrick/wiki/`. Run in the root of the target repository.
 
 ---
 
-## Phase 1: Scanner (Haiku)
-
-For each app (or the single app), invoke the scanner agent:
-
-1. Write task file `.fabrick/tmp/scanner-task.md`:
-   ```
-   You are the fabrick-analyze scanner agent. Read and follow scanner.md exactly.
-
-   Repo root: <absolute path>
-   App directory: <app subdir, or "." for single app>
-   Output file: .fabrick/tmp/raw-extraction.yaml
-
-   ---
-   [paste full contents of .claude/skills/fabrick-analyze/scanner.md here]
-
-   ---
-   ## Known Patterns
-   [paste full contents of .claude/skills/fabrick-analyze/patterns.md here, or "(none)" if empty]
-   ```
-
-2. Invoke Haiku scanner:
-   ```bash
-   claude -p "$(cat .fabrick/tmp/scanner-task.md)" --model claude-haiku-4-5-20251001 --dangerously-skip-permissions
-   ```
-
-3. Verify `.fabrick/tmp/raw-extraction.yaml` was written. If missing or empty, log error and continue with empty extraction.
-
-For monorepos: run scanner once per app, merge outputs before synthesis.
-
----
-
-## Phase 2: Synthesis (current session)
-
-Read `.fabrick/tmp/raw-extraction.yaml`. Follow `synthesis.md` exactly to produce all final output files.
-
----
-
-## Phase 3: Cross-App Pass (monorepos only)
-
-After synthesis completes for all apps:
-- Compare `connection_points.outbound` entries across apps for matching `inbound` entries
-- Match by: topic/subject (messaging) or path+method (HTTP)
-- Write `.fabrick/context/cross-app.yaml`
-
----
-
-## Phase 4: Cleanup
+## Step 1: Scan for changes
 
 ```bash
-rm -rf .fabrick/tmp
+npx @fabrick/cli scan
 ```
+
+This outputs JSON to stdout:
+```json
+{
+  "mode": "full" | "incremental",
+  "changed": ["src/models/user.ts", ...],
+  "added": ["src/new-thing.ts", ...],
+  "deleted": ["src/old-thing.ts", ...],
+  "totalFiles": 342
+}
+```
+
+- If `mode=full` and `totalFiles=0`: nothing to analyze, stop.
+- If `mode=incremental` and `changed=[] added=[] deleted=[]`: wiki is up to date, stop and report.
 
 ---
 
-## Output Checklist
+## Step 2: Detect project structure
 
-**Single app:**
-- [ ] `.fabrick/config.yaml`
-- [ ] `.fabrick/context/meta.yaml`
-- [ ] `.fabrick/context/connection_points.yaml`
-- [ ] `.fabrick/context/envs.yaml`
-- [ ] `.fabrick/context/overview.md`
-- [ ] `.fabrick/context/logic.md`
-- [ ] `.fabrick/context/domain.md` (skip for infrastructure repos)
+Look at the file paths from scan output. Check for monorepo indicators:
+- Multiple `apps/*/` or `packages/*/` directories each with their own `package.json`
+- `nx.json`, `turbo.json`, `lerna.json`, or `go.work` at root
+- `pom.xml` with `<modules>`
 
-**Monorepo:**
-- [ ] `.fabrick/context/meta.yaml` (repo-level)
-- [ ] `.fabrick/context/cross-app.yaml`
-- [ ] `.fabrick/context/apps/<app-name>/` — all above files per app
+**Single app**: wiki goes in `.fabrick/wiki/`  
+**Monorepo**: wiki goes in `apps/<app-name>/.fabrick/wiki/` per app
 
-Report written files and any that could not be generated (with reason).
+---
+
+## Step 3: Read source files
+
+**Full mode**: read all source files (or representative key files for very large repos)
+
+**Incremental mode**:
+1. Read `.fabrick/wiki/source-map.json` (or per-app path)
+2. Find which wiki pages reference the changed/added files
+3. Read only: changed/added source files + affected wiki pages + `index.md`
+
+**Skip**: `node_modules/`, `.git/`, `.fabrick/`, `dist/`, `build/`, `coverage/`
+
+---
+
+## Step 4: Generate or update wiki pages
+
+Write `.md` files to `.fabrick/wiki/` (or per-app path) following this exact format:
+
+```markdown
+---
+slug: entities/user
+category: entities
+sources:
+  - src/models/user.ts
+  - src/dto/user.dto.ts
+related:
+  - entities/order
+  - logic/auth-flow
+updated: 2026-05-08
+---
+
+# User
+
+[markdown content describing this concept]
+
+## Related Pages
+- [Order](../entities/order.md) — User has many Orders
+- [Auth Flow](../logic/auth-flow.md) — login/register uses User
+```
+
+**Taxonomy** (starter categories — add custom ones if the codebase warrants):
+- `entities/` — domain models, data structures, DB schemas
+- `logic/` — business flows, algorithms, processes
+- `contracts/` — API endpoints, request/response schemas
+- `transport/` — messaging topics/events, queues, gRPC
+- `config/` — environment variables grouped by concern
+- Custom categories (e.g. `middleware/`, `auth/`, `integrations/`) if useful
+
+**index.md** (required):
+```markdown
+# Wiki Index
+
+## Entities
+- [User](entities/user.md) — Core user model with email auth
+- [Order](entities/order.md) — Purchase order with line items
+
+## Logic
+- [Auth Flow](logic/auth-flow.md) — Login, register, JWT lifecycle
+
+## Contracts
+- [REST API](contracts/rest-api.md) — All HTTP endpoints
+
+...
+```
+
+**Incremental**: update only affected pages + index.md. Delete pages for removed concepts.
+
+**Monorepo**: create a separate wiki per app. Each wiki is independent with its own taxonomy.
+
+---
+
+## Step 5: Rebuild metadata
+
+For single app:
+```bash
+npx @fabrick/cli rebuild-source-map
+```
+
+For monorepo (run once per app):
+```bash
+npx @fabrick/cli rebuild-source-map --wiki-path apps/api/.fabrick/wiki
+npx @fabrick/cli rebuild-source-map --wiki-path apps/frontend/.fabrick/wiki
+```
+
+This writes `source-map.json` and `hashmap.json` to each wiki directory.
+
+---
+
+## Output checklist
+
+- [ ] `.fabrick/wiki/index.md` (or per-app)
+- [ ] `.fabrick/wiki/hashmap.json`
+- [ ] `.fabrick/wiki/source-map.json`
+- [ ] Category directories with `.md` pages
+- [ ] Each page has valid frontmatter (slug, category, sources, related, updated)
+- [ ] Each page has Related Pages section
+
+Report written pages and any that could not be generated.

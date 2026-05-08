@@ -1,8 +1,8 @@
-// Integration test: MCP tool handlers → getSynthesisFile → API
+// Integration test: MCP tool handlers → searchProject → API
 // Uses a real HTTP server (http.createServer) to mock the Fabrick API
 
 import * as http from 'http';
-import { getSynthesisFile } from '../src/api-client.js';
+import { searchProject, getToolDescription } from '../src/api-client.js';
 
 // Restore native fetch (Node 18+) so this integration test makes real HTTP calls.
 // Other test files set global.fetch = jest.fn() — reset it here.
@@ -13,26 +13,31 @@ beforeAll(() => {
   }
 });
 
-function startMockApiServer(responses: Record<string, { status: number; body: string }>): Promise<{
+function startMockApiServer(responses: Record<string, { status: number; body: string; contentType?: string }>): Promise<{
   url: string;
   close: () => void;
-  requests: Array<{ url: string; headers: Record<string, string> }>;
+  requests: Array<{ url: string; headers: Record<string, string>; body: string }>;
 }> {
-  const requests: Array<{ url: string; headers: Record<string, string> }> = [];
+  const requests: Array<{ url: string; headers: Record<string, string>; body: string }> = [];
 
   return new Promise((resolve) => {
     const server = http.createServer((req, res) => {
-      requests.push({
-        url: req.url || '',
-        headers: req.headers as Record<string, string>,
+      let body = '';
+      req.on('data', (chunk) => { body += chunk; });
+      req.on('end', () => {
+        requests.push({
+          url: req.url || '',
+          headers: req.headers as Record<string, string>,
+          body,
+        });
+
+        const key = req.url || '';
+        const match = Object.keys(responses).find((pattern) => key.includes(pattern));
+        const response = match ? responses[match] : { status: 404, body: 'Not found', contentType: 'text/plain' };
+
+        res.writeHead(response.status, { 'Content-Type': response.contentType ?? 'application/json' });
+        res.end(response.body);
       });
-
-      const key = req.url || '';
-      const match = Object.keys(responses).find((pattern) => key.includes(pattern));
-      const response = match ? responses[match] : { status: 404, body: 'Not found' };
-
-      res.writeHead(response.status, { 'Content-Type': 'text/plain' });
-      res.end(response.body);
     });
 
     server.listen(0, '127.0.0.1', () => {
@@ -46,31 +51,35 @@ function startMockApiServer(responses: Record<string, { status: number; body: st
   });
 }
 
-describe('MCP integration — getSynthesisFile against real HTTP', () => {
-  it('fetches synthesis index from real HTTP server', async () => {
+describe('MCP integration — searchProject against real HTTP', () => {
+  it('posts question and returns answer from real HTTP server', async () => {
+    const responseBody = JSON.stringify({ answer: 'Auth uses JWT', sources: ['logic/auth-flow'] });
     const { url, close, requests } = await startMockApiServer({
-      '/synthesis/file': { status: 200, body: '# Project Index\n\nSection 1' },
+      '/search': { status: 200, body: responseBody },
     });
 
     try {
-      const result = await getSynthesisFile(url, 'myorg', 'myproject', 'index.md', 'fbrk_test-token');
+      const result = await searchProject(url, 'myorg', 'myproject', 'how does auth work?', 'fbrk_test-token');
 
-      expect(result).toBe('# Project Index\n\nSection 1');
+      expect(result.answer).toBe('Auth uses JWT');
+      expect(result.sources).toEqual(['logic/auth-flow']);
       expect(requests[0].headers['authorization']).toBe('Bearer fbrk_test-token');
-      expect(requests[0].url).toContain('/v1/orgs/myorg/projects/myproject/synthesis/file');
-      expect(requests[0].url).toContain('path=index.md');
+      expect(requests[0].url).toBe('/v1/orgs/myorg/projects/myproject/search');
+      expect(JSON.parse(requests[0].body)).toEqual({ question: 'how does auth work?' });
     } finally {
       close();
     }
   });
 
-  it('throws on 404 from real HTTP server', async () => {
-    const { url, close } = await startMockApiServer({});
+  it('throws on 400 from real HTTP server', async () => {
+    const { url, close } = await startMockApiServer({
+      '/search': { status: 400, body: 'Bad request' },
+    });
 
     try {
       await expect(
-        getSynthesisFile(url, 'org', 'proj', 'missing.md', 'fbrk_tok'),
-      ).rejects.toThrow('API returned 404');
+        searchProject(url, 'org', 'proj', 'q', 'fbrk_tok'),
+      ).rejects.toThrow('Search API returned 400');
     } finally {
       close();
     }
@@ -78,13 +87,13 @@ describe('MCP integration — getSynthesisFile against real HTTP', () => {
 
   it('throws on 401 (token rejected)', async () => {
     const { url, close } = await startMockApiServer({
-      '/synthesis/file': { status: 401, body: 'Unauthorized' },
+      '/search': { status: 401, body: 'Unauthorized' },
     });
 
     try {
       await expect(
-        getSynthesisFile(url, 'org', 'proj', 'index.md', 'fbrk_bad-token'),
-      ).rejects.toThrow('API returned 401');
+        searchProject(url, 'org', 'proj', 'q', 'fbrk_bad-token'),
+      ).rejects.toThrow('Search API returned 401');
     } finally {
       close();
     }
@@ -92,14 +101,43 @@ describe('MCP integration — getSynthesisFile against real HTTP', () => {
 
   it('encodes special chars in org/project names in URL', async () => {
     const { url, close, requests } = await startMockApiServer({
-      '/synthesis/file': { status: 200, body: 'content' },
+      '/search': { status: 200, body: JSON.stringify({ answer: 'ok', sources: [] }) },
     });
 
     try {
-      await getSynthesisFile(url, 'my org', 'my project', 'cross-cutting/envs.md', 'tok');
+      await searchProject(url, 'my org', 'my project', 'q', 'tok');
 
-      expect(requests[0].url).toContain('/v1/orgs/my%20org/projects/my%20project/synthesis/file');
-      expect(requests[0].url).toContain('path=cross-cutting%2Fenvs.md');
+      expect(requests[0].url).toBe('/v1/orgs/my%20org/projects/my%20project/search');
+    } finally {
+      close();
+    }
+  });
+});
+
+describe('MCP integration — getToolDescription against real HTTP', () => {
+  it('fetches mcp-description page and returns text', async () => {
+    const { url, close, requests } = await startMockApiServer({
+      '/synthesis/file': { status: 200, body: 'Use fabrick_search to query...', contentType: 'text/plain' },
+    });
+
+    try {
+      const result = await getToolDescription(url, 'myorg', 'myproject', 'fbrk_test-token');
+
+      expect(result).toBe('Use fabrick_search to query...');
+      expect(requests[0].url).toContain('/synthesis/file');
+      expect(requests[0].url).toContain('mcp-description');
+    } finally {
+      close();
+    }
+  });
+
+  it('throws on 404 when mcp-description page not found', async () => {
+    const { url, close } = await startMockApiServer({});
+
+    try {
+      await expect(
+        getToolDescription(url, 'org', 'proj', 'fbrk_tok'),
+      ).rejects.toThrow('API returned 404');
     } finally {
       close();
     }

@@ -244,6 +244,10 @@ export class ReposService {
     return repo.project as unknown as Project;
   }
 
+  async updateRepoWikiHash(repoId: string, hash: string): Promise<void> {
+    await this.repoRepo.update(repoId, { wikiContentHash: hash } as any);
+  }
+
   private async getProjectOrFail(projectId: string): Promise<Project> {
     const project = await this.projectRepo.findOne({ where: { id: projectId } });
     if (!project) throw new NotFoundException('Project not found');

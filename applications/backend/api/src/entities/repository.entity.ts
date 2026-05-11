@@ -21,6 +21,9 @@ export class Repository {
   @ManyToOne(() => Project, { onDelete: 'CASCADE' })
   project: Project;
 
+  @Column({ type: 'varchar', length: 64, nullable: true, default: null })
+  wikiContentHash: string | null;
+
   @CreateDateColumn()
   createdAt: Date;
 }

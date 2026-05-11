@@ -1,9 +1,9 @@
-// Tests fbrk_ token auth flow end-to-end through getSynthesisFile
+// Tests fbrk_ token auth flow end-to-end through searchProject
 // The MCP server passes token as-is (with fbrk_ prefix) to API.
 // The API's FabrickAuthGuard strips the prefix before JWT verification.
 // This test verifies the contract from MCP side: token forwarded unmodified.
 
-import { getSynthesisFile } from './api-client.js';
+import { searchProject } from './api-client.js';
 
 const mockFetch = jest.fn();
 global.fetch = mockFetch;
@@ -14,19 +14,19 @@ beforeEach(() => {
 
 describe('MCP auth — fbrk_ token forwarding', () => {
   it('forwards fbrk_ token as Bearer in Authorization header', async () => {
-    mockFetch.mockResolvedValue({ ok: true, text: async () => '# content' });
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({ answer: '', sources: [] }) });
 
-    await getSynthesisFile('http://localhost:3000', 'myorg', 'myproject', 'index.md', 'fbrk_eyJhbGci.payload.sig');
+    await searchProject('http://localhost:3000', 'myorg', 'myproject', 'q', 'fbrk_eyJhbGci.payload.sig');
 
     const [, opts] = mockFetch.mock.calls[0] as [string, RequestInit];
     expect((opts.headers as Record<string, string>)['Authorization']).toBe('Bearer fbrk_eyJhbGci.payload.sig');
   });
 
   it('API receives token with fbrk_ prefix intact (not stripped by MCP)', async () => {
-    mockFetch.mockResolvedValue({ ok: true, text: async () => '' });
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({ answer: '', sources: [] }) });
 
     const token = 'fbrk_some-long-jwt-token';
-    await getSynthesisFile('http://localhost:3000', 'org', 'proj', 'file.md', token);
+    await searchProject('http://localhost:3000', 'org', 'proj', 'q', token);
 
     const [, opts] = mockFetch.mock.calls[0] as [string, RequestInit];
     const authHeader = (opts.headers as Record<string, string>)['Authorization'];
@@ -39,16 +39,16 @@ describe('MCP auth — fbrk_ token forwarding', () => {
     mockFetch.mockResolvedValue({ ok: false, status: 401 });
 
     await expect(
-      getSynthesisFile('http://localhost:3000', 'org', 'proj', 'file.md', 'fbrk_bad'),
-    ).rejects.toThrow('API returned 401');
+      searchProject('http://localhost:3000', 'org', 'proj', 'q', 'fbrk_bad'),
+    ).rejects.toThrow('Search API returned 401');
   });
 
-  it('calls correct synthesis file endpoint for MCP tool', async () => {
-    mockFetch.mockResolvedValue({ ok: true, text: async () => '# Index' });
+  it('calls correct search endpoint for MCP tool', async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({ answer: 'ok', sources: [] }) });
 
-    await getSynthesisFile('http://api.fabrick.me', 'myorg', 'myproject', 'index.md', 'fbrk_tok');
+    await searchProject('http://api.fabrick.me', 'myorg', 'myproject', 'how does auth work?', 'fbrk_tok');
 
     const [url] = mockFetch.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe('http://api.fabrick.me/v1/orgs/myorg/projects/myproject/synthesis/file?path=index.md');
+    expect(url).toBe('http://api.fabrick.me/v1/orgs/myorg/projects/myproject/search');
   });
 });

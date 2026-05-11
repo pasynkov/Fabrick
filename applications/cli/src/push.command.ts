@@ -1,5 +1,6 @@
 import { Command, CommandRunner } from 'nest-commander';
-import { existsSync, readFileSync } from 'fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'fs';
+import { join } from 'path';
 import { parse } from 'yaml';
 import * as archiver from 'archiver';
 import { PassThrough } from 'stream';
@@ -32,13 +33,13 @@ export class PushCommand extends CommandRunner {
       process.exit(1);
     }
 
-    if (!existsSync('.fabrick/context')) {
-      console.error('No context found at .fabrick/context/. Run fabrick analyze first.');
+    if (!existsSync('.fabrick/wiki')) {
+      console.error('No wiki found at .fabrick/wiki/. Run fabrick-analyze first.');
       process.exit(1);
     }
 
-    console.log('Zipping context...');
-    const zipBuffer = await this.zipContext();
+    console.log('Zipping wiki...');
+    const zipBuffer = await this.zipWiki();
 
     const apiUrl = config.api_url || creds.api_url;
     const base = apiUrl.trim().replace(/\/$/, '');
@@ -75,7 +76,7 @@ export class PushCommand extends CommandRunner {
       console.error(`Upload failed: ${res.status} ${body}`);
       process.exit(1);
     }
-    console.log('✓ Context uploaded successfully');
+    console.log('✓ Wiki uploaded successfully');
     if (triggerSynthesis) {
       console.log('✓ Synthesis triggered');
     }
@@ -91,7 +92,7 @@ export class PushCommand extends CommandRunner {
     });
   }
 
-  private zipContext(): Promise<Buffer> {
+  private zipWiki(): Promise<Buffer> {
     return new Promise((resolve, reject) => {
       const chunks: Buffer[] = [];
       const pass = new PassThrough();
@@ -101,7 +102,35 @@ export class PushCommand extends CommandRunner {
 
       const archive = archiver.default('zip', { zlib: { level: 9 } });
       archive.pipe(pass);
-      archive.directory('.fabrick/context/', false);
+
+      // Single app: zip .fabrick/wiki/ directly
+      // Monorepo: discover per-app wikis and zip them under wiki/<app-name>/
+      const singleWikiPath = '.fabrick/wiki';
+      if (existsSync(singleWikiPath)) {
+        archive.directory(singleWikiPath, false);
+      } else {
+        // Look for per-app wikis in apps/ or packages/
+        const searchRoots = ['apps', 'packages'];
+        let found = false;
+        for (const searchRoot of searchRoots) {
+          if (!existsSync(searchRoot)) continue;
+          const apps: string[] = readdirSync(searchRoot).filter((d: string) => {
+            try { return statSync(join(searchRoot, d)).isDirectory(); } catch { return false; }
+          });
+          for (const app of apps) {
+            const appWiki = join(searchRoot, app, '.fabrick', 'wiki');
+            if (existsSync(appWiki)) {
+              archive.directory(appWiki, `wiki/${app}`);
+              found = true;
+            }
+          }
+        }
+        if (!found) {
+          reject(new Error('No wiki found. Run fabrick-analyze first.'));
+          return;
+        }
+      }
+
       archive.finalize().catch(reject);
     });
   }

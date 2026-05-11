@@ -8,6 +8,7 @@ import { OrgMember } from '../entities/org-member.entity';
 import { Organization } from '../entities/organization.entity';
 import { Project } from '../entities/project.entity';
 import { Repository } from '../entities/repository.entity';
+import { WikiPage } from '../entities/wiki-page.entity';
 import { StorageService } from '../storage/storage.service';
 import { ApiKeyResolutionService } from '../api-keys/api-key-resolution.service';
 import { ApiKeyAuditService } from '../api-keys/api-key-audit.service';
@@ -20,6 +21,7 @@ const mockProjectRepo = () => ({
 const mockOrgRepo = () => ({ findOne: jest.fn() });
 const mockMemberRepo = () => ({ findOne: jest.fn() });
 const mockRepoRepo = () => ({ find: jest.fn() });
+const mockWikiPageRepo = () => ({ find: jest.fn(), findOne: jest.fn(), save: jest.fn(), delete: jest.fn() });
 const mockQueue = () => ({ publish: jest.fn(), subscribe: jest.fn() });
 const mockStorage = () => ({ putObject: jest.fn(), getObject: jest.fn(), listObjects: jest.fn() });
 const mockJwt = () => ({
@@ -53,6 +55,7 @@ describe('SynthesisService', () => {
         { provide: getRepositoryToken(Organization), useFactory: mockOrgRepo },
         { provide: getRepositoryToken(OrgMember), useFactory: mockMemberRepo },
         { provide: getRepositoryToken(Repository), useFactory: mockRepoRepo },
+        { provide: getRepositoryToken(WikiPage), useFactory: mockWikiPageRepo },
         { provide: QUEUE_SERVICE, useFactory: mockQueue },
         { provide: StorageService, useFactory: mockStorage },
         { provide: JwtService, useFactory: mockJwt },
@@ -88,6 +91,7 @@ describe('SynthesisService', () => {
         orgSlug: 'myorg',
         projectSlug: 'myproject',
         repos: [{ id: 'repo1', slug: 'myrepo' }],
+        changedRepos: ['myrepo'],
         callbackToken: 'callback-token',
       }));
     });

@@ -1,16 +1,15 @@
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import Anthropic from '@anthropic-ai/sdk';
-import { readFileSync } from 'fs';
-import { join } from 'path';
 import { QUEUE_SERVICE } from '../queue/queue.module';
 import { QueueService } from '../queue/queue.interface';
 import { StorageService } from '../storage/storage.service';
+import { SynthesisImpl, RepoWikiInput, ExistingPage } from '@app/shared';
 
 interface SynthesisJob {
   projectId: string;
   orgSlug: string;
   projectSlug: string;
   repos: { id: string; slug: string }[];
+  changedRepos: string[];
   callbackToken: string;
   anthropicApiKey: string;
 }
@@ -18,18 +17,13 @@ interface SynthesisJob {
 @Injectable()
 export class SynthesisProcessor implements OnModuleInit {
   private readonly logger = new Logger(SynthesisProcessor.name);
-  private readonly systemPrompt: string;
   private readonly apiBaseUrl = process.env.API_BASE_URL || 'http://localhost:3000';
 
   constructor(
     @Inject(QUEUE_SERVICE) private readonly queueService: QueueService,
     private readonly storageService: StorageService,
-  ) {
-    this.systemPrompt = readFileSync(
-      join(__dirname, '..', 'assets', 'synthesis-prompt.txt'),
-      'utf-8',
-    );
-  }
+    private readonly synthesisImpl: SynthesisImpl,
+  ) {}
 
   async onModuleInit() {
     await this.queueService.subscribe('synthesis-jobs', async (payload) => {
@@ -39,78 +33,60 @@ export class SynthesisProcessor implements OnModuleInit {
   }
 
   private async processJob(job: SynthesisJob): Promise<void> {
-    const { projectId, orgSlug, projectSlug, repos, callbackToken, anthropicApiKey } = job;
+    const { projectId, orgSlug, projectSlug, repos, changedRepos, callbackToken, anthropicApiKey } = job;
     try {
-      this.logger.log(`[${projectSlug}] loading repos`);
-      this.logger.log(`[${projectSlug}] found ${repos.length} repos`);
+      this.logger.log(`[${projectSlug}] loading repo wikis, changedRepos=${changedRepos.join(',')}`);
 
       if (!anthropicApiKey) throw new Error('No API key provided for synthesis job');
-      const anthropic = new Anthropic({ apiKey: anthropicApiKey });
 
-      const contextBlocks: string[] = [];
+      // Load existing project wiki pages for incremental mode
+      const existingPages = await this.loadExistingPages(projectId, callbackToken);
+
+      // Load wiki files from blob storage
+      const repoWikis: RepoWikiInput[] = [];
       for (const repo of repos) {
-        const prefix = `${projectSlug}/${repo.slug}/context/`;
-        this.logger.log(`[${projectSlug}] listing context at ${orgSlug}/${prefix}`);
+        const prefix = `${projectSlug}/${repo.slug}/wiki/`;
         const keys = await this.storageService.listObjects(orgSlug, prefix);
-        this.logger.log(`[${projectSlug}/${repo.slug}] ${keys.length} context files`);
         if (keys.length === 0) continue;
 
-        let block = `=== REPO: ${repo.slug} ===\n`;
-        for (const key of keys) {
-          const fileName = key.slice(prefix.length);
-          const content = await this.storageService.getObject(orgSlug, key);
-          block += `--- ${fileName} ---\n${content.toString('utf-8')}\n`;
+        const indexKey = keys.find((k) => k.endsWith('/index.md') || k === `${prefix}index.md`);
+        let indexContent: string | undefined;
+        if (indexKey) {
+          const buf = await this.storageService.getObject(orgSlug, indexKey);
+          indexContent = buf.toString('utf-8');
         }
-        contextBlocks.push(block);
+
+        const files: { path: string; content: string }[] = [];
+        for (const key of keys) {
+          const content = await this.storageService.getObject(orgSlug, key);
+          files.push({ path: key, content: content.toString('utf-8') });
+        }
+
+        repoWikis.push({ slug: repo.slug, files, indexContent });
       }
 
-      if (contextBlocks.length === 0) {
-        this.logger.warn(`[${projectSlug}] no context files found`);
-        await this.reportStatus(projectId, callbackToken, 'error', 'No context files found for any repository');
+      if (repoWikis.length === 0) {
+        this.logger.warn(`[${projectSlug}] no wiki files found`);
+        await this.reportStatus(projectId, callbackToken, 'error', 'No wiki files found for any repository');
         return;
       }
 
-      const userMessage = contextBlocks.join('\n\n');
-      this.logger.log(`[${projectSlug}] calling Anthropic, input ~${userMessage.length} chars`);
+      const context = this.synthesisImpl.buildContext(repoWikis, existingPages, changedRepos);
+      this.logger.log(`[${projectSlug}] calling Anthropic, input ~${context.length} chars`);
 
-      const response = await anthropic.messages.create({
-        model: 'claude-opus-4-6',
-        max_tokens: 16000,
-        system: this.systemPrompt,
-        messages: [{ role: 'user', content: userMessage }],
-      });
+      const rawText = await this.synthesisImpl.synthesize(context, anthropicApiKey);
+      const { pages, deleteSlugs } = this.synthesisImpl.parseResponse(rawText);
 
-      const rawText = response.content.find((c) => c.type === 'text')?.text ?? '';
-      this.logger.log(`[${projectSlug}] Anthropic response ${rawText.length} chars, stop_reason=${response.stop_reason}`);
-      if (response.stop_reason === 'max_tokens') {
-        throw new Error('Anthropic response truncated (max_tokens reached) — increase max_tokens or reduce context');
+      if (pages.length === 0) {
+        throw new Error('No pages found in Claude response');
       }
 
-      const chunks = rawText.split(/\n?=== FILE: /);
-      const files: Record<string, string> = {};
-      for (const chunk of chunks.slice(1)) {
-        const markerEnd = chunk.indexOf(' ===');
-        if (markerEnd === -1) continue;
-        const filename = chunk.slice(0, markerEnd).trim();
-        const content = chunk.slice(markerEnd + 4).replace(/^\r?\n/, '').trimEnd();
-        files[filename] = content;
-      }
+      this.logger.log(`[${projectSlug}] parsed ${pages.length} pages, ${deleteSlugs.length} deletes`);
 
-      if (Object.keys(files).length === 0) {
-        throw new Error('No files found in Claude response');
-      }
+      await this.upsertPages(projectId, callbackToken, pages);
 
-      const fileCount = Object.keys(files).length;
-      this.logger.log(`[${projectSlug}] parsed ${fileCount} synthesis files`);
-
-      const synthPrefix = `${projectSlug}/synthesis/`;
-      for (const [path, content] of Object.entries(files)) {
-        await this.storageService.putObject(
-          orgSlug,
-          `${synthPrefix}${path}`,
-          Buffer.from(content, 'utf-8'),
-        );
-        this.logger.log(`[${projectSlug}] stored ${path}`);
+      if (deleteSlugs.length > 0) {
+        await this.deletePages(projectId, callbackToken, deleteSlugs);
       }
 
       await this.reportStatus(projectId, callbackToken, 'done');
@@ -118,6 +94,42 @@ export class SynthesisProcessor implements OnModuleInit {
     } catch (err: any) {
       this.logger.error(`[${projectSlug}] synthesis failed: ${err?.message}`);
       await this.reportStatus(projectId, callbackToken, 'error', err?.message ?? 'Unknown error');
+    }
+  }
+
+  private async loadExistingPages(projectId: string, callbackToken: string): Promise<ExistingPage[]> {
+    try {
+      const url = `${this.apiBaseUrl}/v1/internal/synthesis/pages?projectId=${projectId}&callbackToken=${encodeURIComponent(callbackToken)}`;
+      const res = await fetch(url, { headers: { 'Content-Type': 'application/json' } });
+      if (!res.ok) return [];
+      const data = await res.json() as { pages: ExistingPage[] };
+      return data.pages ?? [];
+    } catch {
+      return [];
+    }
+  }
+
+  private async upsertPages(projectId: string, callbackToken: string, pages: any[]): Promise<void> {
+    const res = await fetch(`${this.apiBaseUrl}/v1/internal/synthesis/pages`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projectId, callbackToken, pages }),
+    });
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`Failed to upsert pages: ${res.status} ${body}`);
+    }
+  }
+
+  private async deletePages(projectId: string, callbackToken: string, slugs: string[]): Promise<void> {
+    const res = await fetch(`${this.apiBaseUrl}/v1/internal/synthesis/pages`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projectId, callbackToken, slugs }),
+    });
+    if (!res.ok) {
+      const body = await res.text();
+      this.logger.warn(`Failed to delete pages: ${res.status} ${body}`);
     }
   }
 

@@ -16,6 +16,7 @@ const mockReposService = () => ({
   requireOrgMemberByRepo: jest.fn(),
   getRepoWithContext: jest.fn(),
   getProjectByRepo: jest.fn(),
+  updateRepoWikiHash: jest.fn(),
 });
 const mockStorageService = () => ({
   putObject: jest.fn(),
@@ -149,7 +150,7 @@ describe('ReposController — uploadContext synthesis triggering', () => {
 
     await controller.uploadContext(req as any, 'repo1', file, { triggerSynthesis: false } as any);
 
-    expect(synthesisService.triggerForProject).toHaveBeenCalledWith('proj-id', 'uid1');
+    expect(synthesisService.triggerForProject).toHaveBeenCalledWith('proj-id', 'uid1', ['repo1']);
   });
 
   it('triggers synthesis when triggerSynthesis flag is true and autoSynthesisEnabled is false', async () => {
@@ -159,7 +160,7 @@ describe('ReposController — uploadContext synthesis triggering', () => {
 
     await controller.uploadContext(req as any, 'repo1', file, { triggerSynthesis: true } as any);
 
-    expect(synthesisService.triggerForProject).toHaveBeenCalledWith('proj-id', 'uid1');
+    expect(synthesisService.triggerForProject).toHaveBeenCalledWith('proj-id', 'uid1', ['repo1']);
   });
 
   it('does not trigger synthesis when autoSynthesisEnabled is false and no triggerSynthesis flag', async () => {

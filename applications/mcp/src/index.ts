@@ -3,7 +3,7 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { decode } from 'jsonwebtoken';
-import { getSynthesisFile } from './api-client.js';
+import { searchProject, getSynthesisPage } from './api-client.js';
 
 const token = process.env.FABRICK_TOKEN;
 const apiUrl = process.env.FABRICK_API_URL;
@@ -28,27 +28,33 @@ if (!payload || typeof payload.org !== 'string' || typeof payload.project !== 's
 const org = payload.org;
 const project = payload.project;
 
+const FALLBACK_DESCRIPTION = 'Search the project knowledge base. Ask any question about architecture, APIs, entities, flows, configuration.';
+const FALLBACK_INSTRUCTIONS = `Use fabrick_search when your question requires knowledge from a different service, layer, or repository than the one you are currently working in. Do not use it for questions answerable from local file context. Call fabrick_search at most once per user question — do not retry with rephrased queries. If the wiki has no answer, report "not found in wiki" and suggest checking the source code directly.`;
+
+const [toolDescription, serverInstructions] = await Promise.allSettled([
+  getSynthesisPage(apiUrl, org, project, 'mcp-description', token),
+  getSynthesisPage(apiUrl, org, project, 'mcp-instructions', token),
+]);
+
 const server = new Server(
   { name: 'fabrick', version: '1.0.0' },
-  { capabilities: { tools: {} } },
+  {
+    capabilities: { tools: {} },
+    instructions: serverInstructions.status === 'fulfilled' ? serverInstructions.value : FALLBACK_INSTRUCTIONS,
+  },
 );
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: [
     {
-      name: 'get_synthesis_index',
-      description: 'Get the synthesis index for the current project. Always call this first to understand what files are available.',
-      inputSchema: { type: 'object', properties: {} },
-    },
-    {
-      name: 'get_synthesis_file',
-      description: 'Get a specific synthesis file by path (e.g. "apps/backend.md", "cross-cutting/envs.md").',
+      name: 'fabrick_search',
+      description: toolDescription.status === 'fulfilled' ? toolDescription.value : FALLBACK_DESCRIPTION,
       inputSchema: {
         type: 'object',
         properties: {
-          path: { type: 'string', description: 'File path relative to synthesis root' },
+          question: { type: 'string', description: 'Your question about the project' },
         },
-        required: ['path'],
+        required: ['question'],
       },
     },
   ],
@@ -57,23 +63,15 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
 
-  if (name === 'get_synthesis_index') {
+  if (name === 'fabrick_search') {
+    const question = (args as Record<string, unknown>)?.question as string | undefined;
+    if (!question) return { content: [{ type: 'text', text: 'Error: question argument is required' }] };
     try {
-      const text = await getSynthesisFile(apiUrl!, org, project, 'index.md', token!);
-      return { content: [{ type: 'text', text }] };
-    } catch {
-      return { content: [{ type: 'text', text: `Synthesis not available for project '${project}'. Run synthesis first.` }] };
-    }
-  }
-
-  if (name === 'get_synthesis_file') {
-    const path = (args as Record<string, unknown>)?.path as string | undefined;
-    if (!path) return { content: [{ type: 'text', text: 'Error: path argument is required' }] };
-    try {
-      const text = await getSynthesisFile(apiUrl!, org, project, path, token!);
-      return { content: [{ type: 'text', text }] };
-    } catch {
-      return { content: [{ type: 'text', text: `File '${path}' not found in synthesis for project '${project}'.` }] };
+      const result = await searchProject(apiUrl!, org, project, question, token!);
+      const sourcesText = result.sources.length > 0 ? `\n\n**Sources:** ${result.sources.join(', ')}` : '';
+      return { content: [{ type: 'text', text: result.answer + sourcesText }] };
+    } catch (err: any) {
+      return { content: [{ type: 'text', text: `Search failed: ${err?.message ?? 'Unknown error'}` }] };
     }
   }
 

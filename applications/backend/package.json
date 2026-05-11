@@ -7,6 +7,7 @@
     "build:synthesis": "nest build synthesis",
     "build:sandbox": "nest build sandbox",
     "start:api": "nest start api --watch",
+    "start:api:http": "nest start api --entryFile main",
     "start:synthesis": "nest start synthesis --watch",
     "test:api": "jest --config api/jest.config.js",
     "test:api:e2e": "jest --config api/jest.e2e.config.js --rootDir api"

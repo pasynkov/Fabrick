@@ -83,8 +83,8 @@ jobs:
         run: npm ci --legacy-peer-deps
         working-directory: applications/backend/api
       - name: Start API
-        run: npm run start &
-        working-directory: applications/backend/api
+        run: npm run start:api:http &
+        working-directory: applications/backend
         env:
           DB_HOST: localhost
           DB_PORT: 5432
@@ -170,6 +170,10 @@ jobs:
       - name: Install production deps in api
         run: npm ci --legacy-peer-deps --omit=dev
         working-directory: applications/backend/api
+      - name: Copy webpack output into api/dist
+        run: |
+          mkdir -p applications/backend/api/dist
+          cp -r applications/backend/dist/api/. applications/backend/api/dist/
       - name: Package (include dist, bypass .gitignore)
         run: |
           cd applications/backend/api

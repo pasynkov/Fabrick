@@ -1,0 +1,35 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: fabrick
+      POSTGRES_PASSWORD: fabrick
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fabrick"]
+      interval: 3s
+      timeout: 5s
+      retries: 10
+
+  e2e:
+    image: node:24-alpine
+    working_dir: /app
+    volumes:
+      - ./api:/app
+      - ./shared:/shared
+      - /app/node_modules
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: fabrick
+      DB_PASS: fabrick
+      DB_TEST_NAME: fabrick_test
+      DB_SSL: "false"
+      JWT_SECRET: test-secret
+      ENCRYPTION_KEY: dGVzdC1lbmNyeXB0aW9uLWtleS1mb3ItZTJlLXRlc3RzISE=
+    command: sh -c "npm ci --legacy-peer-deps && npm run test:e2e"
+    depends_on:
+      postgres:
+        condition: service_healthy

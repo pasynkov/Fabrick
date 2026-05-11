@@ -140,8 +140,8 @@ describe('fabrick init --non-interactive', () => {
 
 describe('fabrick push', () => {
   it('exits 0 with mock context file', () => {
-    mkdirSync(join(tmpDir, '.fabrick', 'context'), { recursive: true });
-    writeFileSync(join(tmpDir, '.fabrick', 'context', 'mock.md'), '# Mock context');
+    mkdirSync(join(tmpDir, '.fabrick', 'wiki'), { recursive: true });
+    writeFileSync(join(tmpDir, '.fabrick', 'wiki', 'mock.md'), '# Mock context');
     const result = spawnSync('node', [CLI_BIN, 'push'], {
       cwd: tmpDir,
       env: { ...process.env, FABRICK_API_URL: API_URL },

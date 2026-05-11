@@ -16,7 +16,7 @@ import { SharedModule, WIKI_REPOSITORY } from '@app/shared';
     TypeOrmModule.forFeature([Organization, Project, WikiPage, OrgMember]),
     ApiKeysModule,
     AuthModule,
-    SharedModule.forRepository({ provide: WIKI_REPOSITORY, useClass: TypeOrmWikiRepository }),
+    SharedModule.forRepository({ provide: WIKI_REPOSITORY, useExisting: TypeOrmWikiRepository }),
   ],
   controllers: [SearchController],
   providers: [SearchService, TypeOrmWikiRepository],

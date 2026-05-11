@@ -8,14 +8,17 @@ import { Project } from '../entities/project.entity';
 import { WikiPage } from '../entities/wiki-page.entity';
 import { SearchController } from './search.controller';
 import { SearchService } from './search.service';
+import { TypeOrmWikiRepository } from './typeorm-wiki.repository';
+import { SharedModule, WIKI_REPOSITORY } from '@app/shared';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Organization, Project, WikiPage, OrgMember]),
     ApiKeysModule,
     AuthModule,
+    SharedModule.forRepository({ provide: WIKI_REPOSITORY, useClass: TypeOrmWikiRepository }),
   ],
   controllers: [SearchController],
-  providers: [SearchService],
+  providers: [SearchService, TypeOrmWikiRepository],
 })
 export class SearchModule {}

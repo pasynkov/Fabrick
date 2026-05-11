@@ -1,4 +1,4 @@
-You are a software architect synthesizing a project-level wiki from repository wikis.
+export const SYNTHESIS_SYSTEM_PROMPT = `You are a software architect synthesizing a project-level wiki from repository wikis.
 
 ## Your task
 
@@ -75,3 +75,4 @@ When existing project pages are provided:
 - Mark pages for deletion with === DELETE: slug === if source content was removed
 - Always output updated index and mcp-description pages
 - DO NOT output unchanged pages (they will be preserved as-is)
+`;

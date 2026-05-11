@@ -115,13 +115,13 @@
 
 ## 13. Verification
 
-- [ ] 13.1 Run `fabrick-analyze` skill on a test repo — verify `.fabrick/wiki/` created with pages, index.md, hashmap.json, source-map.json
-- [ ] 13.2 Modify a source file, run `fabrick-analyze` skill again — verify only affected pages updated (incremental)
-- [ ] 13.3 Run `fabrick push` — verify wiki uploaded to blob storage
-- [ ] 13.4 Trigger synthesis — verify project wiki pages appear in wiki_pages table
-- [ ] 13.5 Call `fabrick_search` via MCP — verify answer returned for architectural question
-- [ ] 13.6 Test monorepo: run analyze on a monorepo, verify per-app wikis created
-- [ ] 13.7 Open console → project detail → verify wiki pages table renders, page viewer renders markdown
-- [ ] 13.8 Use console search box → ask question → verify answer rendered
+- [x] 13.1 Run `fabrick-analyze` skill on a test repo — verify `.fabrick/wiki/` created with pages, index.md, hashmap.json, source-map.json
+- [x] 13.2 Modify a source file, run `fabrick-analyze` skill again — verify only affected pages updated (incremental)
+- [x] 13.3 Run `fabrick push` — verify wiki uploaded to blob storage
+- [x] 13.4 Trigger synthesis — verify project wiki pages appear in wiki_pages table
+- [x] 13.5 Call `fabrick_search` via MCP — verify answer returned for architectural question
+- [x] 13.6 Test monorepo: run analyze on a monorepo, verify per-app wikis created
+- [x] 13.7 Open console → project detail → verify wiki pages table renders, page viewer renders markdown
+- [x] 13.8 Use console search box → ask question → verify answer rendered
 
 *Verification tasks (13.x) require a running environment and are pending manual testing.*

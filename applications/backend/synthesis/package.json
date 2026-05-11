@@ -38,6 +38,10 @@
     "testMatch": [
       "**/*.spec.ts"
     ],
+    "moduleNameMapper": {
+      "^@app/shared$": "<rootDir>/../shared/src",
+      "^@app/shared/(.*)$": "<rootDir>/../shared/src/$1"
+    },
     "transform": {
       "^.+\\.ts$": [
         "ts-jest",
@@ -48,7 +52,11 @@
             "experimentalDecorators": true,
             "strictNullChecks": false,
             "noImplicitAny": false,
-            "skipLibCheck": true
+            "skipLibCheck": true,
+            "paths": {
+              "@app/shared": ["../shared/src"],
+              "@app/shared/*": ["../shared/src/*"]
+            }
           }
         }
       ]

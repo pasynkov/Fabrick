@@ -83,10 +83,6 @@ jobs:
       - name: Install openspec
         if: steps.check.outputs.exists == 'true'
         run: npm install -g @fission-ai/openspec
-      - name: Install shared dependencies
-        if: steps.check.outputs.exists == 'true'
-        run: npm ci --legacy-peer-deps
-        working-directory: applications/backend/shared
       - name: Install API dependencies
         if: steps.check.outputs.exists == 'true'
         run: npm ci --legacy-peer-deps
@@ -242,10 +238,6 @@ jobs:
         run: |
           git add -A
           git diff --staged --quiet || git commit -m "fix: review fixes for ${{ steps.name.outputs.name }}"
-      - name: Install shared dependencies for build check
-        if: steps.check.outputs.exists == 'true'
-        run: npm ci --legacy-peer-deps
-        working-directory: applications/backend/shared
       - name: Install app dependencies for build check
         if: steps.check.outputs.exists == 'true'
         run: |

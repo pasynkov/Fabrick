@@ -9,7 +9,8 @@ import { WikiPage } from '../entities/wiki-page.entity';
 import { SearchController } from './search.controller';
 import { SearchService } from './search.service';
 import { TypeOrmWikiRepository } from './typeorm-wiki.repository';
-import { SearchImpl, WIKI_REPOSITORY } from '@app/shared';
+import { SearchImpl } from './search.impl';
+import { WIKI_REPOSITORY } from './wiki-repository.interface';
 
 @Module({
   imports: [

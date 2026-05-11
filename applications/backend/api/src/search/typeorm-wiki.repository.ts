@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository as TypeOrmRepository } from 'typeorm';
-import { WikiRepository, WikiPage, WikiPageData } from '@app/shared';
+import { WikiRepository, WikiPage, WikiPageData } from './wiki-repository.interface';
 import { WikiPage as WikiPageEntity } from '../entities/wiki-page.entity';
 
 @Injectable()

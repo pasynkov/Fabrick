@@ -70,7 +70,9 @@ related: [{slug1}, {slug2}]
 {markdown content}
 
 ## Related Pages
-- [{Title}]({relative-path}) — {relationship description}
+- [{Title}]({slug}) — {relationship description}
+
+IMPORTANT: All internal links (index page entries, Related Pages) MUST use the slug as the path — no `.md` extension. Example: `(apps/harvester-conductor)` not `(apps/harvester-conductor.md)`.
 
 To delete a page (incremental mode only):
 

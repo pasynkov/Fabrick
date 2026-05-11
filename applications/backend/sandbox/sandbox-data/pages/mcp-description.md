@@ -5,30 +5,29 @@ title: MCP Description
 sources:
   - backend1
   - kustomize
-  - repo-a
-  - repo-b
 related:
   []
 ---
 
-# What's in This Wiki
+# Nami Trade Harvesting Platform — Knowledge Base
 
-This wiki covers a **trade data harvesting platform** for financial markets (Binance crypto + NASDAQ equities). You can ask about architecture, services, data flows, message contracts, Kubernetes deployment, and configuration.
+This wiki covers a two-repository system: a NestJS microservices monorepo (`backend1`) and its Kubernetes deployment configuration (`kustomize`).
 
-## Repositories / Apps
+**Repositories:**
+- `backend1` — NestJS monorepo with 5 microservices for historical trade data harvesting from Binance and NASDAQ, staging to GCS, loading to BigQuery, and running analytics forecasts
+- `kustomize` — Kubernetes manifests (kustomize + Helm) for deploying all services to a GKE `harvester` namespace
 
-- **backend1** — NestJS monorepo containing 5 microservices: assets-registry (instrument metadata), harvester-conductor (orchestration), harvester-reaper (trade fetching/staging), binance-vision-connector (Binance data), nasdaq-cloud-storage-connector (NASDAQ data)
-- **kustomize** — Kubernetes deployment manifests (Kustomize + Helm) for the `harvester` namespace, including NATS cluster, Kafka UI, Grafana, and all application deployments
-- **repo-a** — Auth service providing JWT-based login (access + refresh tokens)
-- **repo-b** — API gateway that proxies requests and validates JWT tokens on protected routes
+**You can find:**
+- **App descriptions** for all 5 microservices: assets-registry, harvester-conductor, harvester-reaper, binance-vision-connector, nasdaq-cloud-storage-connector — including responsibilities, NATS handlers, Kafka consumers, and configuration
+- **Domain entities**: Asset, Pair, Market, Instrument (financial registry), and Harvest, Period (job tracking) — with full TypeScript/TypeORM schemas
+- **Business logic flows**: complete harvest orchestration (start → reap → report → BigQuery pipeline) and per-period trade transfer detail (GCS staging, BigQuery load, archiving)
+- **8 NATS subjects** across 4 namespaces (`assets.*`, `harvester.*`, `crypto.cex.binance.vision.*`, `stock.nasdaq.cloud-storage.*`) with request/response schemas
+- **2 Kafka topics** (`harvester.reap`, `harvester.report`) with message contracts and transaction semantics
+- **BigQuery pipeline**: fillWindows, fillSignals (disabled), fillForecasts, fillInstruments queries and dataset structure
+- **Kubernetes deployment specs**: replica counts, resource limits, environment variables, GCS bucket names, Kafka transactional IDs per service
+- **Infrastructure**: in-cluster NATS cluster (Helm, 300 MB max payload), external Kafka with Kafka UI, Grafana with BigQuery + Postgres datasources, disabled Kafka BigQuery Connect sink
+- **Config**: all environment variables grouped by concern (Postgres, NATS, Kafka, GCP/GCS)
 
-## Knowledge Available
+Ask about any service's NATS handlers, the harvest job lifecycle, BigQuery schema, GCS file layout, Kubernetes resource limits, or how to deploy a new image version.
 
-- **Entities**: Asset, Pair, Market, Instrument domain model; Harvest & Period job lifecycle; Kubernetes deployment specs for all 5 services
-- **Business Logic**: End-to-end harvest flow (start → reap → report → BigQuery pipeline); per-period trade transfer (fetch → GCS stage → BigQuery load); Kubernetes deploy script
-- **Message Contracts**: 8 NATS subjects across 4 namespaces (`assets.*`, `harvester.*`, `crypto.cex.binance.vision.*`, `stock.nasdaq.cloud-storage.*`); 2 Kafka topics (`harvester.reap`, `harvester.report`)
-- **Transport**: In-cluster NATS (Helm, 300MB max payload); external Kafka; BigQuery analytics pipeline (fillWindows, fillForecasts, fillInstruments)
-- **Config**: Kubernetes ConfigMaps for Postgres, Kafka, NATS, GCP; Sentinel shared bootstrap library env vars
-- **Infra**: Grafana (BigQuery + Postgres datasources); Kafka BigQuery Connect sink (currently disabled)
-
-Ask about specific NATS subjects, Kafka topic schemas, GCS file layouts, BigQuery dataset structure, service resource limits, or the step-by-step harvest orchestration flow.
+---

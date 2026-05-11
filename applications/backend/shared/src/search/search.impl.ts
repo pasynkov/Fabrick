@@ -15,6 +15,7 @@ export class SearchImpl {
     question: string,
     apiKey: string,
   ): Promise<{ answer: string; sources: string[] }> {
+    this.logger.log(`search started  projectId=${projectId}  question=${question}`);
     const indexPage = await this.wikiRepo.findBySlug(projectId, 'index');
     if (!indexPage) {
       throw new Error('No wiki pages found. Run synthesis first.');
@@ -41,12 +42,15 @@ export class SearchImpl {
     } catch {
       selectedSlugs = [];
     }
+    selectedSlugs = selectedSlugs.map((s) => s.replace(/\.md$/i, ''));
+    this.logger.log(`slug selection  selected=${JSON.stringify(selectedSlugs)}`);
 
     if (selectedSlugs.length === 0) {
       return { answer: 'No relevant information found in the project wiki for this question.', sources: [] };
     }
 
     const pages = await this.wikiRepo.findBySlugs(projectId, selectedSlugs);
+    this.logger.log(`pages loaded    count=${pages.length}  slugs=${JSON.stringify(pages.map((p) => p.slug))}`);
 
     if (pages.length === 0) {
       return { answer: 'No relevant information found in the project wiki for this question.', sources: [] };

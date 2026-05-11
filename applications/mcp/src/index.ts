@@ -29,7 +29,7 @@ const org = payload.org;
 const project = payload.project;
 
 const FALLBACK_DESCRIPTION = 'Search the project knowledge base. Ask any question about architecture, APIs, entities, flows, configuration.';
-const FALLBACK_INSTRUCTIONS = `Use fabrick_search when your question requires knowledge from a different service, layer, or repository than the one you are currently working in. Do not use it for questions answerable from local file context.`;
+const FALLBACK_INSTRUCTIONS = `Use fabrick_search when your question requires knowledge from a different service, layer, or repository than the one you are currently working in. Do not use it for questions answerable from local file context. Call fabrick_search at most once per user question — do not retry with rephrased queries. If the wiki has no answer, report "not found in wiki" and suggest checking the source code directly.`;
 
 const [toolDescription, serverInstructions] = await Promise.allSettled([
   getSynthesisPage(apiUrl, org, project, 'mcp-description', token),

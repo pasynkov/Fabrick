@@ -76,6 +76,9 @@ jobs:
         run: docker run -d -p 10000:10000 mcr.microsoft.com/azure-storage/azurite azurite-blob --blobHost 0.0.0.0 --skipApiVersionCheck
       - name: Start NATS with JetStream
         run: docker run -d -p 4222:4222 nats:2-alpine -js
+      - name: Install shared dependencies
+        run: npm ci --legacy-peer-deps
+        working-directory: applications/backend/shared
       - name: Build API
         run: npm ci --legacy-peer-deps && npm run build
         working-directory: applications/backend/api
@@ -161,6 +164,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
+      - run: npm ci --legacy-peer-deps
+        working-directory: applications/backend/shared
       - run: npm ci --legacy-peer-deps
         working-directory: applications/backend/api
       - run: npm run build

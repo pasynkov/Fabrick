@@ -8,11 +8,13 @@ related:
   - apps/assets-registry
   - apps/harvester-conductor
   - apps/harvester-reaper
+  - apps/binance-vision-connector
+  - apps/nasdaq-cloud-storage-connector
 ---
 
 # Sentinel Configuration
 
-`libs/sentinel` is the shared infrastructure library. Provides app bootstrap, typed config, and health checks for all NestJS microservices.
+`libs/sentinel` is the shared infrastructure library. Provides app bootstrap, typed config, health checks.
 
 ## Sentinel Bootstrap Pattern
 
@@ -38,13 +40,13 @@ await sentinel.start();              // wires transports, starts all microservic
 | `DATABASES` | `[]` | Comma-separated DB identifiers |
 
 ### NATS (Section: `nats`)
-Standard NestJS NATS options: servers, auth, queue, etc.
+Standard NestJS NATS options: `NATS_SERVERS`, `NATS_QUEUE`, auth, etc.
 
 ### Kafka (Section: `kafka`)
-Standard NestJS Kafka options: brokers, groupId, clientId, transactionalId, idempotent, etc.
+Standard NestJS Kafka options: `KAFKA_BROKERS`, `KAFKA_GROUP_ID`, `KAFKA_CLIENT_ID`, `KAFKA_TRANSACTIONAL_ID`, `KAFKA_IDEMPOTENT`, etc.
 
 ### Postgres (Section: `postgres`)
-TypeORM datasource options: host, port, username, password, database.
+TypeORM datasource options: `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DATABASE`.
 
 ## Health Checks
 
@@ -68,8 +70,7 @@ Connections to check are declared in `sentinel.options.connections`.
 ```
 
 ## Related Pages
-- [Assets Registry](../apps/assets-registry.md) — uses Sentinel with NATS transport
-- [Harvester Conductor](../apps/harvester-conductor.md) — uses Sentinel with NATS + Kafka
-- [Harvester Reaper](../apps/harvester-reaper.md) — uses Sentinel with custom ContextIdStrategy
-
----
+- [Assets Registry](../apps/assets-registry.md) — uses NATS transport
+- [Harvester Conductor](../apps/harvester-conductor.md) — uses NATS + Kafka transports
+- [Harvester Reaper](../apps/harvester-reaper.md) — uses NATS + Kafka transports
+- [Environment Config](../config/environment.md) — Kubernetes ConfigMaps that supply env vars

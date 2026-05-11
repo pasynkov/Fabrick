@@ -45,5 +45,4 @@ Deployed via Helm chart `grafana` v10.0.0 (official Grafana chart).
 ## Related Pages
 - [Applications](../entities/applications.md) — services whose data appears in dashboards
 - [Environment Config](../config/environment.md) — Postgres credentials (same as configmap)
-
----
+- [Deploy Flow](../logic/deploy-flow.md) — deployed via Helm as part of kustomize build

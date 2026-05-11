@@ -10,6 +10,7 @@ related:
   - apps/harvester-conductor
   - apps/binance-vision-connector
   - apps/nasdaq-cloud-storage-connector
+  - transport/nats
 ---
 
 # NATS Subjects
@@ -65,9 +66,8 @@ stock.nasdaq.cloud-storage.*
 
 ## Related Pages
 - [Kafka Topics](../contracts/kafka-topics.md) — async event subjects
+- [NATS Cluster](../transport/nats.md) — infrastructure serving these subjects
 - [Assets Registry](../apps/assets-registry.md) — assets subjects handler
 - [Harvester Conductor](../apps/harvester-conductor.md) — harvester subjects handler
-- [Binance Vision Connector](../apps/binance-vision-connector.md) — binance subjects handler
-- [NASDAQ Cloud Storage Connector](../apps/nasdaq-cloud-storage-connector.md) — nasdaq subjects handler
-
----
+- [Binance Vision Connector](../apps/binance-vision-connector.md) — Binance trades handler
+- [NASDAQ Cloud Storage Connector](../apps/nasdaq-cloud-storage-connector.md) — NASDAQ trades handler

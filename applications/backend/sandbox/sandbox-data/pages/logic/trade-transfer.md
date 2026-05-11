@@ -33,7 +33,7 @@ Source: [data.binance.vision](https://data.binance.vision) spot daily trades CSV
 URL pattern: spot/daily/trades/{symbol}/{symbol}-trades-{date}.zip
 ```
 
-1. Checks GCS bucket for existing ZIP — cache hit → reads from GCS
+1. Checks GCS bucket (`binance_vision`) for existing ZIP — cache hit → reads from GCS
 2. Cache miss → HTTP GET from Binance, tee-streams: write to GCS + parse simultaneously
 3. Unzips in-memory → parses CSV (no header row, mapped manually)
 4. Returns `bufferCount(batchSize)` batches
@@ -80,7 +80,5 @@ Dataset: `trades_raw`, Table: `trades`
 ## Related Pages
 - [Harvest Flow](../logic/harvest-flow.md) — orchestration context
 - [BigQuery Pipeline](../transport/bigquery-pipeline.md) — post-load analytics queries
-- [Binance Vision Connector](../apps/binance-vision-connector.md) — Binance trade source
-- [NASDAQ Cloud Storage Connector](../apps/nasdaq-cloud-storage-connector.md) — NASDAQ trade source
-
----
+- [Binance Vision Connector](../apps/binance-vision-connector.md) — Binance data source
+- [NASDAQ Cloud Storage Connector](../apps/nasdaq-cloud-storage-connector.md) — NASDAQ data source

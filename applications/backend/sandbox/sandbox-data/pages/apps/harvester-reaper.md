@@ -12,8 +12,8 @@ related:
   - apps/binance-vision-connector
   - apps/nasdaq-cloud-storage-connector
   - config/sentinel-config
-  - entities/applications
   - config/environment
+  - entities/applications
 ---
 
 # Harvester Reaper
@@ -43,39 +43,32 @@ Uses custom `ContextIdStrategy` for per-message DI scope isolation.
 
 ## Configuration (`ReaperConfig`)
 
-| Env Var | Default (code) | Kubernetes Value | Description |
-|---------|----------------|-----------------|-------------|
-| `REAPER_NATS_BATCH_SIZE` | 5000 | 10000 | Trades per NATS response batch |
-| `REAPER_KAFKA_BATCH_SIZE` | 3000 | 7000 | Trades per GCS upload chunk |
-| `REAPER_KAFKA_PARALLEL_WRITES` | 10 | 10 | Concurrent GCS uploads |
-| `REAPER_GCP_BUCKET_NAME` | — | `trades_jsonl` | GCS bucket for staged trades |
-| `KAFKA_TRANSACTIONAL_ID` | — | pod name | Unique per-replica transaction ID |
-| `KAFKA_IDEMPOTENT` | — | `true` | Idempotent producer |
+| Env Var | K8s Value | Description |
+|---------|-----------|-------------|
+| `REAPER_NATS_BATCH_SIZE` | `10000` | Trades per NATS response batch |
+| `REAPER_KAFKA_BATCH_SIZE` | `7000` | Trades per GCS upload chunk |
+| `REAPER_KAFKA_PARALLEL_WRITES` | `10` | Concurrent GCS uploads |
+| `REAPER_GCP_BUCKET_NAME` | `trades_jsonl` | GCS bucket for staging |
+| `KAFKA_TRANSACTIONAL_ID` | pod name | Unique per replica |
+| `KAFKA_IDEMPOTENT` | `true` | Exactly-once semantics |
+
+Resources: 250m/1Gi req → 1150m/2Gi limit
 
 ## GCS File Layout
 
 ```
-{market}/{type}/{pair}/{yyyy}/{mm}/{dd}/{from}-{to}.jsonl          ← final archive
+{market}/{type}/{pair}/{yyyy}/{mm}/{dd}/{from}-{to}.jsonl   ← final archive
 {market}/{type}/{pair}/{yyyy}/{mm}/{dd}/{periodId}_{rnd}_{from}.jsonl  ← temp chunks
 ```
-
-Bucket: `trades_jsonl`
 
 ## Graceful Shutdown
 
 `onApplicationShutdown()` emits `destroy$` → active RxJS pipeline stops → Kafka transaction aborted → `KafkaRetriableException` thrown → Kafka re-delivers message.
 
-## Kubernetes Configuration
-
-Resources: 250m CPU / 1Gi memory (request) → 1150m CPU / 2Gi memory (limit)  
-Mounts GCP key at `/etc/secrets/key.json`.
-
 ## Related Pages
 - [Harvest Flow](../logic/harvest-flow.md) — orchestration context
-- [Trade Transfer](../logic/trade-transfer.md) — detailed trade fetch and staging
+- [Trade Transfer](../logic/trade-transfer.md) — detailed trade fetch and staging logic
 - [Kafka Topics](../contracts/kafka-topics.md) — topics consumed and produced
 - [Binance Vision Connector](../apps/binance-vision-connector.md) — trade data source
 - [NASDAQ Cloud Storage Connector](../apps/nasdaq-cloud-storage-connector.md) — trade data source
-- [Kubernetes Applications](../entities/applications.md) — deployment spec
-
----
+- [Environment Config](../config/environment.md) — Kafka, GCP ConfigMaps

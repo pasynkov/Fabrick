@@ -50,13 +50,7 @@ kubectl port-forward svc/nats-cluster -n harvester 4222
 | harvester-reaper | `harvester-reaper` |
 | nasdaq-cloud-storage | `nasdaq-cloud-storage` |
 
-## Sentinel Connection Settings
-
-NestJS apps connect via Sentinel library with: `pingInterval=30s`, `maxPingOut=5`.
-
 ## Related Pages
 - [Applications](../entities/applications.md) — all services subscribe via NATS
-- [Environment / ConfigMaps](../config/environment.md) — nats-servers-configmap
-- [NATS Subjects](../contracts/nats-subjects.md) — message contracts over this transport
-
----
+- [Environment Config](../config/environment.md) — nats-servers-configmap
+- [NATS Subjects](../contracts/nats-subjects.md) — message contracts served over this cluster

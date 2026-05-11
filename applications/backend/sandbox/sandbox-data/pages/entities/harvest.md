@@ -60,5 +60,3 @@ Periods are created in a DB transaction using raw SQL insert from `generate_seri
 - [Asset / Instrument](../entities/asset.md) — instrumentId references Instrument
 - [Harvest Flow](../logic/harvest-flow.md) — full orchestration lifecycle
 - [Harvester Conductor](../apps/harvester-conductor.md) — service owning these entities
-
----

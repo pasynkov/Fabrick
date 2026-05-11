@@ -31,12 +31,12 @@ Single script `deploy.sh` builds the full kustomize tree and applies to cluster.
 
 ```
 base/
-├── namespace.yaml                    # Namespace: harvester
-├── configmaps/                       # 4 ConfigMaps + gcp-service-account-key generator
+├── namespace.yaml           # Namespace: harvester
+├── configmaps/              # 4 ConfigMaps + gcp-service-account-key generator
 ├── infra/
-│   ├── nats/cluster/                 # Helm: nats v1.3.6
-│   ├── kafka-ui/                     # Deployment + Service + Ingress
-│   └── grafana/                      # Helm: grafana v10.0.0
+│   ├── nats/cluster/        # Helm: nats v1.3.6
+│   ├── kafka-ui/            # Deployment + Service + Ingress
+│   └── grafana/             # Helm: grafana v10.0.0
 │   # kafka-bigquery-connect disabled
 └── applications/
     ├── priority-class.low.yaml
@@ -63,9 +63,7 @@ Tags are set on images:
 - `pasynkov/namico-nasdaq-cloud-storage`
 
 ## Related Pages
-- [Applications](../entities/applications.md) — deployed services
+- [Applications](../entities/applications.md) — deployed services with resource specs
 - [NATS Cluster](../transport/nats.md) — deployed via Helm
 - [Grafana](../infra/grafana.md) — deployed via Helm
-- [Environment / ConfigMaps](../config/environment.md) — ConfigMaps applied as part of the build
-
----
+- [Environment Config](../config/environment.md) — ConfigMaps applied at deploy time

@@ -7,6 +7,7 @@ sources:
 related:
   - transport/kafka
   - config/environment
+  - contracts/kafka-topics
 ---
 
 # Kafka BigQuery Connect
@@ -43,10 +44,6 @@ Kafka Connect worker that sinks the `trades` Kafka topic to BigQuery using the `
 
 Batch load mode enabled via GCS intermediate staging (`enableBatchLoad: trades`).
 
-## Internal Kafka Topics
-
-Connect creates 3 internal topics: `_connect-configs`, `_connect-offsets`, `_connect-status` (replication factor 1).
-
 ## Re-enabling
 
 Uncomment `- kafka-bigquery-connect` in `base/infra/kustomization.yaml` and apply connector config via REST after pod starts:
@@ -56,4 +53,5 @@ curl -X POST http://<pod>:8083/connectors -H 'Content-Type: application/json' -d
 
 ## Related Pages
 - [Kafka](../transport/kafka.md) — source topic `trades`
+- [Kafka Topics](../contracts/kafka-topics.md) — `trades` and `dlq-bigquery-trades` topic definitions
 - [Environment Config](../config/environment.md) — kafka-brokers-configmap, GCP key

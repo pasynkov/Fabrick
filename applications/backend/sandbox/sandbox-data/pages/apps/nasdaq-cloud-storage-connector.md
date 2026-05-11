@@ -9,8 +9,8 @@ related:
   - logic/trade-transfer
   - contracts/nats-subjects
   - config/sentinel-config
-  - entities/applications
   - config/environment
+  - entities/applications
 ---
 
 # NASDAQ Cloud Storage Connector
@@ -20,7 +20,7 @@ NestJS microservice. Serves NASDAQ trade data from GCS bucket via NATS.
 **Path:** `apps/nasdaq/cloud-storage-connector`  
 **Image:** `pasynkov/namico-nasdaq-cloud-storage`  
 **Transport:** NATS only  
-**Replicas:** 4 (RollingUpdate: maxUnavailable 0, maxSurge 1)
+**Replicas:** 4 (RollingUpdate, maxUnavailable: 0, maxSurge: 1)
 
 ## Responsibilities
 
@@ -50,24 +50,22 @@ NATS request
   → emit batches
 ```
 
-## CSV Format
+## CSV Format (NASDAQ trades)
 
-Headers: `Timestamp, Price, Volume`  
-Timestamp is float seconds → converted to ms: `Math.round(parseFloat(ts) * 1000)`
+Headers: `Timestamp, Price, Volume`. Timestamp is a float seconds value → converted to ms: `Math.round(parseFloat(ts) * 1000)`.
 
 ## Kubernetes Configuration
 
-| Env Var | Value |
-|---------|-------|
+| Env | Value |
+|-----|-------|
 | `NATS_QUEUE` | `nasdaq-cloud-storage` |
 | `TRANSPORTS` | `nats` |
 | `NASDAQ_CLOUD_STORAGE_GCP_BUCKET_NAME` | `nasdaq-trades` |
 
-Mounts GCP key at `/etc/secrets/key.json`.
+Mounts GCP key at `/etc/secrets/key.json`
 
 ## Related Pages
-- [Trade Transfer](../logic/trade-transfer.md) — how the reaper calls this service
-- [NATS Subjects](../contracts/nats-subjects.md) — full subject contract
-- [Kubernetes Applications](../entities/applications.md) — deployment spec
-
----
+- [Trade Transfer](../logic/trade-transfer.md) — how the reaper calls this connector
+- [NATS Subjects](../contracts/nats-subjects.md) — subject contract
+- [Environment Config](../config/environment.md) — GCP credentials ConfigMap
+- [Deployed Applications](../entities/applications.md) — Kubernetes deployment details

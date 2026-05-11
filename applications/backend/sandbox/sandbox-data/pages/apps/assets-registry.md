@@ -9,8 +9,8 @@ related:
   - entities/asset
   - contracts/nats-subjects
   - config/sentinel-config
-  - entities/applications
   - config/environment
+  - entities/applications
 ---
 
 # Assets Registry
@@ -40,7 +40,7 @@ NestJS microservice. Financial instrument reference data store. Serves NATS quer
 
 ## Database
 
-PostgreSQL via TypeORM (`assets_registry` DB). Migrations in `src/database/migrations/`:
+PostgreSQL via TypeORM. Database: `assets_registry`. Migrations in `src/database/migrations/`:
 - `1756791670441-init` — create tables
 - `1756791786439-btc-usdt-binance-spot` — seed BTC/USDT Binance spot instrument
 - `1757077697549-binance-pairs` — bulk import Binance pairs from CSV
@@ -50,19 +50,18 @@ PostgreSQL via TypeORM (`assets_registry` DB). Migrations in `src/database/migra
 
 ## Kubernetes Configuration
 
-| Env Var | Value |
-|---------|-------|
+| Env | Value |
+|-----|-------|
 | `POSTGRES_DATABASE` | `assets_registry` |
 | `NATS_QUEUE` | `assets-registry` |
 | `TRANSPORTS` | `nats` |
 
-Resources: 150m CPU / 128Mi memory (request) → 1150m CPU / 256Gi memory (limit)
+Resources: 150m/128Mi req → 1150m/256Mi limit  
+Health check: `GET /healthy` on port 3000
 
 ## Related Pages
 - [Asset / Instrument Entities](../entities/asset.md) — domain model served by this app
 - [NATS Subjects](../contracts/nats-subjects.md) — subjects handled by this app
 - [Sentinel Config](../config/sentinel-config.md) — shared bootstrap library
-- [Environment / ConfigMaps](../config/environment.md) — injected Postgres and NATS config
-- [Kubernetes Applications](../entities/applications.md) — deployment spec
-
----
+- [Environment Config](../config/environment.md) — Postgres and NATS ConfigMaps
+- [Deployed Applications](../entities/applications.md) — Kubernetes deployment details

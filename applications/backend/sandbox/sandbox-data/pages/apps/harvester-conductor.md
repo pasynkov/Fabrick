@@ -12,8 +12,8 @@ related:
   - contracts/nats-subjects
   - contracts/kafka-topics
   - config/sentinel-config
-  - entities/applications
   - config/environment
+  - entities/applications
 ---
 
 # Harvester Conductor
@@ -61,29 +61,26 @@ NestJS microservice. Orchestrates harvest jobs. Owns the `harvests` and `harvest
 
 ## Database
 
-PostgreSQL (`harvester` DB). Migration:
+PostgreSQL. Database: `harvester`. Migrations in `src/database/migrations/`:
 - `1757076547237-init` — create `harvests` and `harvest_periods` tables
 
 ## Kubernetes Configuration
 
-| Env Var | Value |
-|---------|-------|
-| `POSTGRES_DATABASE` | `harvester` |
+| Env | Value |
+|-----|-------|
 | `NATS_QUEUE` | `harvester-conductor` |
 | `TRANSPORTS` | `nats,kafka` |
 | `KAFKA_CLIENT_ID` | `harvest-conductor-client` |
 | `KAFKA_GROUP_ID` | `harvest-conductor-group` |
+| `POSTGRES_DATABASE` | `harvester` |
 
-Resources: 125m CPU / 256Mi memory (request) → 1150m CPU / 512Gi memory (limit)  
-Mounts GCP key at `/etc/secrets/key.json`.
+Resources: 125m/256Mi req → 1150m/512Mi limit  
+Mounts GCP key at `/etc/secrets/key.json`
 
 ## Related Pages
 - [Harvest & Period Entities](../entities/harvest.md) — DB entities owned by this service
 - [Harvest Flow](../logic/harvest-flow.md) — full orchestration lifecycle
-- [BigQuery Pipeline](../transport/bigquery-pipeline.md) — analytics queries this service runs
-- [NATS Subjects](../contracts/nats-subjects.md) — subjects handled by this service
-- [Kafka Topics](../contracts/kafka-topics.md) — topics produced and consumed
-- [Sentinel Config](../config/sentinel-config.md) — shared bootstrap library
-- [Kubernetes Applications](../entities/applications.md) — deployment spec
-
----
+- [BigQuery Pipeline](../transport/bigquery-pipeline.md) — forecast SQL queries
+- [NATS Subjects](../contracts/nats-subjects.md) — subjects handled
+- [Kafka Topics](../contracts/kafka-topics.md) — topics produced/consumed
+- [Environment Config](../config/environment.md) — Postgres, Kafka, GCP ConfigMaps

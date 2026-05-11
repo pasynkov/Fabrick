@@ -69,5 +69,3 @@ Expected count = sum of `period.trades` across all periods in the harvest. Pipel
 ## Related Pages
 - [Harvest Flow](../logic/harvest-flow.md) — pipeline trigger context
 - [Trade Transfer](../logic/trade-transfer.md) — how trades reach BigQuery
-
----

@@ -13,92 +13,80 @@ related:
   - apps/nasdaq-cloud-storage-connector
   - contracts/nats-subjects
   - contracts/kafka-topics
+  - transport/nats
+  - transport/kafka
   - transport/bigquery-pipeline
   - config/environment
 ---
 
 # System Overview
 
-Nami is a trade data harvesting platform that collects historical trade records from Binance (crypto) and NASDAQ (equities), stages them to Google Cloud Storage, loads them to BigQuery, and runs an analytics/forecast pipeline.
+Nami is a trade data harvesting pipeline that collects historical trade data from Binance (crypto) and NASDAQ (equities), stages it to Google Cloud Storage, loads it to BigQuery, and runs an analytics/forecast pipeline.
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                    Kubernetes: harvester ns                      │
-│                                                                 │
-│  ┌──────────────────┐   NATS    ┌──────────────────────────┐   │
-│  │  assets-registry │◄─────────►│  harvester-conductor     │   │
-│  │  (PostgreSQL)    │           │  (PostgreSQL + BigQuery)  │   │
-│  └──────────────────┘           └────────────┬─────────────┘   │
-│                                              │ Kafka            │
-│  ┌──────────────────┐                        │ harvester.reap   │
-│  │  binance-vision  │◄──────┐  ┌─────────────▼─────────────┐   │
-│  │  (GCS cache)     │  NATS │  │  harvester-reaper (x4)    │   │
-│  └──────────────────┘       │  │  (GCS → BigQuery)         │   │
-│                             ├──┤                           │   │
-│  ┌──────────────────┐       │  └─────────────┬─────────────┘   │
-│  │  nasdaq-cloud-   │◄──────┘                │ Kafka            │
-│  │  storage (GCS)   │                        │ harvester.report │
-│  └──────────────────┘                        │                  │
-│                                              ▼                  │
-│  NATS Cluster (in-cluster)   Kafka (external: kafka-server.     │
-│  nats-cluster:4222           internal.namico.io:9092)           │
-└─────────────────────────────────────────────────────────────────┘
-                           │
-                    BigQuery (GCP)
-                    trades_raw.trades
-                    trades_raw.windows
-                    trades_raw.forecasts
-                    trades_raw.instruments
+External Client
+  │
+  ▼ NATS
+┌─────────────────────┐
+│  Assets Registry    │ ◄─── NATS: assets.*
+│  (PostgreSQL)       │      instrument reference data
+└─────────────────────┘
+
+┌─────────────────────┐
+│ Harvester Conductor │ ◄─── NATS: harvester.*
+│  (PostgreSQL)       │      orchestrates harvest jobs
+└────────┬────────────┘
+         │ Kafka: harvester.reap
+         ▼
+┌─────────────────────┐      NATS: crypto.cex.binance.vision.get-trades
+│  Harvester Reaper   │ ──► Binance Vision Connector ──► GCS (binance_vision cache)
+│  (×4 replicas)      │
+│                     │      NATS: stock.nasdaq.cloud-storage.get-trades
+│                     │ ──► NASDAQ Cloud Storage Connector ──► GCS (nasdaq-trades)
+│                     │
+│                     │ ──► GCS (trades_jsonl) ──► BigQuery (trades_raw.trades)
+└────────┬────────────┘
+         │ Kafka: harvester.report
+         ▼
+┌─────────────────────┐
+│ Harvester Conductor │ ──► BigQuery: fillWindows → fillForecasts → fillInstruments
+└─────────────────────┘
 ```
 
 ## Services
 
-| Service | Replicas | Transport | Storage |
+| Service | Replicas | Transports | Storage |
 |---------|----------|-----------|---------|
-| assets-registry | 1 | NATS | PostgreSQL (`assets_registry`) |
-| harvester-conductor | 1 | NATS + Kafka | PostgreSQL (`harvester`) + BigQuery |
-| harvester-reaper | 4 | NATS + Kafka | GCS (`trades_jsonl`) + BigQuery |
-| binance-vision | 4 | NATS | GCS (`binance_vision`) |
-| nasdaq-cloud-storage | 4 | NATS | GCS (`nasdaq-trades`) |
+| Assets Registry | 1 | NATS | PostgreSQL (`assets_registry`) |
+| Harvester Conductor | 1 | NATS + Kafka | PostgreSQL (`harvester`) + BigQuery |
+| Harvester Reaper | 4 | NATS (out) + Kafka (in+out) | GCS + BigQuery |
+| Binance Vision Connector | 4 | NATS | GCS (`binance_vision`) |
+| NASDAQ Cloud Storage Connector | 4 | NATS | GCS (`nasdaq-trades`) |
 
-## End-to-End Data Flow
+## Data Flow Summary
 
-1. **Start**: Client sends NATS `harvester.start-harvest` → Conductor creates Harvest + day-granularity Periods, dispatches to Kafka `harvester.reap`
-2. **Reap**: Reaper consumes one period per message → queries connector (Binance Vision or NASDAQ) via NATS for trade batches → uploads JSONL to GCS → archives → loads to BigQuery `trades_raw.trades`
-3. **Report**: Reaper sends `harvester.report` Kafka event (inside same transaction) → Conductor marks period completed
-4. **Await**: When all periods complete, Conductor polls BigQuery every 60s verifying trade count
-5. **Pipeline**: On count match, Conductor runs `fillWindows → fillForecasts → fillInstruments` BigQuery queries sequentially
-6. **Complete**: Harvest status → `completed`
-
-## GCS Buckets
-
-| Bucket | Owner | Purpose |
-|--------|-------|---------|
-| `binance_vision` | binance-vision | Cache for Binance ZIP downloads |
-| `nasdaq-trades` | nasdaq-cloud-storage | Pre-staged NASDAQ CSV data |
-| `trades_jsonl` | harvester-reaper | Staged trade JSONL files before BQ load |
+1. **Start**: Client sends `harvester.start-harvest` via NATS to Conductor
+2. **Dispatch**: Conductor creates Harvest + day-granularity Periods, emits all to Kafka `harvester.reap`
+3. **Reap**: Each Reaper picks up a period, fetches trades from the appropriate connector (Binance or NASDAQ) via NATS, uploads JSONL batches to GCS `trades_jsonl`, archives, loads to BigQuery `trades_raw.trades`
+4. **Report**: Reaper sends `harvester.report` Kafka event (inside same Kafka transaction as load)
+5. **Await**: Conductor marks periods complete; when all done, polls BigQuery trade count vs expected
+6. **Pipeline**: On count match, Conductor runs BigQuery analytics: fillWindows → fillForecasts → fillInstruments
+7. **Complete**: Harvest status set to `completed`
 
 ## Infrastructure
 
-- **NATS**: In-cluster Helm deployment, max payload 300 MB, queue-subscribed for load balancing
-- **Kafka**: External (`kafka-server.internal.namico.io:9092`); reaper uses Kafka transactions for exactly-once semantics
-- **PostgreSQL**: External (`postgres.internal.namico.io:5432`)
-- **BigQuery**: GCP project `cs-poc-xyd1uouxnw27ehczhe6rxby`, dataset `trades_raw`
-- **Monitoring**: Grafana with BigQuery + Postgres datasources at `grafana.internal.namico.io`
+- **Namespace**: `harvester` (Kubernetes)
+- **NATS**: In-cluster cluster (Helm), `nats-cluster-headless.harvester.svc.cluster.local:4222`, max payload 300MB
+- **Kafka**: External broker at `kafka-server.internal.namico.io:9092`
+- **PostgreSQL**: External at `postgres.internal.namico.io:5432`
+- **GCP Project**: `cs-poc-xyd1uouxnw27ehczhe6rxby`
+- **BigQuery dataset**: `trades_raw`
+- **Monitoring**: Grafana with BigQuery + Postgres datasources
 
 ## Related Pages
 - [NATS Subjects](contracts/nats-subjects.md) — all message contracts
 - [Kafka Topics](contracts/kafka-topics.md) — async event contracts
 - [Harvest Flow](logic/harvest-flow.md) — detailed orchestration steps
-- [BigQuery Pipeline](transport/bigquery-pipeline.md) — analytics queries
-
-## Related Pages
-- [NATS Subjects](contracts/nats-subjects.md) — All NATS request/response message contracts
-- [Kafka Topics](contracts/kafka-topics.md) — Async harvest event contracts
-- [Harvest Flow](logic/harvest-flow.md) — Detailed end-to-end orchestration
-- [BigQuery Pipeline](transport/bigquery-pipeline.md) — Post-ingestion analytics queries
-- [Environment / ConfigMaps](config/environment.md) — Kubernetes environment configuration
-
----
+- [Deploy Flow](logic/deploy-flow.md) — Kubernetes deployment procedure

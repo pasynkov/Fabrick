@@ -84,5 +84,3 @@ Instrument {
 - [Harvest & Period](../entities/harvest.md) — Harvest references instrumentId
 - [NATS Subjects](../contracts/nats-subjects.md) — Assets subjects expose Instrument queries
 - [Assets Registry App](../apps/assets-registry.md) — service hosting these entities
-
----

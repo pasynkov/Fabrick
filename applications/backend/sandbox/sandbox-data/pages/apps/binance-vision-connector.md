@@ -9,8 +9,8 @@ related:
   - logic/trade-transfer
   - contracts/nats-subjects
   - config/sentinel-config
-  - entities/applications
   - config/environment
+  - entities/applications
 ---
 
 # Binance Vision Connector
@@ -20,7 +20,7 @@ NestJS microservice. Serves Binance spot trade data via NATS. Sources from GCS c
 **Path:** `apps/binance/vision-connector`  
 **Image:** `pasynkov/namico-binance-vision`  
 **Transport:** NATS only  
-**Replicas:** 4 (RollingUpdate: maxUnavailable 2, maxSurge 1)
+**Replicas:** 4 (RollingUpdate, maxUnavailable: 2, maxSurge: 1)
 
 ## Responsibilities
 
@@ -51,24 +51,23 @@ NATS request
 
 On 404 from Binance: returns empty (day has no data).
 
-## CSV Format
+## CSV Format (Binance trades)
 
 Headers mapped positionally: `TradeId, Price, Quantity, QuoteQuantity, Timestamp, IsBuyerMaker, IsBestMatch`
 
 ## Kubernetes Configuration
 
-| Env Var | Value |
-|---------|-------|
+| Env | Value |
+|-----|-------|
 | `NATS_QUEUE` | `binance-vision` |
 | `TRANSPORTS` | `nats` |
 | `BINANCE_VISION_STORAGE_GCP_BUCKET_NAME` | `binance_vision` |
 
-Resources: 250m CPU / 512Mi memory (request) → 1150m CPU / 1Gi memory (limit)  
-Mounts GCP key at `/etc/secrets/key.json`.
+Resources: 250m/512Mi req → 1150m/1Gi limit  
+Mounts GCP key at `/etc/secrets/key.json`
 
 ## Related Pages
-- [Trade Transfer](../logic/trade-transfer.md) — how the reaper calls this service
-- [NATS Subjects](../contracts/nats-subjects.md) — full subject contract
-- [Kubernetes Applications](../entities/applications.md) — deployment spec
-
----
+- [Trade Transfer](../logic/trade-transfer.md) — how the reaper calls this connector
+- [NATS Subjects](../contracts/nats-subjects.md) — subject contract
+- [Environment Config](../config/environment.md) — GCP credentials ConfigMap
+- [Deployed Applications](../entities/applications.md) — Kubernetes deployment details

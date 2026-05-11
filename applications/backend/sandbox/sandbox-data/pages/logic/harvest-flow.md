@@ -97,10 +97,8 @@ Runs BigQuery queries in sequence:
 - HTTP exceptions from NATS are re-thrown with original status code
 
 ## Related Pages
-- [Harvest & Period Entities](../entities/harvest.md) — DB entities
+- [Harvest & Period](../entities/harvest.md) — DB entities
 - [Trade Transfer](../logic/trade-transfer.md) — per-period trade fetching detail
 - [BigQuery Pipeline](../transport/bigquery-pipeline.md) — forecast SQL queries
 - [NATS Subjects](../contracts/nats-subjects.md) — message contracts
 - [Kafka Topics](../contracts/kafka-topics.md) — event contracts
-
----

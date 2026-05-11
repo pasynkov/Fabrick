@@ -25,27 +25,15 @@ Web UI (`provectuslabs/kafka-ui:latest`) for inspecting topics, consumer groups,
 
 Reads broker config from `kafka-brokers-configmap`.
 
-## Topics
-
-| Topic | Producer | Consumer | Notes |
-|-------|----------|----------|-------|
-| `harvester.reap` | Conductor | Reaper | Period work dispatch |
-| `harvester.report` | Reaper | Conductor | Period completion report |
-| `trades` | Reaper | kafka-bigquery-connect (disabled) | Raw trade sink |
-| `dlq-bigquery-trades` | kafka-bigquery-connect | — | Dead-letter queue |
-| `_connect-configs` | kafka-connect internal | — | |
-| `_connect-offsets` | kafka-connect internal | — | |
-| `_connect-status` | kafka-connect internal | — | |
-
 ## Services Using Kafka
 
-- **harvester-conductor**: NATS + Kafka transport, group `harvest-conductor-group`, client `harvest-conductor-client`
-- **harvester-reaper**: transactional producer, group `harvest-reaper-group`, idempotent, per-pod transactional ID (= pod name)
+| Service | Role | Group ID | Notes |
+|---------|------|----------|-------|
+| harvester-conductor | producer + consumer | `harvest-conductor-group` | Publishes `harvester.reap`, consumes `harvester.report` |
+| harvester-reaper | consumer + producer | `harvest-reaper-group` | Transactional, idempotent, per-pod transactional ID |
 
 ## Related Pages
-- [Applications](../entities/applications.md) — conductor and reaper use Kafka
-- [Kafka Topics](../contracts/kafka-topics.md) — harvester topic contracts and schemas
+- [Kafka Topics](../contracts/kafka-topics.md) — topic definitions and schemas
+- [Applications](../entities/applications.md) — conductor and reaper deployment specs
 - [Kafka BigQuery Connect](../infra/kafka-bigquery-connect.md) — sink connector (currently disabled)
-- [Environment / ConfigMaps](../config/environment.md) — kafka-brokers-configmap
-
----
+- [Environment Config](../config/environment.md) — kafka-brokers-configmap

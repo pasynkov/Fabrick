@@ -12,6 +12,7 @@ module.exports = {
   },
   transform: {
     '^.+\\.ts$': ['ts-jest', {
+      diagnostics: false,
       tsconfig: {
         module: 'commonjs',
         emitDecoratorMetadata: true,

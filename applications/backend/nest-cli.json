@@ -16,6 +16,7 @@
       "compilerOptions": {
         "webpack": true,
         "tsConfigPath": "api/tsconfig.app.json",
+        "webpackConfigPath": "api/webpack.config.js",
         "assets": [
           { "include": "assets/**/*", "outDir": "dist" }
         ]

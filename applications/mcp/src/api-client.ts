@@ -17,13 +17,14 @@ export async function searchProject(
   return res.json() as Promise<{ answer: string; sources: string[] }>;
 }
 
-export async function getToolDescription(
+export async function getSynthesisPage(
   apiUrl: string,
   org: string,
   project: string,
+  path: string,
   token: string,
 ): Promise<string> {
-  const url = `${apiUrl}/v1/orgs/${encodeURIComponent(org)}/projects/${encodeURIComponent(project)}/synthesis/file?path=${encodeURIComponent('mcp-description')}`;
+  const url = `${apiUrl}/v1/orgs/${encodeURIComponent(org)}/projects/${encodeURIComponent(project)}/synthesis/file?path=${encodeURIComponent(path)}`;
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${token}` },
   });

@@ -3,7 +3,7 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { decode } from 'jsonwebtoken';
-import { searchProject, getToolDescription } from './api-client.js';
+import { searchProject, getSynthesisPage } from './api-client.js';
 
 const token = process.env.FABRICK_TOKEN;
 const apiUrl = process.env.FABRICK_API_URL;
@@ -29,24 +29,26 @@ const org = payload.org;
 const project = payload.project;
 
 const FALLBACK_DESCRIPTION = 'Search the project knowledge base. Ask any question about architecture, APIs, entities, flows, configuration.';
+const FALLBACK_INSTRUCTIONS = `Use fabrick_search when your question requires knowledge from a different service, layer, or repository than the one you are currently working in. Do not use it for questions answerable from local file context.`;
 
-let toolDescription = FALLBACK_DESCRIPTION;
-try {
-  toolDescription = await getToolDescription(apiUrl, org, project, token);
-} catch {
-  // Use fallback if no synthesis yet
-}
+const [toolDescription, serverInstructions] = await Promise.allSettled([
+  getSynthesisPage(apiUrl, org, project, 'mcp-description', token),
+  getSynthesisPage(apiUrl, org, project, 'mcp-instructions', token),
+]);
 
 const server = new Server(
   { name: 'fabrick', version: '1.0.0' },
-  { capabilities: { tools: {} } },
+  {
+    capabilities: { tools: {} },
+    instructions: serverInstructions.status === 'fulfilled' ? serverInstructions.value : FALLBACK_INSTRUCTIONS,
+  },
 );
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: [
     {
       name: 'fabrick_search',
-      description: toolDescription,
+      description: toolDescription.status === 'fulfilled' ? toolDescription.value : FALLBACK_DESCRIPTION,
       inputSchema: {
         type: 'object',
         properties: {

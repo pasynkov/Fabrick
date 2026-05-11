@@ -5,7 +5,7 @@ import { searchProject } from './api-client.js';
 
 jest.mock('./api-client.js', () => ({
   searchProject: jest.fn(),
-  getToolDescription: jest.fn(),
+  getSynthesisPage: jest.fn(),
 }));
 
 const mockSearchProject = searchProject as jest.Mock;

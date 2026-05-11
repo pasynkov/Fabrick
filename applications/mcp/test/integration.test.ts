@@ -2,7 +2,7 @@
 // Uses a real HTTP server (http.createServer) to mock the Fabrick API
 
 import * as http from 'http';
-import { searchProject, getToolDescription } from '../src/api-client.js';
+import { searchProject, getSynthesisPage } from '../src/api-client.js';
 
 // Restore native fetch (Node 18+) so this integration test makes real HTTP calls.
 // Other test files set global.fetch = jest.fn() — reset it here.
@@ -114,14 +114,14 @@ describe('MCP integration — searchProject against real HTTP', () => {
   });
 });
 
-describe('MCP integration — getToolDescription against real HTTP', () => {
-  it('fetches mcp-description page and returns text', async () => {
+describe('MCP integration — getSynthesisPage against real HTTP', () => {
+  it('fetches requested page and returns text', async () => {
     const { url, close, requests } = await startMockApiServer({
       '/synthesis/file': { status: 200, body: 'Use fabrick_search to query...', contentType: 'text/plain' },
     });
 
     try {
-      const result = await getToolDescription(url, 'myorg', 'myproject', 'fbrk_test-token');
+      const result = await getSynthesisPage(url, 'myorg', 'myproject', 'mcp-description', 'fbrk_test-token');
 
       expect(result).toBe('Use fabrick_search to query...');
       expect(requests[0].url).toContain('/synthesis/file');
@@ -131,12 +131,12 @@ describe('MCP integration — getToolDescription against real HTTP', () => {
     }
   });
 
-  it('throws on 404 when mcp-description page not found', async () => {
+  it('throws on 404 when page not found', async () => {
     const { url, close } = await startMockApiServer({});
 
     try {
       await expect(
-        getToolDescription(url, 'org', 'proj', 'fbrk_tok'),
+        getSynthesisPage(url, 'org', 'proj', 'mcp-description', 'fbrk_tok'),
       ).rejects.toThrow('API returned 404');
     } finally {
       close();

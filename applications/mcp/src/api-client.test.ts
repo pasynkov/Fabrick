@@ -1,4 +1,4 @@
-import { searchProject, getToolDescription } from './api-client.js';
+import { searchProject, getSynthesisPage } from './api-client.js';
 
 const mockFetch = jest.fn();
 global.fetch = mockFetch;
@@ -77,32 +77,41 @@ describe('searchProject', () => {
   });
 });
 
-describe('getToolDescription', () => {
+describe('getSynthesisPage', () => {
   const apiUrl = 'http://localhost:3000';
   const token = 'fbrk_test-token';
 
   it('returns text content on 200 response', async () => {
     mockFetch.mockResolvedValue({ ok: true, text: async () => 'Use this tool to search...' });
 
-    const result = await getToolDescription(apiUrl, 'myorg', 'myproject', token);
+    const result = await getSynthesisPage(apiUrl, 'myorg', 'myproject', 'mcp-description', token);
     expect(result).toBe('Use this tool to search...');
   });
 
-  it('fetches mcp-description page via synthesis/file endpoint', async () => {
+  it('fetches requested page via synthesis/file endpoint', async () => {
     mockFetch.mockResolvedValue({ ok: true, text: async () => '' });
 
-    await getToolDescription(apiUrl, 'myorg', 'myproject', token);
+    await getSynthesisPage(apiUrl, 'myorg', 'myproject', 'mcp-description', token);
 
     const [calledUrl] = mockFetch.mock.calls[0] as [string, RequestInit];
     expect(calledUrl).toContain('/synthesis/file');
     expect(calledUrl).toContain('mcp-description');
   });
 
+  it('encodes path param in URL', async () => {
+    mockFetch.mockResolvedValue({ ok: true, text: async () => '' });
+
+    await getSynthesisPage(apiUrl, 'myorg', 'myproject', 'mcp-instructions', token);
+
+    const [calledUrl] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(calledUrl).toContain('mcp-instructions');
+  });
+
   it('throws on non-200 response', async () => {
     mockFetch.mockResolvedValue({ ok: false, status: 404 });
 
     await expect(
-      getToolDescription(apiUrl, 'myorg', 'myproject', token),
+      getSynthesisPage(apiUrl, 'myorg', 'myproject', 'mcp-description', token),
     ).rejects.toThrow('API returned 404');
   });
 });

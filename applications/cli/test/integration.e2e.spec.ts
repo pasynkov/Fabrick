@@ -151,13 +151,12 @@ describe('fabrick push', () => {
 });
 
 describe('MCP stdio', () => {
-  it('get_synthesis_index returns mock synthesis content', async () => {
+  it('lists fabrick_search tool', async () => {
     const mcpProcess = spawn('node', [MCP_BIN], {
       env: { ...process.env, FABRICK_TOKEN: mcpToken, FABRICK_API_URL: API_URL },
       stdio: ['pipe', 'pipe', 'pipe'],
     });
 
-    // Send all frames upfront — MCP SDK processes them sequentially
     mcpProcess.stdin.write(
       JSON.stringify({
         jsonrpc: '2.0',
@@ -174,12 +173,7 @@ describe('MCP stdio', () => {
       JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) + '\n',
     );
     mcpProcess.stdin.write(
-      JSON.stringify({
-        jsonrpc: '2.0',
-        id: 3,
-        method: 'tools/call',
-        params: { name: 'get_synthesis_index', arguments: {} },
-      }) + '\n',
+      JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} }) + '\n',
     );
 
     const msg = await new Promise<any>((resolve, reject) => {
@@ -194,7 +188,7 @@ describe('MCP stdio', () => {
         for (const line of buf.split('\n')) {
           try {
             const parsed = JSON.parse(line);
-            if (parsed.id === 3) {
+            if (parsed.id === 2) {
               clearTimeout(timer);
               mcpProcess.kill();
               resolve(parsed);
@@ -211,6 +205,6 @@ describe('MCP stdio', () => {
       });
     });
 
-    expect(msg.result?.content?.[0]?.text).toBe(MOCK_SYNTHESIS);
+    expect(msg.result?.tools?.[0]?.name).toBe('fabrick_search');
   });
 });

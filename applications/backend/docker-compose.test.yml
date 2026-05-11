@@ -15,11 +15,10 @@ services:
 
   e2e:
     image: node:24-alpine
-    working_dir: /app
+    working_dir: /backend
     volumes:
-      - ./api:/app
-      - ./shared:/shared
-      - /app/node_modules
+      - .:/backend
+      - /backend/node_modules
     environment:
       DB_HOST: postgres
       DB_PORT: "5432"
@@ -28,8 +27,7 @@ services:
       DB_TEST_NAME: fabrick_test
       DB_SSL: "false"
       JWT_SECRET: test-secret
-      ENCRYPTION_KEY: dGVzdC1lbmNyeXB0aW9uLWtleS1mb3ItZTJlLXRlc3RzISE=
-    command: sh -c "npm ci --legacy-peer-deps && npm run test:e2e"
+    command: sh -c "npm ci --legacy-peer-deps && npx jest --config api/jest.e2e.config.js"
     depends_on:
       postgres:
         condition: service_healthy

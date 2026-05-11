@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository as TypeOrmRepository } from 'typeorm';
-import { SearchImpl } from './search.impl';
+import { SearchImpl } from '@app/shared';
 import { Organization } from '../entities/organization.entity';
 import { Project } from '../entities/project.entity';
 import { OrgMember } from '../entities/org-member.entity';

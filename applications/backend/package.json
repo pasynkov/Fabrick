@@ -1,13 +1,15 @@
 {
-  "name": "fabrick-api",
-  "version": "0.10.0",
+  "name": "fabrick-backend",
+  "version": "0.11.0",
+  "private": true,
   "scripts": {
-    "build": "npm --prefix .. run build:api",
-    "start": "node dist/main/index.js",
-    "start:dev": "nest start --watch",
-    "test:unit": "jest",
-    "test:e2e": "jest --config jest.e2e.config.js",
-    "test": "jest && jest --config jest.e2e.config.js"
+    "build:api": "nest build api",
+    "build:synthesis": "nest build synthesis",
+    "build:sandbox": "nest build sandbox",
+    "start:api": "nest start api --watch",
+    "start:synthesis": "nest start synthesis --watch",
+    "test:api": "jest --config api/jest.config.js",
+    "test:api:e2e": "jest --config api/jest.e2e.config.js --rootDir api"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
@@ -25,6 +27,8 @@
     "bcrypt": "^6.0.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^1.4.5-lts.1",
     "nats": "^2.28.0",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
@@ -32,25 +36,29 @@
     "reflect-metadata": "^0.2.0",
     "rxjs": "^7.8.0",
     "typeorm": "^0.3.28",
-    "unzipper": "^0.12.3"
+    "unzipper": "^0.12.3",
+    "yaml": "^2.6.1"
   },
   "devDependencies": {
     "@nestjs/cli": "^10.0.0",
+    "@nestjs/schematics": "^10.0.0",
     "@nestjs/testing": "^10.0.0",
     "@types/adm-zip": "^0.5.8",
     "@types/archiver": "^7.0.0",
     "@types/bcrypt": "^6.0.0",
     "@types/jest": "^30.0.0",
-    "@types/multer": "^1.4.11",
+    "@types/jsonwebtoken": "^9.0.0",
+    "@types/multer": "^1.4.12",
     "@types/node": "^24.0.0",
     "@types/passport-jwt": "^4.0.1",
     "@types/supertest": "^6.0.0",
-    "@types/unzipper": "^0.10.9",
+    "@types/unzipper": "^0.10.10",
     "adm-zip": "^0.5.17",
     "archiver": "^7.0.1",
     "jest": "^30.3.0",
     "supertest": "^7.0.0",
     "ts-jest": "^29.4.9",
+    "ts-loader": "^9.5.2",
     "typescript": "^5.0.0"
   }
 }

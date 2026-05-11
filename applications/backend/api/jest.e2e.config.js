@@ -6,6 +6,7 @@ module.exports = {
   globalTeardown: '<rootDir>/test/teardown.ts',
   maxWorkers: 1,
   moduleFileExtensions: ['ts', 'tsx', 'js', 'json'],
+  modulePaths: ['<rootDir>/node_modules'],
   moduleNameMapper: {
     '^@app/shared/(.*)$': '<rootDir>/../shared/src/$1',
     '^@app/shared$': '<rootDir>/../shared/src',

@@ -15,6 +15,7 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
+import { createHash } from 'crypto';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import * as unzipper from 'unzipper';
@@ -155,22 +156,32 @@ export class ReposController {
     await this.reposService.requireOrgMemberByRepo(req.user.id, repoId);
 
     const { orgSlug, projectSlug, repo } = await this.reposService.getRepoWithContext(repoId);
+
+    // Compute hash of uploaded content
+    const newHash = createHash('sha256').update(file.buffer).digest('hex');
+    const wikiChanged = repo.wikiContentHash !== newHash;
+
     const directory = await unzipper.Open.buffer(file.buffer);
     for (const entry of directory.files) {
       if (entry.type === 'File') {
         const content = await entry.buffer();
         await this.storageService.putObject(
           orgSlug,
-          `${projectSlug}/${repo.slug}/context/${entry.path}`,
+          `${projectSlug}/${repo.slug}/wiki/${entry.path}`,
           content,
         );
       }
     }
 
+    // Update stored hash
+    if (wikiChanged) {
+      await this.reposService.updateRepoWikiHash(repoId, newHash);
+    }
+
     const project = await this.reposService.getProjectByRepo(repoId);
-    if (project.autoSynthesisEnabled || dto.triggerSynthesis) {
+    if ((project.autoSynthesisEnabled || dto.triggerSynthesis) && wikiChanged) {
       try {
-        await this.synthesisService.triggerForProject(project.id, req.user.id);
+        await this.synthesisService.triggerForProject(project.id, req.user.id, [repo.slug]);
       } catch (err: any) {
         this.logger.error(`Synthesis trigger failed for project ${project.id}: ${err.message}`);
         if (dto.triggerSynthesis) {

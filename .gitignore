@@ -17,3 +17,4 @@ src/app/e2e/.auth.json
 .DS_Store
 .idea
 output.txt
+/applications/backend/sandbox/sandbox-data/

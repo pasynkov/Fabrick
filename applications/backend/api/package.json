@@ -1,15 +1,16 @@
 {
   "name": "fabrick-api",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "scripts": {
-    "build": "nest build",
-    "start": "node dist/main",
+    "build": "npm --prefix .. run build:api",
+    "start": "node dist/main/index.js",
     "start:dev": "nest start --watch",
     "test:unit": "jest",
     "test:e2e": "jest --config jest.e2e.config.js",
     "test": "jest && jest --config jest.e2e.config.js"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
     "@azure/functions": "^3.5.1",
     "@azure/service-bus": "^7.9.0",
     "@azure/storage-blob": "12.24.0",

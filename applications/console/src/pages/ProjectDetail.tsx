@@ -3,6 +3,9 @@ import { Link, useParams } from 'react-router-dom';
 import { api } from '../api';
 import { ProjectKeyResolutionChain } from '../components/ProjectKeyResolutionChain';
 import { ApiKeyAuditLogs } from '../components/ApiKeyAuditLogs';
+import { WikiSearch } from '../components/WikiSearch';
+import { WikiPagesTable } from '../components/WikiPagesTable';
+import { WikiPageView } from '../components/WikiPageView';
 
 interface Repo { id: string; name: string; slug: string; gitRemote: string }
 interface Project { id: string; name: string; slug: string }
@@ -18,8 +21,9 @@ export default function ProjectDetail() {
 
   const [synthStatus, setSynthStatus] = useState<string>('idle');
   const [synthError, setSynthError] = useState<string | undefined>();
-  const [synthFiles, setSynthFiles] = useState<Record<string, string> | null>(null);
   const [synthTriggering, setSynthTriggering] = useState(false);
+  const [selectedWikiSlug, setSelectedWikiSlug] = useState<string | null>(null);
+  const [wikiKey, setWikiKey] = useState(0);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -36,7 +40,6 @@ export default function ProjectDetail() {
           setSynthStatus(s.status);
           setSynthError(s.error);
           if (s.status === 'running') startPolling(p.id);
-          if (s.status === 'done') loadFiles(p.id);
         }).catch(() => {});
         api.projects.apiKey.status(p.id).then((s) => {
           setHasEffectiveApiKey(s.effectiveSource !== 'none');
@@ -57,7 +60,7 @@ export default function ProjectDetail() {
         setSynthError(s.error);
         if (s.status !== 'running') {
           stopPolling();
-          if (s.status === 'done') loadFiles(projectId);
+          if (s.status === 'done') setWikiKey((k) => k + 1);
         }
       } catch {}
     }, 3000);
@@ -70,13 +73,6 @@ export default function ProjectDetail() {
     }
   }
 
-  async function loadFiles(projectId: string) {
-    try {
-      const files = await api.synthesis.files(projectId);
-      setSynthFiles(files);
-    } catch {}
-  }
-
   async function handleRunSynthesis() {
     if (!project) return;
     setSynthTriggering(true);
@@ -84,7 +80,6 @@ export default function ProjectDetail() {
       await api.synthesis.trigger(project.id);
       setSynthStatus('running');
       setSynthError(undefined);
-      setSynthFiles(null);
       startPolling(project.id);
     } catch (e: any) {
       setSynthError(e.message);
@@ -177,7 +172,7 @@ export default function ProjectDetail() {
           </div>
 
           {synthStatus === 'idle' && (
-            <p className="text-gray-400 text-sm">No synthesis yet. Push context and run synthesis.</p>
+            <p className="text-gray-400 text-sm">No synthesis yet. Push wiki and run synthesis.</p>
           )}
 
           {synthStatus === 'running' && (
@@ -195,22 +190,36 @@ export default function ProjectDetail() {
               <span className="font-medium">Error:</span> {synthError || 'Unknown error'}
             </div>
           )}
-
-          {synthStatus === 'done' && synthFiles && (
-            <div className="space-y-3">
-              {Object.entries(synthFiles).map(([path, content]) => (
-                <details key={path} className="bg-white border border-gray-200 rounded-lg">
-                  <summary className="px-4 py-3 cursor-pointer font-mono text-sm text-gray-700 hover:bg-gray-50 select-none">
-                    {path}
-                  </summary>
-                  <pre className="px-4 py-3 text-xs text-gray-600 whitespace-pre-wrap border-t border-gray-100 overflow-auto max-h-64">
-                    {content}
-                  </pre>
-                </details>
-              ))}
-            </div>
-          )}
         </section>
+
+        {orgSlug && projectSlug && synthStatus === 'done' && (
+          <>
+            <section>
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">Search Wiki</h2>
+              <WikiSearch orgSlug={orgSlug} projectSlug={projectSlug} hasApiKey={!noApiKey} />
+            </section>
+
+            <section>
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">Wiki Pages</h2>
+              {selectedWikiSlug ? (
+                <WikiPageView
+                  orgSlug={orgSlug}
+                  projectSlug={projectSlug}
+                  slug={selectedWikiSlug}
+                  onBack={() => setSelectedWikiSlug(null)}
+                  onNavigate={setSelectedWikiSlug}
+                />
+              ) : (
+                <WikiPagesTable
+                  key={wikiKey}
+                  orgSlug={orgSlug}
+                  projectSlug={projectSlug}
+                  onSelectPage={setSelectedWikiSlug}
+                />
+              )}
+            </section>
+          </>
+        )}
       </main>
     </div>
   );

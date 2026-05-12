@@ -1,18 +1,4 @@
-// Mock @anthropic-ai/sdk before any imports
-const mockMessagesCreate = jest.fn();
-jest.mock('@anthropic-ai/sdk', () => ({
-  default: jest.fn().mockImplementation(() => ({
-    messages: { create: mockMessagesCreate },
-  })),
-}));
-
-// Mock fs.readFileSync to avoid reading the actual prompt file
-jest.mock('fs', () => ({
-  ...jest.requireActual('fs'),
-  readFileSync: jest.fn().mockReturnValue('You are a synthesis assistant.'),
-}));
-
-// Mock fetch for callback reporting
+// Mock fetch for HTTP callbacks
 const mockFetch = jest.fn();
 global.fetch = mockFetch;
 
@@ -20,34 +6,32 @@ import { Test } from '@nestjs/testing';
 import { SynthesisProcessor } from './synthesis.processor';
 import { QUEUE_SERVICE } from '../queue/queue.module';
 import { StorageService } from '../storage/storage.service';
+import { SynthesisImpl } from '@app/shared';
 
 const mockStorage = () => ({
   listObjects: jest.fn(),
   getObject: jest.fn(),
   putObject: jest.fn(),
 });
+
 const mockQueue = () => ({
   publish: jest.fn(),
   subscribe: jest.fn(),
 });
 
-function makeAnthropicResponse(text: string, stop_reason = 'end_turn') {
-  return {
-    content: [{ type: 'text', text }],
-    stop_reason,
-  };
-}
-
-function makeDelimiterResponse(files: Record<string, string>): string {
-  return Object.entries(files)
-    .map(([name, content]) => `=== FILE: ${name} ===\n${content}`)
-    .join('\n\n');
-}
+const mockSynthesisImpl = () => ({
+  buildContext: jest.fn().mockReturnValue('context string'),
+  synthesize: jest.fn().mockResolvedValue('raw claude response'),
+  parseResponse: jest.fn().mockReturnValue({
+    pages: [{ slug: 'index', category: 'overview', title: 'Index', content: '# Index', sources: [], related: [] }],
+    deleteSlugs: [],
+  }),
+});
 
 describe('SynthesisProcessor', () => {
   let processor: SynthesisProcessor;
   let storageService: ReturnType<typeof mockStorage>;
-  let queueService: ReturnType<typeof mockQueue>;
+  let synthesisImpl: ReturnType<typeof mockSynthesisImpl>;
 
   beforeEach(async () => {
     const module = await Test.createTestingModule({
@@ -55,15 +39,16 @@ describe('SynthesisProcessor', () => {
         SynthesisProcessor,
         { provide: StorageService, useFactory: mockStorage },
         { provide: QUEUE_SERVICE, useFactory: mockQueue },
+        { provide: SynthesisImpl, useFactory: mockSynthesisImpl },
       ],
     }).compile();
 
     processor = module.get(SynthesisProcessor);
     storageService = module.get(StorageService);
-    queueService = module.get(QUEUE_SERVICE);
+    synthesisImpl = module.get(SynthesisImpl);
 
     jest.clearAllMocks();
-    mockFetch.mockResolvedValue({ ok: true });
+    mockFetch.mockResolvedValue({ ok: true, json: jest.fn().mockResolvedValue({ pages: [] }), text: jest.fn().mockResolvedValue('') });
   });
 
   const baseJob = {
@@ -71,90 +56,98 @@ describe('SynthesisProcessor', () => {
     orgSlug: 'myorg',
     projectSlug: 'myproject',
     repos: [{ id: 'repo1', slug: 'myrepo' }],
+    changedRepos: ['myrepo'],
     callbackToken: 'callback-token',
     anthropicApiKey: 'test-api-key',
   };
 
   describe('processJob — happy path', () => {
-    it('loads context files, calls Anthropic, stores synthesis files, reports done', async () => {
-      storageService.listObjects.mockResolvedValue(['myproject/myrepo/context/summary.md']);
-      storageService.getObject.mockResolvedValue(Buffer.from('# Summary content'));
-      storageService.putObject.mockResolvedValue(undefined);
-
-      const synthesisOutput = makeDelimiterResponse({
-        'index.md': '# Project Index',
-        'apps/api.md': '## API Details',
-      });
-      mockMessagesCreate.mockResolvedValue(makeAnthropicResponse(synthesisOutput));
+    it('loads wiki files, calls SynthesisImpl, upserts pages, reports done', async () => {
+      storageService.listObjects.mockResolvedValue(['myproject/myrepo/wiki/index.md']);
+      storageService.getObject.mockResolvedValue(Buffer.from('# Wiki content'));
 
       await (processor as any).processJob(baseJob);
 
-      // Loaded context
-      expect(storageService.listObjects).toHaveBeenCalledWith('myorg', 'myproject/myrepo/context/');
-      expect(storageService.getObject).toHaveBeenCalledWith('myorg', 'myproject/myrepo/context/summary.md');
+      expect(storageService.listObjects).toHaveBeenCalledWith('myorg', 'myproject/myrepo/wiki/');
+      expect(storageService.getObject).toHaveBeenCalledWith('myorg', 'myproject/myrepo/wiki/index.md');
 
-      // Called Anthropic with correct model
-      expect(mockMessagesCreate).toHaveBeenCalledWith(expect.objectContaining({
-        model: 'claude-opus-4-6',
-        messages: [{ role: 'user', content: expect.stringContaining('# Summary content') }],
-      }));
-
-      // Stored synthesis files
-      expect(storageService.putObject).toHaveBeenCalledWith(
-        'myorg',
-        'myproject/synthesis/index.md',
-        expect.any(Buffer),
-      );
-      expect(storageService.putObject).toHaveBeenCalledWith(
-        'myorg',
-        'myproject/synthesis/apps/api.md',
-        expect.any(Buffer),
+      expect(synthesisImpl.buildContext).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({ slug: 'myrepo' }),
+        ]),
+        expect.any(Array),
+        ['myrepo'],
       );
 
-      // Reported done via callback
+      expect(synthesisImpl.synthesize).toHaveBeenCalledWith('context string', 'test-api-key');
+      expect(synthesisImpl.parseResponse).toHaveBeenCalledWith('raw claude response');
+
+      // Upserted pages
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining('/v1/internal/synthesis/pages'),
+        expect.objectContaining({ method: 'PUT' }),
+      );
+
+      // Reported done
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('/v1/internal/synthesis/status'),
         expect.objectContaining({
           method: 'POST',
-          headers: expect.objectContaining({ Authorization: 'Bearer callback-token' }),
           body: expect.stringContaining('"status":"done"'),
         }),
       );
     });
 
-    it('processes multiple repos, concatenates context blocks', async () => {
+    it('processes multiple repos, passes all to buildContext', async () => {
       const job = {
         ...baseJob,
         repos: [
           { id: 'repo1', slug: 'repo-a' },
           { id: 'repo2', slug: 'repo-b' },
         ],
+        changedRepos: ['repo-a', 'repo-b'],
       };
 
       storageService.listObjects
-        .mockResolvedValueOnce(['myproject/repo-a/context/a.md'])
-        .mockResolvedValueOnce(['myproject/repo-b/context/b.md']);
+        .mockResolvedValueOnce(['myproject/repo-a/wiki/a.md'])
+        .mockResolvedValueOnce(['myproject/repo-b/wiki/b.md']);
       storageService.getObject.mockResolvedValue(Buffer.from('file content'));
-      storageService.putObject.mockResolvedValue(undefined);
-
-      mockMessagesCreate.mockResolvedValue(makeAnthropicResponse(makeDelimiterResponse({ 'index.md': 'ok' })));
 
       await (processor as any).processJob(job);
 
-      const callArgs = mockMessagesCreate.mock.calls[0][0];
-      const userContent = callArgs.messages[0].content as string;
-      expect(userContent).toContain('=== REPO: repo-a ===');
-      expect(userContent).toContain('=== REPO: repo-b ===');
+      const [repoWikis] = (synthesisImpl.buildContext as jest.Mock).mock.calls[0];
+      expect(repoWikis).toHaveLength(2);
+      expect(repoWikis[0].slug).toBe('repo-a');
+      expect(repoWikis[1].slug).toBe('repo-b');
+    });
+
+    it('calls deletePages when parsedResponse has deleteSlugs', async () => {
+      storageService.listObjects.mockResolvedValue(['myproject/myrepo/wiki/index.md']);
+      storageService.getObject.mockResolvedValue(Buffer.from('content'));
+      (synthesisImpl.parseResponse as jest.Mock).mockReturnValue({
+        pages: [{ slug: 'index', category: 'overview', title: 'Index', content: '', sources: [], related: [] }],
+        deleteSlugs: ['old-page'],
+      });
+
+      await (processor as any).processJob(baseJob);
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining('/v1/internal/synthesis/pages'),
+        expect.objectContaining({
+          method: 'DELETE',
+          body: expect.stringContaining('old-page'),
+        }),
+      );
     });
   });
 
   describe('processJob — error handling', () => {
-    it('reports error when no context files found', async () => {
+    it('reports error when no wiki files found', async () => {
       storageService.listObjects.mockResolvedValue([]);
 
       await (processor as any).processJob(baseJob);
 
-      expect(mockMessagesCreate).not.toHaveBeenCalled();
+      expect(synthesisImpl.synthesize).not.toHaveBeenCalled();
       expect(mockFetch).toHaveBeenCalledWith(
         expect.any(String),
         expect.objectContaining({
@@ -163,27 +156,10 @@ describe('SynthesisProcessor', () => {
       );
     });
 
-    it('reports error when response has no === FILE: markers', async () => {
-      storageService.listObjects.mockResolvedValue(['myproject/myrepo/context/a.md']);
+    it('reports error when parseResponse returns no pages', async () => {
+      storageService.listObjects.mockResolvedValue(['myproject/myrepo/wiki/index.md']);
       storageService.getObject.mockResolvedValue(Buffer.from('content'));
-      mockMessagesCreate.mockResolvedValue(makeAnthropicResponse('This is not delimiter format at all.'));
-
-      await (processor as any).processJob(baseJob);
-
-      expect(mockFetch).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.objectContaining({
-          body: expect.stringContaining('"status":"error"'),
-        }),
-      );
-      const body = JSON.parse((mockFetch.mock.calls[0][1] as any).body);
-      expect(body.error).toBe('No files found in Claude response');
-    });
-
-    it('reports error when stop_reason is max_tokens', async () => {
-      storageService.listObjects.mockResolvedValue(['myproject/myrepo/context/a.md']);
-      storageService.getObject.mockResolvedValue(Buffer.from('content'));
-      mockMessagesCreate.mockResolvedValue(makeAnthropicResponse('partial...', 'max_tokens'));
+      (synthesisImpl.parseResponse as jest.Mock).mockReturnValue({ pages: [], deleteSlugs: [] });
 
       await (processor as any).processJob(baseJob);
 
@@ -195,10 +171,10 @@ describe('SynthesisProcessor', () => {
       );
     });
 
-    it('reports error when Anthropic throws', async () => {
-      storageService.listObjects.mockResolvedValue(['myproject/myrepo/context/a.md']);
+    it('reports error when SynthesisImpl.synthesize throws', async () => {
+      storageService.listObjects.mockResolvedValue(['myproject/myrepo/wiki/index.md']);
       storageService.getObject.mockResolvedValue(Buffer.from('content'));
-      mockMessagesCreate.mockRejectedValue(new Error('API overloaded'));
+      (synthesisImpl.synthesize as jest.Mock).mockRejectedValue(new Error('API overloaded'));
 
       await (processor as any).processJob(baseJob);
 
@@ -208,34 +184,6 @@ describe('SynthesisProcessor', () => {
           body: expect.stringContaining('API overloaded'),
         }),
       );
-    });
-
-    it('sends system prompt to Anthropic', async () => {
-      storageService.listObjects.mockResolvedValue(['myproject/myrepo/context/a.md']);
-      storageService.getObject.mockResolvedValue(Buffer.from('ctx'));
-      storageService.putObject.mockResolvedValue(undefined);
-      mockMessagesCreate.mockResolvedValue(makeAnthropicResponse(makeDelimiterResponse({ 'index.md': 'x' })));
-
-      await (processor as any).processJob(baseJob);
-
-      expect(mockMessagesCreate).toHaveBeenCalledWith(expect.objectContaining({
-        system: 'You are a synthesis assistant.',
-      }));
-    });
-
-    it('parses file content containing quotes and newlines correctly', async () => {
-      storageService.listObjects.mockResolvedValue(['myproject/myrepo/context/a.md']);
-      storageService.getObject.mockResolvedValue(Buffer.from('content'));
-      storageService.putObject.mockResolvedValue(undefined);
-
-      const complexContent = `# Title\n\nSome "quoted" text\nand a backslash: \\\nand another line.`;
-      const response = `=== FILE: index.md ===\n${complexContent}`;
-      mockMessagesCreate.mockResolvedValue(makeAnthropicResponse(response));
-
-      await (processor as any).processJob(baseJob);
-
-      const [, , storedBuffer] = storageService.putObject.mock.calls[0];
-      expect(storedBuffer.toString('utf-8')).toBe(complexContent);
     });
   });
 

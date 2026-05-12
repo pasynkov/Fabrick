@@ -143,23 +143,25 @@ In Claude Code, run:
 /fabrick-analyze
 ```
 
-Extracts context from your repository into `.fabrick/context/` — framework, endpoints, environment variables, domain logic, and AI-generated summaries.
+Builds a wiki for your repository in `.fabrick/wiki/` — concept-organized markdown pages covering entities, business logic, API contracts, transport, and configuration. Incremental: only changed files are re-analyzed on subsequent runs. Wiki is committed to git as part of your project.
 
-### Push context to Fabrick
+### Push wiki to Fabrick
 
 ```
 /fabrick-push
 ```
 
-Uploads your local `.fabrick/context/` to the Fabrick backend for synthesis and search.
+Uploads your local `.fabrick/wiki/` to the Fabrick backend for project-level synthesis and search.
 
 ### Search across your architecture
 
+Use the `fabrick_search` MCP tool directly in Claude Code — ask any question about your project and get a direct answer without file navigation:
+
 ```
-/fabrick-search
+fabrick_search("what endpoint returns user profile data?")
 ```
 
-Ask questions about your codebase — Fabrick finds answers from the synthesized architecture index.
+Or browse and search your project wiki in the [Fabrick console](https://console.fabrick.me).
 
 ---
 

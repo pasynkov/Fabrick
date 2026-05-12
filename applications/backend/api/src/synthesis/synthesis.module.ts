@@ -6,15 +6,14 @@ import { OrgMember } from '../entities/org-member.entity';
 import { Organization } from '../entities/organization.entity';
 import { Project } from '../entities/project.entity';
 import { Repository } from '../entities/repository.entity';
-import { StorageModule } from '../storage/storage.module';
+import { WikiPage } from '../entities/wiki-page.entity';
 import { QueueModule } from '../queue/queue.module';
 import { SynthesisController } from './synthesis.controller';
 import { SynthesisService } from './synthesis.service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Project, Organization, OrgMember, Repository]),
-    StorageModule,
+    TypeOrmModule.forFeature([Project, Organization, OrgMember, Repository, WikiPage]),
     QueueModule,
     AuthModule,
     ApiKeysModule,

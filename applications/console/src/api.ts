@@ -40,6 +40,30 @@ async function tryRefresh(): Promise<string | null> {
   }
 }
 
+async function requestText(path: string, retry = true): Promise<string> {
+  let token = getToken();
+
+  if (token && isTokenExpiringSoon(token)) {
+    const refreshed = await tryRefresh();
+    if (refreshed) token = refreshed;
+    else { clearAuth(); throw Object.assign(new Error('Session expired'), { status: 401 }); }
+  }
+
+  const versionedPath = `/v1${path}`;
+  const res = await fetch(`${API_URL}${versionedPath}`, {
+    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+  });
+
+  if (res.status === 401 && retry) {
+    const refreshed = await tryRefresh();
+    if (!refreshed) { clearAuth(); throw Object.assign(new Error('Session expired'), { status: 401 }); }
+    return requestText(path, false);
+  }
+
+  if (!res.ok) throw Object.assign(new Error(res.statusText), { status: res.status });
+  return res.text();
+}
+
 async function request<T>(path: string, options: RequestInit = {}, retry = true): Promise<T> {
   let token = getToken();
 
@@ -190,5 +214,27 @@ export const api = {
       request<{ status: string; error?: string }>(`/projects/${projectId}/synthesis/status`),
     files: (projectId: string) =>
       request<Record<string, string>>(`/projects/${projectId}/synthesis`),
+    pages: (orgSlug: string, projectSlug: string) =>
+      request<{ pages: WikiPageSummary[] }>(`/orgs/${orgSlug}/projects/${projectSlug}/synthesis/pages`),
+    file: (orgSlug: string, projectSlug: string, slug: string) =>
+      requestText(`/orgs/${orgSlug}/projects/${projectSlug}/synthesis/file?path=${encodeURIComponent(slug)}`),
+  },
+
+  wiki: {
+    search: (orgSlug: string, projectSlug: string, question: string) =>
+      request<{ answer: string; sources: string[] }>(`/orgs/${orgSlug}/projects/${projectSlug}/search`, {
+        method: 'POST',
+        body: JSON.stringify({ question }),
+      }),
   },
 };
+
+export interface WikiPageSummary {
+  id: string;
+  slug: string;
+  category: string;
+  title: string;
+  sources: string[];
+  related: string[];
+  updatedAt: string;
+}

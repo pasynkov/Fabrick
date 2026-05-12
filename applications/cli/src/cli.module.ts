@@ -4,6 +4,8 @@ import { CredentialsService } from './credentials.service';
 import { InitCommand } from './init.command';
 import { LoginCommand } from './login.command';
 import { PushCommand } from './push.command';
+import { ScanCommand } from './scan.command';
+import { RebuildSourceMapCommand } from './rebuild-source-map.command';
 
 @Module({
   providers: [
@@ -12,6 +14,8 @@ import { PushCommand } from './push.command';
     LoginCommand,
     InitCommand,
     PushCommand,
+    ScanCommand,
+    RebuildSourceMapCommand,
   ],
 })
 export class CliModule {}

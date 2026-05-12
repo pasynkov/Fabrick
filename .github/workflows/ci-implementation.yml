@@ -83,6 +83,10 @@ jobs:
       - name: Install openspec
         if: steps.check.outputs.exists == 'true'
         run: npm install -g @fission-ai/openspec
+      - name: Install backend dependencies
+        if: steps.check.outputs.exists == 'true'
+        run: npm ci --legacy-peer-deps
+        working-directory: applications/backend
       - name: Install API dependencies
         if: steps.check.outputs.exists == 'true'
         run: npm ci --legacy-peer-deps
@@ -238,18 +242,17 @@ jobs:
         run: |
           git add -A
           git diff --staged --quiet || git commit -m "fix: review fixes for ${{ steps.name.outputs.name }}"
-      - name: Install app dependencies for build check
+      - name: Install backend dependencies for build check
         if: steps.check.outputs.exists == 'true'
-        run: |
-          npm ci --legacy-peer-deps
-        working-directory: applications/backend/api
+        run: npm ci --legacy-peer-deps
+        working-directory: applications/backend
       - uses: actions/setup-node@v4
         if: steps.check.outputs.exists == 'true'
         with:
           node-version: '24'
       - name: Install synthesis dependencies
         if: steps.check.outputs.exists == 'true'
-        run: npm install
+        run: npm install --legacy-peer-deps
         working-directory: applications/backend/synthesis
       - name: Install console dependencies
         if: steps.check.outputs.exists == 'true'

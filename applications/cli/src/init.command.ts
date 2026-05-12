@@ -12,6 +12,13 @@ interface Org { id: string; name: string; slug: string; role: string }
 interface Project { id: string; name: string; slug: string }
 interface Repo { id: string; name: string; slug: string; gitRemote: string; projectId: string }
 
+function sshToHttps(remote: string): string {
+  // git@github.com:org/repo.git → https://github.com/org/repo.git
+  const match = remote.match(/^git@([^:]+):(.+)$/);
+  if (match) return `https://${match[1]}/${match[2]}`;
+  return remote;
+}
+
 const AI_TOOLS = ['claude'] as const;
 type AiTool = typeof AI_TOOLS[number];
 
@@ -61,7 +68,7 @@ export class InitCommand extends CommandRunner {
 
     let gitRemote: string;
     try {
-      gitRemote = execSync('git remote get-url origin', { encoding: 'utf8' }).trim();
+      gitRemote = sshToHttps(execSync('git remote get-url origin', { encoding: 'utf8' }).trim());
     } catch {
       console.error('No git remote found. Is this a git repository with an origin remote?');
       process.exit(1);
@@ -98,7 +105,7 @@ export class InitCommand extends CommandRunner {
     // Get git remote
     let gitRemote: string;
     try {
-      gitRemote = execSync('git remote get-url origin', { encoding: 'utf8' }).trim();
+      gitRemote = sshToHttps(execSync('git remote get-url origin', { encoding: 'utf8' }).trim());
     } catch {
       console.error('No git remote found. Is this a git repository with an origin remote?');
       process.exit(1);

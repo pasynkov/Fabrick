@@ -116,7 +116,7 @@ jobs:
 #      - run: echo "Deployment approved"
 
   version-bump:
-    needs: [approve]
+#    needs: [approve]
     runs-on: ubuntu-latest
     permissions:
       contents: write

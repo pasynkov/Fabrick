@@ -5,5 +5,6 @@ module.exports = (options) => ({
   output: {
     ...options.output,
     path: path.join(__dirname, 'dist'),
+    filename: options.output.filename.replace(/^api\//, ''),
   },
 });

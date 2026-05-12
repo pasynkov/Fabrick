@@ -11,7 +11,7 @@ jest.mock('fs', () => {
   };
 });
 
-// archiver is used inside PushCommand.zipContext() — we mock the full module
+// archiver is used inside PushCommand.zipWiki() — we mock the full module
 jest.mock('archiver', () => {
   const mockArchive = {
     pipe: jest.fn(),
@@ -58,7 +58,7 @@ describe('PushCommand e2e — upload flow', () => {
 
     (fs.existsSync as jest.Mock).mockImplementation((p: string) => {
       if (String(p).endsWith('config.yaml')) return true;
-      if (String(p).endsWith('context')) return true;
+      if (String(p).endsWith('wiki')) return true;
       return false;
     });
 
@@ -76,7 +76,7 @@ describe('PushCommand e2e — upload flow', () => {
   it('uploads with correct endpoint and Authorization header', async () => {
     mockFetch.mockResolvedValue({ ok: true });
     jest.spyOn(process, 'exit').mockImplementation((() => {}) as any);
-    jest.spyOn(command as any, 'zipContext').mockResolvedValue(Buffer.from('zip-data'));
+    jest.spyOn(command as any, 'zipWiki').mockResolvedValue(Buffer.from('zip-data'));
 
     await command.run();
 
@@ -91,7 +91,7 @@ describe('PushCommand e2e — upload flow', () => {
 
   it('calls correct endpoint with repo_id from config', async () => {
     mockFetch.mockResolvedValue({ ok: true });
-    jest.spyOn(command as any, 'zipContext').mockResolvedValue(Buffer.from('zip'));
+    jest.spyOn(command as any, 'zipWiki').mockResolvedValue(Buffer.from('zip'));
     jest.spyOn(process, 'exit').mockImplementation((() => {}) as any);
 
     await command.run();
@@ -110,7 +110,7 @@ describe('PushCommand e2e — upload flow', () => {
 
   it('exits 1 when upload returns non-ok', async () => {
     mockFetch.mockResolvedValue({ ok: false, status: 401, text: async () => 'Unauthorized' });
-    jest.spyOn(command as any, 'zipContext').mockResolvedValue(Buffer.from('zip'));
+    jest.spyOn(command as any, 'zipWiki').mockResolvedValue(Buffer.from('zip'));
     jest.spyOn(process, 'exit').mockImplementation(((code: number) => { throw new Error('EXIT_' + code); }) as any);
 
     await expect(command.run()).rejects.toThrow('EXIT_1');

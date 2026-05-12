@@ -1,6 +1,6 @@
 {
   "name": "fabrick-synthesis",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "scripts": {
     "build": "nest build",
     "start": "node dist/main",
@@ -54,8 +54,12 @@
             "noImplicitAny": false,
             "skipLibCheck": true,
             "paths": {
-              "@app/shared": ["../shared/src"],
-              "@app/shared/*": ["../shared/src/*"]
+              "@app/shared": [
+                "../shared/src"
+              ],
+              "@app/shared/*": [
+                "../shared/src/*"
+              ]
             }
           }
         }

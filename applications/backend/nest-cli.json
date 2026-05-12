@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json.schemastore.org/nest-cli",
+  "collection": "@nestjs/schematics",
+  "monorepo": true,
+  "sourceRoot": "api/src",
+  "compilerOptions": {
+    "webpack": true,
+    "tsConfigPath": "api/tsconfig.app.json"
+  },
+  "projects": {
+    "api": {
+      "type": "application",
+      "root": "api",
+      "entryFile": "main/index",
+      "sourceRoot": "api/src",
+      "compilerOptions": {
+        "webpack": true,
+        "tsConfigPath": "api/tsconfig.app.json",
+        "webpackConfigPath": "api/webpack.config.js",
+        "assets": [
+          { "include": "assets/**/*", "outDir": "dist" }
+        ]
+      }
+    },
+    "synthesis": {
+      "type": "application",
+      "root": "synthesis",
+      "entryFile": "main",
+      "sourceRoot": "synthesis/src",
+      "compilerOptions": {
+        "webpack": true,
+        "tsConfigPath": "synthesis/tsconfig.app.json",
+        "assets": [
+          { "include": "assets/**/*", "outDir": "dist" }
+        ]
+      }
+    },
+    "sandbox": {
+      "type": "application",
+      "root": "sandbox",
+      "entryFile": "main",
+      "sourceRoot": "sandbox/src",
+      "compilerOptions": {
+        "tsConfigPath": "sandbox/tsconfig.app.json"
+      }
+    },
+    "shared": {
+      "type": "library",
+      "root": "shared",
+      "entryFile": "index",
+      "sourceRoot": "shared/src",
+      "compilerOptions": {
+        "tsConfigPath": "shared/tsconfig.lib.json"
+      }
+    }
+  }
+}

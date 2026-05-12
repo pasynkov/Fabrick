@@ -15,9 +15,8 @@
     "strictNullChecks": false,
     "noImplicitAny": false,
     "paths": {
-      "@app/shared": ["../shared/src"],
-      "@app/shared/*": ["../shared/src/*"]
+      "@app/shared": ["shared/src"],
+      "@app/shared/*": ["shared/src/*"]
     }
-  },
-  "exclude": ["node_modules", "dist", "test"]
+  }
 }

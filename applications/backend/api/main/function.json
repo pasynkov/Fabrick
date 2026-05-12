@@ -13,5 +13,6 @@
       "name": "res"
     }
   ],
-  "scriptFile": "../dist/main/index.js"
+  "scriptFile": "../dist/main/index.js",
+  "entryPoint": "default"
 }

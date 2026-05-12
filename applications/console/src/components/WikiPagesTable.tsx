@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { api, WikiPageSummary } from '../api';
+import { api } from '../api';
+import type { WikiPageSummary } from '../api';
 
 interface Props {
   orgSlug: string;

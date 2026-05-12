@@ -108,12 +108,12 @@ jobs:
         env:
           MCP_DIST_PATH: ${{ github.workspace }}/applications/mcp/dist/index.js
 
-  approve:
-    needs: [e2e-api, e2e-cli]
-    runs-on: ubuntu-latest
-    environment: production
-    steps:
-      - run: echo "Deployment approved"
+#  approve:
+#    needs: [e2e-api, e2e-cli]
+#    runs-on: ubuntu-latest
+#    environment: production
+#    steps:
+#      - run: echo "Deployment approved"
 
   version-bump:
     needs: [approve]

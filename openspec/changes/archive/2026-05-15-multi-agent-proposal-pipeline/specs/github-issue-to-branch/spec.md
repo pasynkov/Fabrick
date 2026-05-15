@@ -37,6 +37,8 @@ After opening PRs, the pipeline SHALL post a comment on the issue with links to 
 - **AND** the comment begins with the "Affected components" section returned by `proposal-author` in step 1
 - **AND** for each PR, the comment includes the review notes returned by step 4 for that directory
 
+## ADDED Requirements
+
 ### Requirement: Replace proposal labels with feature on PR open
 After step 6 opens the PRs, the pipeline SHALL strip every `proposal:*` label from the source issue and apply the `feature` label.
 

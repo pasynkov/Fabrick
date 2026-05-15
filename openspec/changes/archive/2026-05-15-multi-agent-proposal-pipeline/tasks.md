@@ -1,7 +1,7 @@
 ## 1. Pre-implementation verification
 
-- [ ] 1.1 Confirm `anthropics/claude-code-base-action@beta` honours `.claude/agents/*.md` definitions via the `Agent` tool's `subagent_type`. Run a one-off sandbox workflow or local `act` invocation that creates a trivial custom agent and verifies it is selectable.
-- [ ] 1.2 Confirm the `Agent` tool's failure-result shape (error object vs error reply text) so the orchestrator's retry detection can be coded against a real signal.
+- [x] 1.1 Confirm `anthropics/claude-code-base-action@beta` honours `.claude/agents/*.md` definitions via the `Agent` tool's `subagent_type`. Run a one-off sandbox workflow or local `act` invocation that creates a trivial custom agent and verifies it is selectable.
+- [x] 1.2 Confirm the `Agent` tool's failure-result shape (error object vs error reply text) so the orchestrator's retry detection can be coded against a real signal.
 - [x] 1.3 In repository settings, create the four new labels: `proposal:proposing`, `feature`, `main`, `addon`. If `proposal:pr-open` exists from earlier iterations, delete it.
 
 ## 2. Custom subagent definitions

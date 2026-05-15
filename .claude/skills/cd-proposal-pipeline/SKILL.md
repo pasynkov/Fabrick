@@ -26,19 +26,27 @@ The skill is caller-agnostic — CI fills the arguments from workflow context; a
 
 The six steps run sequentially. Step 4 fans out N parallel `Agent` calls in a single response.
 
-### Step 0 — Fetch issue thread
+### Step 0 — Fetch issue thread + swap entry labels
 
 Invoke `gh-ops`:
 
 ```
 Agent(
   subagent_type="gh-ops",
-  description="Fetch issue thread",
-  prompt="Fetch issue thread for repo <repo> issue <issue-number>. Return the full JSON inline. Apply truncation rules if the combined size exceeds ~30 KB or 50 comments — preserve the issue body, drop oldest comments first."
+  description="Fetch issue thread and swap entry labels",
+  prompt="""
+Repo: <repo>. Issue: <issue-number>.
+
+Do both, in order:
+1. Fetch issue thread (`gh issue view ... --json title,body,comments`). Apply truncation rules if combined size > ~30 KB or > 50 comments — preserve the issue body, drop oldest comments first.
+2. Swap entry labels: remove `proposal` and `proposal:ready` (no-op if absent), add `proposal:proposing`.
+
+Return the issue JSON inline first (optionally with `truncated: true`), followed by a short note listing labels removed/added.
+"""
 )
 ```
 
-Expected return: the issue JSON, optionally with `truncated: true`. Keep the JSON in the orchestrator's context — it is the input for step 1.
+Expected return: the issue JSON + label-swap note. Keep the JSON in the orchestrator's context — it is the input for step 1.
 
 ### Step 1 — Generate main proposal
 
@@ -71,9 +79,9 @@ The author also writes `tasks.md` in TDD order: every behavioural task is preced
 
 Timeout budget: 15 minutes. If the subagent has been running longer, treat as failure.
 
-### Step 2 — Post summary, label proposing
+### Step 2 — Post summary comment
 
-Invoke `gh-ops` twice (sequential, since they are short):
+Invoke `gh-ops`:
 
 ```
 Agent(
@@ -81,12 +89,9 @@ Agent(
   description="Post summary comment",
   prompt="Repo: <repo>. Issue: <issue-number>. Post the following body as a new issue comment using --body-file: <summary-block>"
 )
-Agent(
-  subagent_type="gh-ops",
-  description="Add proposal:proposing label",
-  prompt="Repo: <repo>. Issue: <issue-number>. Add label proposal:proposing."
-)
 ```
+
+The `proposal:proposing` label was already applied in step 0.
 
 ### Step 3 — Review main + extract addons
 
@@ -192,6 +197,11 @@ Use the idempotent create-or-fetch pattern. Return the PR URL.
     description="Label PR <change>",
     prompt="Repo: <repo>. PR: <url>. Add label <main|addon> depending on whether <change> equals <main-name>."
   )
+  Agent(
+    subagent_type="gh-ops",
+    description="Link PR to issue Development section",
+    prompt="Repo: <repo>. PR: <url>. Issue: <issue-number>. Link the PR to the issue Development section via GraphQL `linkPullRequest` mutation (does NOT add a closing keyword — the issue stays open). The linked PR's source branch appears in the same Development panel as a side effect, so no separate branch-link call is needed. Idempotent: if the link already exists, surface that fact and do not retry."
+  )
 ```
 
 After every PR is opened (or has been recorded as failed):
@@ -229,7 +239,7 @@ On first failure, re-invoke the same subagent once with the same prompt. On seco
 
 | When | Issue labels | PR labels |
 |---|---|---|
-| End of step 2 | + `proposal:proposing` | — |
+| End of step 0 | + `proposal:proposing`<br>− `proposal`, `proposal:ready` (no-op if absent) | — |
 | End of step 6 | + `feature`<br>− every `proposal:*` label (`proposal:proposing`, `proposal:exploring`, `proposal:ready`, plus any legacy `proposal:*` label still attached) | main PR: `main`<br>addon PRs: `addon` |
 
 ## Issue-thread truncation (recap)

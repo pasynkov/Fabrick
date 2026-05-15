@@ -4,138 +4,44 @@ on:
   issues:
     types: [labeled]
 
+concurrency:
+  group: proposal-pipeline-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
 jobs:
-  create:
+  pipeline:
     if: github.event.label.name == 'proposal:ready'
     runs-on: ubuntu-latest
     permissions:
       contents: write
       issues: write
-      actions: write
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Fetch issue thread
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh issue view ${{ github.event.issue.number }} \
-            --json title,body,comments \
-            --repo "$GITHUB_REPOSITORY" > /tmp/issue-thread.json
-
       - name: Install openspec
         run: npm install -g @fission-ai/openspec
 
-      - name: Configure git
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-      - name: Build generate prompt
-        run: |
-          ISSUE_NUMBER="${{ github.event.issue.number }}"
-          cat > /tmp/generate-prompt.txt << PROMPT_EOF
-          You are generating an OpenSpec proposal from a GitHub issue.
-
-          Full issue thread (JSON): read from /tmp/issue-thread.json
-
-          Issue number: ${ISSUE_NUMBER}
-
-          Steps:
-          1. Read /tmp/issue-thread.json and derive a concise kebab-case change name that accurately
-             reflects the final agreed scope (not just a slug of the title).
-          2. Use the Skill tool to invoke the "openspec-propose" skill with that name as the argument.
-             This will generate proposal.md, design.md, specs/, and tasks.md artifacts.
-          3. Write ONLY the change name (e.g. "persistent-refresh-token") to /tmp/change-name.txt.
-             Do NOT include the issue number or "proposal/" prefix.
-          PROMPT_EOF
-
-      - name: Generate proposal artifacts
+      - name: Run proposal pipeline
         uses: anthropics/claude-code-base-action@beta
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          model: claude-haiku-4-5-20251001
-          allowed_tools: "Bash,Read,Write,Glob,LS,Skill"
-          prompt_file: /tmp/generate-prompt.txt
+          model: claude-opus-4-7
+          timeout_minutes: 45
+          allowed_tools: "Agent,Bash,Read,Write,Edit,Skill,Glob,LS"
+          settings: |
+            {
+              "permissions": {
+                "allow": ["Bash(*)", "Read(*)", "Write(*)", "Edit(*)", "Glob(*)", "LS(*)"],
+                "deny": []
+              }
+            }
+          prompt: |
+            Invoke the Skill tool with skill="cd-proposal-pipeline" and args="${{ github.repository }} ${{ github.event.issue.number }}".
 
-      - name: Build scope check prompt
-        run: |
-          CHANGE_NAME=$(cat /tmp/change-name.txt | tr -d '[:space:]')
-          ISSUE_NUMBER="${{ github.event.issue.number }}"
-          cat > /tmp/scope-check-prompt.txt << PROMPT_EOF
-          Issue thread (JSON): read from /tmp/issue-thread.json
-
-          Change name: ${CHANGE_NAME}
-          Issue number: ${ISSUE_NUMBER}
-
-          Your task: identify capabilities in the generated proposal that are NOT traceable to the original issue body.
-
-          Steps:
-          1. Read openspec/changes/${CHANGE_NAME}/proposal.md and openspec/changes/${CHANGE_NAME}/tasks.md
-          2. Compare each capability against the original issue body (from the thread JSON above — field "body")
-          3. For each addon capability with >= 3 tasks that is not traceable to the issue body:
-             a. Configure git user if not already set:
-                git config user.name "github-actions[bot]"
-                git config user.email "github-actions[bot]@users.noreply.github.com"
-             b. Run: openspec new change "<addon-name>"
-             c. Generate proposal.md, design.md, specs/, and tasks.md for the addon change
-             d. Create and push the addon branch:
-                git checkout -b "proposal/${ISSUE_NUMBER}-<addon-name>"
-                git add "openspec/changes/<addon-name>/"
-                git commit -m "proposal: <addon-name>\n\nrefs #${ISSUE_NUMBER}"
-                git push origin "proposal/${ISSUE_NUMBER}-<addon-name>"
-             e. Return to the original branch: git checkout -
-             f. Remove the addon capability from openspec/changes/${CHANGE_NAME}/proposal.md and tasks.md
-             g. Append to the Impact section of openspec/changes/${CHANGE_NAME}/proposal.md:
-                "Scope note: \`<addon-name>\` extracted to separate proposal — see branch \`proposal/${ISSUE_NUMBER}-<addon-name>\`"
-          4. Do NOT push the original branch — that is handled by the commit-and-push step.
-          5. If no addons found (or all addons have < 3 tasks), do nothing.
-          PROMPT_EOF
-
-      - name: Scope check — split addons
-        uses: anthropics/claude-code-base-action@beta
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          model: claude-haiku-4-5-20251001
-          allowed_tools: "Bash,Read,Write,Glob"
-          prompt_file: /tmp/scope-check-prompt.txt
-
-      - name: Commit and push proposal branch
-        id: push
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          CHANGE_NAME=$(cat /tmp/change-name.txt | tr -d '[:space:]')
-          ISSUE_NUMBER="${{ github.event.issue.number }}"
-          BRANCH_NAME="${ISSUE_NUMBER}-${CHANGE_NAME}"
-          git checkout -b "proposal/${BRANCH_NAME}"
-          git add openspec/changes/${CHANGE_NAME}/
-          git commit -m "proposal: ${CHANGE_NAME}
-
-          refs #${ISSUE_NUMBER}"
-          git push origin "proposal/${BRANCH_NAME}"
-          echo "branch_name=${BRANCH_NAME}" >> $GITHUB_OUTPUT
-          echo "change_name=${CHANGE_NAME}" >> $GITHUB_OUTPUT
-
-      - name: Post branch created comment
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh issue comment ${{ github.event.issue.number }} \
-            --body "Proposal branch created: \`proposal/${{ steps.push.outputs.branch_name }}\`. Review workflow starting." \
-            --repo "$GITHUB_REPOSITORY"
-
-      - name: Trigger proposal review
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh workflow run ci-proposal-review.yml \
-            --ref "proposal/${{ steps.push.outputs.branch_name }}" \
-            --field "branch=proposal/${{ steps.push.outputs.branch_name }}" \
-            --repo "$GITHUB_REPOSITORY"
+            The skill orchestrates the end-to-end proposal pipeline from issue thread fetch through opened PRs. Follow the skill's instructions exactly. Do not deviate from the six-step contract.

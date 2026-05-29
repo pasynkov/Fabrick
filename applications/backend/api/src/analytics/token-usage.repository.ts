@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { MoreThanOrEqual, Repository as TypeOrmRepository } from 'typeorm';
 import { TokenUsage } from '../entities/token-usage.entity';
+import { ANALYTICS_WINDOW_MS } from './analytics.constants';
 
 export interface CreateTokenUsageInput {
   projectId: string;
@@ -20,14 +21,12 @@ export class TokenUsageRepository {
   ) {}
 
   async create(input: CreateTokenUsageInput): Promise<TokenUsage> {
-    const entity = this.repo.create(input);
-    return this.repo.save(entity);
+    return this.repo.save(this.repo.create(input));
   }
 
   async findRecentForProject(projectId: string): Promise<TokenUsage[]> {
-    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     return this.repo.find({
-      where: { projectId, createdAt: MoreThanOrEqual(since) },
+      where: { projectId, createdAt: MoreThanOrEqual(new Date(Date.now() - ANALYTICS_WINDOW_MS)) },
       order: { createdAt: 'DESC' },
     });
   }

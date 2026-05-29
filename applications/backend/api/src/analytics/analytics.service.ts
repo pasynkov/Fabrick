@@ -68,31 +68,11 @@ export class AnalyticsService {
 }
 
 function toSearchRequestRow(r: SearchRequest): SearchRequestRow {
-  return {
-    id: r.id,
-    question: r.question,
-    reasoningRequested: r.reasoningRequested,
-    iters: r.iters,
-    pagesRead: r.pagesRead,
-    totalInputTokens: r.totalInputTokens,
-    totalOutputTokens: r.totalOutputTokens,
-    durationMs: r.durationMs,
-    stopReason: r.stopReason,
-    answerBrief: r.answerBrief,
-    answerReasoning: r.answerReasoning,
-    sources: r.sources,
-    createdAt: r.createdAt.toISOString(),
-  };
+  const { project, projectId, createdAt, ...rest } = r;
+  return { ...rest, createdAt: createdAt.toISOString() };
 }
 
 function toTokenUsageRow(r: TokenUsage): TokenUsageRow {
-  return {
-    id: r.id,
-    searchRequestId: r.searchRequestId,
-    operation: r.operation,
-    inputTokens: r.inputTokens,
-    outputTokens: r.outputTokens,
-    provider: r.provider,
-    createdAt: r.createdAt.toISOString(),
-  };
+  const { project, searchRequest, projectId, createdAt, ...rest } = r;
+  return { ...rest, createdAt: createdAt.toISOString() };
 }

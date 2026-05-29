@@ -2,7 +2,7 @@
 
 ### Requirement: MCP exposes single fabrick_search tool with dynamic description
 
-MCP server SHALL remove `get_synthesis_index` and `get_synthesis_file` tools. SHALL add `fabrick_search` tool accepting `{ question: string }`. Tool calls `POST /orgs/:org/projects/:project/search` with the question and returns the answer text.
+MCP server SHALL expose `fabrick_search` accepting `{ question: string }`. The tool calls `POST /orgs/:org/projects/:project/search` with the question and returns the answer text. The underlying server-side search performs an agentic loop and may take longer than the previous 2-step flow; the MCP tool contract is unchanged and SHALL surface the resulting answer text as-is.
 
 At startup, MCP SHALL fetch the `mcp-description` page from the API and use its content as the tool description. If the page is not available (no synthesis run yet), MCP SHALL use a generic fallback description.
 
@@ -27,6 +27,11 @@ At startup, MCP SHALL fetch the `mcp-instructions` page from the API and use its
 #### Scenario: Search API returns error
 - **WHEN** search API returns non-200 status
 - **THEN** MCP tool returns error message to the agent
+
+#### Scenario: Search API takes longer than the previous flow
+- **WHEN** the underlying agentic loop runs multiple iterations before responding
+- **THEN** MCP waits for the API response and returns the answer text unchanged
+- **AND** the tool contract `{ question }` → answer text is not altered
 
 #### Scenario: Fallback server instructions discourage parallel calls
 - **GIVEN** project has no `mcp-instructions` wiki page

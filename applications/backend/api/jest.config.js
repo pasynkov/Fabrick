@@ -5,6 +5,8 @@ module.exports = {
   moduleNameMapper: {
     '^@app/shared$': '<rootDir>/../shared/src',
     '^@app/shared/(.*)$': '<rootDir>/../shared/src/$1',
+    '^@anthropic-ai/sdk$': '<rootDir>/../shared/node_modules/@anthropic-ai/sdk',
+    '^@anthropic-ai/sdk/(.*)$': '<rootDir>/../shared/node_modules/@anthropic-ai/sdk/$1',
   },
   modulePaths: ['<rootDir>/../node_modules'],
   transform: {

@@ -1,4 +1,4 @@
-## ADDED Requirements
+## MODIFIED Requirements
 
 ### Requirement: SearchImpl performs agentic tool-use loop using WikiRepository
 `SearchImpl.search()` SHALL implement an agentic search loop using the Anthropic SDK's tool-use protocol. It SHALL load the project's `index` page via WikiRepository, build an initial message stack consisting of (a) a system prompt describing the agent role and listing tool descriptions, (b) a user message containing the index page content, and (c) a user message containing the question. It SHALL call `messages.create` with a defined `tools` array and iterate until the model returns `stop_reason: "end_turn"` or a budget cap is reached. It SHALL return `{ answer, sources }` where `answer` is the model's final markdown (with any trailing `SOURCES:` line stripped) and `sources` is the slug list the model emits on that line. The 2-step Claude flow (single slug-selection call followed by a single answer call) SHALL be removed.
@@ -97,3 +97,9 @@ The system prompt — including agent role description, tool guidance, and worke
 #### Scenario: Prompts are self-contained
 - **WHEN** `SearchImpl` is used
 - **THEN** it requires no external prompt files or assets — all prompts are in the source code
+
+## REMOVED Requirements
+
+### Requirement: Claude returns slugs with .md suffix
+**Reason**: The 2-step slug-selection prompt is removed; the new flow uses tool-call arguments for slugs, so `.md` suffix normalization on a JSON slug array is no longer applicable.
+**Migration**: None at the API boundary. If a model ever passes a slug with `.md` suffix to `read_page`, the tool result returns `page not found` and the model can correct itself; no normalization is required.

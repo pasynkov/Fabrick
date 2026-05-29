@@ -64,43 +64,34 @@ export class SandboxController {
     return { autoSynthesisEnabled: false, hasApiKey: false };
   }
 
-  // Manual synthesis trigger — runs synchronously
+  // Manual synthesis trigger — runs synchronously.
+  // Sources are picked in this order:
+  //   1) body.repos (absolute paths to repo roots)
+  //   2) process.env.REPOS (comma-separated absolute paths)
+  //   3) sandbox-data/blobs/<repoSlug>/wiki/ (uploaded via /repos/:repoId/context)
   @Post('sandbox/synthesize')
-  async synthesize(): Promise<{ pages: number; status: string }> {
+  async synthesize(
+    @Body() body?: { repos?: string[] },
+  ): Promise<{ pages: number; status: string; repos: string[] }> {
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) throw new BadRequestException('ANTHROPIC_API_KEY env var is required');
 
-    if (!existsSync(BLOBS_DIR)) {
-      throw new BadRequestException('No blobs directory found. Push wikis first.');
-    }
+    const envRepos = (process.env.REPOS ?? '')
+      .split(',')
+      .map((p) => p.trim())
+      .filter(Boolean);
+    const repoPaths = body?.repos?.length ? body.repos : envRepos;
 
-    // Load all repo wikis from filesystem
-    const repoDirs = readdirSync(BLOBS_DIR).filter((d) => {
-      try { return statSync(join(BLOBS_DIR, d)).isDirectory(); } catch { return false; }
-    });
-
-    const repoWikis: RepoWikiInput[] = [];
-    for (const repoSlug of repoDirs) {
-      const wikiDir = join(BLOBS_DIR, repoSlug, 'wiki');
-      if (!existsSync(wikiDir)) continue;
-
-      const files = this.walkFiles(wikiDir).map((filePath) => ({
-        path: filePath,
-        content: readFileSync(filePath, 'utf-8'),
-      }));
-
-      if (files.length === 0) continue;
-
-      const indexFile = files.find((f) => f.path.endsWith('/index.md') || f.path.endsWith('\\index.md'));
-      repoWikis.push({
-        slug: repoSlug,
-        files,
-        indexContent: indexFile?.content,
-      });
-    }
+    const repoWikis: RepoWikiInput[] = repoPaths.length
+      ? this.loadRepoWikisFromPaths(repoPaths)
+      : this.loadRepoWikisFromBlobs();
 
     if (repoWikis.length === 0) {
-      throw new BadRequestException('No wiki files found in sandbox-data/blobs/. Push wikis first.');
+      throw new BadRequestException(
+        repoPaths.length
+          ? 'No wiki files found in provided repo paths (expected <repo>/.fabrick/wiki/*.md).'
+          : 'No wiki files found in sandbox-data/blobs/. Provide REPOS env or upload wikis first.',
+      );
     }
 
     const existingPages = await this.wikiRepo.findByProject(PROJECT_ID);
@@ -123,7 +114,58 @@ export class SandboxController {
     }
 
     this.logger.log(`Synthesis done: ${pages.length} pages, ${deleteSlugs.length} deletes`);
-    return { pages: pages.length, status: 'done' };
+    return { pages: pages.length, status: 'done', repos: repoWikis.map((r) => r.slug) };
+  }
+
+  private loadRepoWikisFromPaths(repoPaths: string[]): RepoWikiInput[] {
+    const out: RepoWikiInput[] = [];
+    for (const repoPath of repoPaths) {
+      const wikiDir = join(repoPath, '.fabrick', 'wiki');
+      if (!existsSync(wikiDir)) {
+        this.logger.warn(`skipping ${repoPath}: no .fabrick/wiki dir`);
+        continue;
+      }
+      const files = this.walkFiles(wikiDir)
+        .filter((p) => p.endsWith('.md'))
+        .map((p) => ({ path: p, content: readFileSync(p, 'utf-8') }));
+      if (files.length === 0) {
+        this.logger.warn(`skipping ${repoPath}: .fabrick/wiki is empty`);
+        continue;
+      }
+      const indexFile = files.find((f) => f.path.endsWith('/index.md'));
+      out.push({
+        slug: repoPath.split('/').filter(Boolean).pop() ?? repoPath,
+        files,
+        indexContent: indexFile?.content,
+      });
+    }
+    return out;
+  }
+
+  private loadRepoWikisFromBlobs(): RepoWikiInput[] {
+    if (!existsSync(BLOBS_DIR)) return [];
+    const repoDirs = readdirSync(BLOBS_DIR).filter((d) => {
+      try {
+        return statSync(join(BLOBS_DIR, d)).isDirectory();
+      } catch {
+        return false;
+      }
+    });
+    const out: RepoWikiInput[] = [];
+    for (const repoSlug of repoDirs) {
+      const wikiDir = join(BLOBS_DIR, repoSlug, 'wiki');
+      if (!existsSync(wikiDir)) continue;
+      const files = this.walkFiles(wikiDir).map((filePath) => ({
+        path: filePath,
+        content: readFileSync(filePath, 'utf-8'),
+      }));
+      if (files.length === 0) continue;
+      const indexFile = files.find(
+        (f) => f.path.endsWith('/index.md') || f.path.endsWith('\\index.md'),
+      );
+      out.push({ slug: repoSlug, files, indexContent: indexFile?.content });
+    }
+    return out;
   }
 
   // MCP search

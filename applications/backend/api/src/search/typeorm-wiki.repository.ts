@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository as TypeOrmRepository } from 'typeorm';
-import { WikiRepository, WikiPage, WikiPageData } from '@app/shared';
+import { WikiRepository, WikiPage, WikiPageData, WikiPageMeta, extractOneLiner } from '@app/shared';
 import { WikiPage as WikiPageEntity } from '../entities/wiki-page.entity';
 
 @Injectable()
@@ -28,6 +28,24 @@ export class TypeOrmWikiRepository implements WikiRepository {
   async findByProject(projectId: string): Promise<WikiPage[]> {
     const entities = await this.repo.find({ where: { projectId } });
     return entities.map((e) => this.toWikiPage(e));
+  }
+
+  async findCategories(projectId: string): Promise<string[]> {
+    const rows = await this.repo
+      .createQueryBuilder('p')
+      .select('DISTINCT p.category', 'category')
+      .where('p.projectId = :projectId', { projectId })
+      .getRawMany<{ category: string }>();
+    return rows.map((r) => r.category);
+  }
+
+  async findByCategory(projectId: string, category: string): Promise<WikiPageMeta[]> {
+    const rows = await this.repo
+      .createQueryBuilder('p')
+      .select(['p.slug AS slug', 'p.title AS title', 'LEFT(p.content, 1000) AS content_head'])
+      .where('p.projectId = :projectId AND p.category = :category', { projectId, category })
+      .getRawMany<{ slug: string; title: string; content_head: string }>();
+    return rows.map((r) => ({ slug: r.slug, title: r.title, one_liner: extractOneLiner(r.content_head) }));
   }
 
   async upsert(projectId: string, pages: WikiPageData[]): Promise<void> {

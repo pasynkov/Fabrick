@@ -1,4 +1,4 @@
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Search service delegates to shared SearchImpl
 The API search service SHALL delegate search to shared `SearchImpl`, which performs an agentic tool-use loop over the project wiki. The API service SHALL remain responsible for auth checks, org/project resolution, and API key resolution. It SHALL provide `TypeOrmWikiRepository` to `SearchImpl` via DI.

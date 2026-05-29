@@ -11,6 +11,7 @@ import { Repository } from '../entities/repository.entity';
 import { WikiPage } from '../entities/wiki-page.entity';
 import { ApiKeyResolutionService } from '../api-keys/api-key-resolution.service';
 import { ApiKeyAuditService } from '../api-keys/api-key-audit.service';
+import { TokenUsageRepository } from '../analytics/token-usage.repository';
 
 export interface WikiPageInput {
   slug: string;
@@ -40,7 +41,23 @@ export class SynthesisService {
     private readonly jwtService: JwtService,
     private readonly apiKeyResolutionService: ApiKeyResolutionService,
     private readonly apiKeyAuditService: ApiKeyAuditService,
+    private readonly tokenUsageRepository: TokenUsageRepository,
   ) {}
+
+  async recordSynthesisTokenUsage(projectId: string, inputTokens: number, outputTokens: number): Promise<void> {
+    try {
+      await this.tokenUsageRepository.create({
+        projectId,
+        searchRequestId: null,
+        operation: 'synthesis',
+        inputTokens,
+        outputTokens,
+        provider: 'claude',
+      });
+    } catch (err: any) {
+      this.logger.error(`failed to record synthesis token_usage row: ${err?.message ?? err}`);
+    }
+  }
 
   async triggerForProject(projectId: string, userId: string, changedRepos?: string[]): Promise<void> {
     const project = await this.projectRepo.findOne({ where: { id: projectId } });

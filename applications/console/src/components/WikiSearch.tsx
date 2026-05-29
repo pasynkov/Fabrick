@@ -12,7 +12,9 @@ interface Props {
 
 export function WikiSearch({ orgSlug, projectSlug, hasApiKey }: Props) {
   const [question, setQuestion] = useState('');
+  const [reasoning, setReasoning] = useState(false);
   const [answer, setAnswer] = useState<string | null>(null);
+  const [reasoningText, setReasoningText] = useState<string | null>(null);
   const [sources, setSources] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -23,10 +25,12 @@ export function WikiSearch({ orgSlug, projectSlug, hasApiKey }: Props) {
     setLoading(true);
     setError(null);
     setAnswer(null);
+    setReasoningText(null);
     setSources([]);
     try {
-      const result = await api.wiki.search(orgSlug, projectSlug, question);
+      const result = await api.wiki.search(orgSlug, projectSlug, question, reasoning);
       setAnswer(result.answer);
+      setReasoningText(result.reasoning ?? null);
       setSources(result.sources);
     } catch (err: any) {
       if (err.status === 400) {
@@ -52,22 +56,33 @@ export function WikiSearch({ orgSlug, projectSlug, hasApiKey }: Props) {
 
   return (
     <div className="space-y-4">
-      <form onSubmit={handleSearch} className="flex gap-2">
-        <input
-          type="text"
-          value={question}
-          onChange={(e) => setQuestion(e.target.value)}
-          placeholder="Ask about architecture, APIs, flows..."
-          disabled={loading}
-          className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 disabled:opacity-50"
-        />
-        <button
-          type="submit"
-          disabled={loading || !question.trim()}
-          className="px-4 py-2 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {loading ? 'Searching...' : 'Search'}
-        </button>
+      <form onSubmit={handleSearch} className="space-y-2">
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={question}
+            onChange={(e) => setQuestion(e.target.value)}
+            placeholder="Ask about architecture, APIs, flows..."
+            disabled={loading}
+            className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 disabled:opacity-50"
+          />
+          <button
+            type="submit"
+            disabled={loading || !question.trim()}
+            className="px-4 py-2 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {loading ? 'Searching...' : 'Search'}
+          </button>
+        </div>
+        <label className="flex items-center gap-2 text-xs text-gray-600">
+          <input
+            type="checkbox"
+            checked={reasoning}
+            onChange={(e) => setReasoning(e.target.checked)}
+            disabled={loading}
+          />
+          Include reasoning
+        </label>
       </form>
 
       {error && (
@@ -81,6 +96,14 @@ export function WikiSearch({ orgSlug, projectSlug, hasApiKey }: Props) {
           <div className="prose prose-sm max-w-none text-gray-800">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{answer}</ReactMarkdown>
           </div>
+          {reasoningText && (
+            <details className="border-t border-gray-100 pt-2 text-sm text-gray-700">
+              <summary className="cursor-pointer font-medium">Reasoning</summary>
+              <div className="prose prose-sm max-w-none mt-2">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{reasoningText}</ReactMarkdown>
+              </div>
+            </details>
+          )}
           {sources.length > 0 && (
             <div className="text-xs text-gray-500 border-t border-gray-100 pt-2">
               <span className="font-medium">Sources:</span>{' '}

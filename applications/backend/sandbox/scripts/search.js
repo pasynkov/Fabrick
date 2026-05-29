@@ -13,22 +13,40 @@ const PROJECT = process.env.SANDBOX_PROJECT || 'sandbox';
 function loadQueries(file) {
   const raw = fs.readFileSync(file, 'utf-8');
   const parsed = yaml.parse(raw);
-  const list = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.queries) ? parsed.queries : null;
-  if (!list) throw new Error('YAML must be an array, or { queries: [...] }');
-  return list.map((item) =>
-    typeof item === 'string'
-      ? { name: item, question: item }
-      : { name: item.name || item.question, question: item.question },
-  );
+
+  let defaults = {};
+  let list = null;
+
+  if (Array.isArray(parsed)) {
+    list = parsed;
+  } else if (parsed && typeof parsed === 'object' && Array.isArray(parsed.queries)) {
+    list = parsed.queries;
+    if (parsed.defaults && typeof parsed.defaults === 'object') defaults = parsed.defaults;
+  }
+  if (!list) throw new Error('YAML must be an array, or { defaults?: {...}, queries: [...] }');
+
+  const defaultReasoning = defaults.reasoning === true;
+
+  return list.map((item) => {
+    if (typeof item === 'string') {
+      return { name: item, question: item, reasoning: defaultReasoning };
+    }
+    const reasoning = typeof item.reasoning === 'boolean' ? item.reasoning : defaultReasoning;
+    return {
+      name: item.name || item.question,
+      question: item.question,
+      reasoning,
+    };
+  });
 }
 
-async function ask(question) {
+async function ask(question, reasoning) {
   const url = `${API_URL}/v1/orgs/${ORG}/projects/${PROJECT}/search`;
   const t0 = Date.now();
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ question }),
+    body: JSON.stringify({ question, reasoning }),
   });
   const dt = Date.now() - t0;
   const text = await res.text();
@@ -60,21 +78,28 @@ async function main() {
 
   const results = [];
   for (let i = 0; i < queries.length; i++) {
-    const { name, question } = queries[i];
+    const { name, question, reasoning } = queries[i];
     console.log('━'.repeat(70));
-    console.log(`[${i + 1}/${queries.length}] ${name}`);
+    console.log(`[${i + 1}/${queries.length}] ${name}  reasoning=${reasoning}`);
     console.log(`Q: ${question}`);
-    const r = await ask(question);
+    const r = await ask(question, reasoning);
     if (!r.ok) {
       console.error(`! HTTP ${r.status} (${r.ms}ms): ${r.body}`);
-      results.push({ name, question, error: `HTTP ${r.status}`, body: r.body, ms: r.ms });
+      results.push({ name, question, reasoning, error: `HTTP ${r.status}`, body: r.body, ms: r.ms });
       continue;
     }
-    const { answer, sources } = r.body;
+    const { answer, reasoning: reasoningText, sources, metrics } = r.body;
     console.log(`Sources (${(sources || []).length}): ${(sources || []).join(', ')}`);
-    console.log(`Latency: ${r.ms}ms`);
+    if (metrics) {
+      const totalTokens = (metrics.totalInputTokens || 0) + (metrics.totalOutputTokens || 0);
+      console.log(`Server metrics: iters=${metrics.iters}  totalTokens=${totalTokens}  durationMs=${metrics.durationMs}`);
+    }
+    console.log(`Local latency: ${r.ms}ms`);
     console.log(`\nA:\n${answer}\n`);
-    results.push({ name, question, answer, sources, ms: r.ms });
+    if (reasoningText) {
+      console.log(`Reasoning:\n${reasoningText}\n`);
+    }
+    results.push({ name, question, reasoning, answer, reasoningText, sources, metrics, ms: r.ms });
   }
 
   const outDir = path.join(__dirname, '..', 'sandbox-data');

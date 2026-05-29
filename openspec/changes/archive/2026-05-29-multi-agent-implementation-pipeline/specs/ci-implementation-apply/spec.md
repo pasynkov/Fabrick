@@ -1,4 +1,4 @@
-## ADDED Requirements
+## MODIFIED Requirements
 
 ### Requirement: Autonomous AI implementation on implementation branch
 The implementation pipeline workflow at `.github/workflows/cd-implementation.yml` SHALL be a thin wrapper that invokes the orchestrator skill `cd-implementation-pipeline` via `anthropics/claude-code-base-action@beta` exactly once per run. The workflow SHALL NOT contain inline apply, simplify, review, build, archive, or promote steps; all stage logic SHALL live in the skill and its subagents. The orchestrator's `change-applier` subagent SHALL be the agent that runs the `openspec-apply-change` skill on the current `implementation/<name>` branch and commits its result.

@@ -221,13 +221,46 @@ export const api = {
   },
 
   wiki: {
-    search: (orgSlug: string, projectSlug: string, question: string) =>
-      request<{ answer: string; sources: string[] }>(`/orgs/${orgSlug}/projects/${projectSlug}/search`, {
+    search: (orgSlug: string, projectSlug: string, question: string, reasoning?: boolean) =>
+      request<{ answer: string; reasoning?: string; sources: string[] }>(`/orgs/${orgSlug}/projects/${projectSlug}/search`, {
         method: 'POST',
-        body: JSON.stringify({ question }),
+        body: JSON.stringify({ question, reasoning }),
       }),
   },
+
+  analytics: {
+    usage: (projectId: string) =>
+      request<{ searchRequests: SearchRequestRow[]; tokenUsage: TokenUsageRow[] }>(
+        `/projects/${projectId}/usage-analytics`,
+      ),
+  },
 };
+
+export interface SearchRequestRow {
+  id: string;
+  question: string;
+  reasoningRequested: boolean;
+  iters: number;
+  pagesRead: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  durationMs: number;
+  stopReason: string;
+  answerBrief: string;
+  answerReasoning: string | null;
+  sources: string[];
+  createdAt: string;
+}
+
+export interface TokenUsageRow {
+  id: string;
+  searchRequestId: string | null;
+  operation: string;
+  inputTokens: number;
+  outputTokens: number;
+  provider: string;
+  createdAt: string;
+}
 
 export interface WikiPageSummary {
   id: string;

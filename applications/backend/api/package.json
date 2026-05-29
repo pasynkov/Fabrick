@@ -48,7 +48,7 @@
     "@types/unzipper": "^0.10.9",
     "adm-zip": "^0.5.17",
     "archiver": "^7.0.1",
-    "jest": "^30.3.0",
+    "jest": "^30.4.2",
     "supertest": "^7.0.0",
     "ts-jest": "^29.4.9",
     "typescript": "^5.0.0"

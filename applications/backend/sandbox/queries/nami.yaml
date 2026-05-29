@@ -1,0 +1,8 @@
+defaults:
+  reasoning: false
+queries:
+  - name: conductor scalable
+    question: Could I run conductor in a few exemplars?
+  - name: nats
+    question: Which NATS subjects used by binance queries?
+    reasoning: true

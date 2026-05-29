@@ -1,11 +1,16 @@
 import 'reflect-metadata';
+import { config as dotenvConfig } from 'dotenv';
 import { NestFactory } from '@nestjs/core';
 import { VersioningType } from '@nestjs/common';
 import { existsSync, mkdirSync, writeFileSync, chmodSync } from 'fs';
-import { join, basename } from 'path';
+import { join, basename, resolve } from 'path';
 import { sign } from 'jsonwebtoken';
 import { stringify } from 'yaml';
 import { SandboxModule } from './sandbox.module';
+
+// Load .env from sandbox root regardless of CWD (dist may live under sandbox/dist/...).
+const SANDBOX_ROOT = resolve(__dirname, '..', '..', '..');
+dotenvConfig({ path: join(SANDBOX_ROOT, '.env'), quiet: true });
 
 
 const SANDBOX_SECRET = 'sandbox-local-secret';
@@ -14,13 +19,14 @@ const API_URL = `http://localhost:${PORT}`;
 
 function parseArgs(): { repos: string[]; org: string; project: string } {
   const args = process.argv.slice(2);
-  let repos: string[] = [];
-  let org = 'sandbox';
-  let project = 'sandbox';
+  const envRepos = (process.env.REPOS ?? '').split(',').map((p) => p.trim()).filter(Boolean);
+  let repos: string[] = envRepos;
+  let org = process.env.SANDBOX_ORG ?? 'sandbox';
+  let project = process.env.SANDBOX_PROJECT ?? 'sandbox';
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--repos' && args[i + 1]) {
-      repos = args[++i].split(',').map((p) => p.trim());
+      repos = args[++i].split(',').map((p) => p.trim()).filter(Boolean);
     } else if (args[i] === '--org' && args[i + 1]) {
       org = args[++i];
     } else if (args[i] === '--project' && args[i + 1]) {

@@ -56,6 +56,6 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh workflow run ci-implementation.yml \
+          gh workflow run cd-implementation.yml \
             --ref "implementation/${{ steps.meta.outputs.name }}" \
             --repo "$GITHUB_REPOSITORY"

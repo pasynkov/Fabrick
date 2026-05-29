@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { existsSync, mkdirSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from 'fs';
 import { dirname, join } from 'path';
-import { WikiRepository, WikiPage, WikiPageData } from '@app/shared';
+import { WikiRepository, WikiPage, WikiPageData, WikiPageMeta, extractOneLiner } from '@app/shared';
 
 const PAGES_DIR = join(process.cwd(), 'sandbox-data', 'pages');
 
@@ -100,6 +100,18 @@ export class FsWikiRepository implements WikiRepository {
       if (page) results.push(page);
     }
     return results;
+  }
+
+  async findCategories(projectId: string): Promise<string[]> {
+    const pages = await this.findByProject(projectId);
+    return Array.from(new Set(pages.map((p) => p.category)));
+  }
+
+  async findByCategory(projectId: string, category: string): Promise<WikiPageMeta[]> {
+    const pages = await this.findByProject(projectId);
+    return pages
+      .filter((p) => p.category === category)
+      .map((p) => ({ slug: p.slug, title: p.title, one_liner: extractOneLiner(p.content) }));
   }
 
   async upsert(_projectId: string, pages: WikiPageData[]): Promise<void> {

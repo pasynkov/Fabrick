@@ -5,7 +5,6 @@ import type { SearchRequestRow, TokenUsageRow } from '../api';
 
 export default function ProjectAnalytics() {
   const { orgSlug, projectSlug } = useParams<{ orgSlug: string; projectSlug: string }>();
-  const [projectId, setProjectId] = useState<string | null>(null);
   const [searchRequests, setSearchRequests] = useState<SearchRequestRow[]>([]);
   const [tokenUsage, setTokenUsage] = useState<TokenUsageRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -29,7 +28,6 @@ export default function ProjectAnalytics() {
           return;
         }
         if (cancelled) return;
-        setProjectId(project.id);
         const data = await api.analytics.usage(project.id);
         if (cancelled) return;
         setSearchRequests(data.searchRequests);
@@ -163,9 +161,6 @@ export default function ProjectAnalytics() {
           </>
         )}
 
-        {projectId && (
-          <p className="text-xs text-gray-400">Project id: {projectId}</p>
-        )}
       </main>
     </div>
   );

@@ -18,6 +18,7 @@ import {
 } from '@nestjs/common';
 import { Response } from 'express';
 import { FabrickAuthGuard } from '../auth/fabrick-auth.guard';
+import { RecordTokenUsageDto } from './dto/record-token-usage.dto';
 import { SynthesisCallbackDto } from './dto/synthesis-callback.dto';
 import { UpsertWikiPagesDto } from './dto/upsert-wiki-pages.dto';
 import { DeleteWikiPagesDto } from './dto/delete-wiki-pages.dto';
@@ -58,6 +59,13 @@ export class SynthesisController {
   async deleteWikiPages(@Body() body: DeleteWikiPagesDto): Promise<void> {
     this.synthesisService.verifyCallbackToken(body.callbackToken, body.projectId);
     await this.synthesisService.deletePagesBySlugs(body.projectId, body.slugs);
+  }
+
+  @Post('internal/synthesis/token-usage')
+  @HttpCode(204)
+  async recordTokenUsage(@Body() body: RecordTokenUsageDto): Promise<void> {
+    this.synthesisService.verifyCallbackToken(body.callbackToken, body.projectId);
+    await this.synthesisService.recordSynthesisTokenUsage(body.projectId, body.inputTokens, body.outputTokens);
   }
 
   @Post('projects/:id/synthesis')

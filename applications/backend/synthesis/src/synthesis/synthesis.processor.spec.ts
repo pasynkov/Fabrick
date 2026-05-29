@@ -21,7 +21,7 @@ const mockQueue = () => ({
 
 const mockSynthesisImpl = () => ({
   buildContext: jest.fn().mockReturnValue('context string'),
-  synthesize: jest.fn().mockResolvedValue('raw claude response'),
+  synthesize: jest.fn().mockResolvedValue({ rawText: 'raw claude response', usage: { inputTokens: 100, outputTokens: 200 } }),
   parseResponse: jest.fn().mockReturnValue({
     pages: [{ slug: 'index', category: 'overview', title: 'Index', content: '# Index', sources: [], related: [] }],
     deleteSlugs: [],
@@ -82,6 +82,15 @@ describe('SynthesisProcessor', () => {
       expect(synthesisImpl.synthesize).toHaveBeenCalledWith('context string', 'test-api-key');
       expect(synthesisImpl.parseResponse).toHaveBeenCalledWith('raw claude response');
 
+      // Records token usage for the synthesis call
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining('/v1/internal/synthesis/token-usage'),
+        expect.objectContaining({
+          method: 'POST',
+          body: expect.stringContaining('"inputTokens":100'),
+        }),
+      );
+
       // Upserted pages
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('/v1/internal/synthesis/pages'),
@@ -119,6 +128,19 @@ describe('SynthesisProcessor', () => {
       expect(repoWikis).toHaveLength(2);
       expect(repoWikis[0].slug).toBe('repo-a');
       expect(repoWikis[1].slug).toBe('repo-b');
+    });
+
+    it('skips token-usage call when usage payload is missing', async () => {
+      storageService.listObjects.mockResolvedValue(['myproject/myrepo/wiki/index.md']);
+      storageService.getObject.mockResolvedValue(Buffer.from('content'));
+      (synthesisImpl.synthesize as jest.Mock).mockResolvedValue({ rawText: 'raw claude response', usage: null });
+
+      await (processor as any).processJob(baseJob);
+
+      const tokenUsageCalls = mockFetch.mock.calls.filter(
+        (c: any) => typeof c[0] === 'string' && c[0].includes('/v1/internal/synthesis/token-usage'),
+      );
+      expect(tokenUsageCalls.length).toBe(0);
     });
 
     it('calls deletePages when parsedResponse has deleteSlugs', async () => {

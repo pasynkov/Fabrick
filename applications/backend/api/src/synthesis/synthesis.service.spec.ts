@@ -12,6 +12,7 @@ import { WikiPage } from '../entities/wiki-page.entity';
 import { StorageService } from '../storage/storage.service';
 import { ApiKeyResolutionService } from '../api-keys/api-key-resolution.service';
 import { ApiKeyAuditService } from '../api-keys/api-key-audit.service';
+import { TokenUsageRepository } from '../analytics/token-usage.repository';
 
 const mockProjectRepo = () => ({
   findOne: jest.fn(),
@@ -35,6 +36,10 @@ const mockApiKeyResolution = () => ({
 const mockApiKeyAudit = () => ({
   logOperation: jest.fn(),
   logApiKeyUsage: jest.fn().mockResolvedValue(undefined),
+});
+const mockTokenUsageRepo = () => ({
+  create: jest.fn().mockResolvedValue(undefined),
+  findRecentForProject: jest.fn().mockResolvedValue([]),
 });
 
 describe('SynthesisService', () => {
@@ -61,6 +66,7 @@ describe('SynthesisService', () => {
         { provide: JwtService, useFactory: mockJwt },
         { provide: ApiKeyResolutionService, useFactory: mockApiKeyResolution },
         { provide: ApiKeyAuditService, useFactory: mockApiKeyAudit },
+        { provide: TokenUsageRepository, useFactory: mockTokenUsageRepo },
       ],
     }).compile();
 

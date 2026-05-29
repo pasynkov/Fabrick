@@ -51,10 +51,15 @@ export class SynthesisImpl {
     return contextBlocks.join('\n\n');
   }
 
-  async synthesize(context: string, apiKey: string): Promise<string> {
+  async synthesize(
+    context: string,
+    apiKey: string,
+  ): Promise<{ rawText: string; usage: { inputTokens: number; outputTokens: number } | null }> {
     const anthropic = new Anthropic({ apiKey });
     let rawText = '';
     let stopReason: string | null = null;
+    let inputTokens: number | null = null;
+    let outputTokens: number | null = null;
 
     const stream = anthropic.messages.stream({
       model: 'claude-sonnet-4-6',
@@ -68,16 +73,26 @@ export class SynthesisImpl {
         rawText += event.delta.text;
       } else if (event.type === 'message_delta') {
         stopReason = event.delta.stop_reason ?? null;
+        if (event.usage?.output_tokens != null) outputTokens = event.usage.output_tokens;
+      } else if (event.type === 'message_start') {
+        if (event.message?.usage?.input_tokens != null) inputTokens = event.message.usage.input_tokens;
+        if (event.message?.usage?.output_tokens != null) outputTokens = event.message.usage.output_tokens;
       }
     }
 
-    this.logger.log(`synthesis response ${rawText.length} chars, stop_reason=${stopReason}`);
+    this.logger.log(
+      `synthesis response ${rawText.length} chars, stop_reason=${stopReason}, usage(in=${inputTokens ?? '?'} out=${outputTokens ?? '?'})`,
+    );
 
     if (stopReason === 'max_tokens') {
       throw new Error('Anthropic response truncated (max_tokens reached)');
     }
 
-    return rawText;
+    const usage =
+      inputTokens != null && outputTokens != null
+        ? { inputTokens, outputTokens }
+        : null;
+    return { rawText, usage };
   }
 
   parseResponse(rawText: string): { pages: WikiPageData[]; deleteSlugs: string[] } {

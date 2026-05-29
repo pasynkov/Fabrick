@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { AnalyticsModule } from '../analytics/analytics.module';
 import { ApiKeysModule } from '../api-keys/api-keys.module';
 import { AuthModule } from '../auth/auth.module';
 import { OrgMember } from '../entities/org-member.entity';
@@ -17,6 +18,7 @@ import { SynthesisService } from './synthesis.service';
     QueueModule,
     AuthModule,
     ApiKeysModule,
+    AnalyticsModule,
   ],
   controllers: [SynthesisController],
   providers: [SynthesisService],

@@ -2,6 +2,11 @@ import { Body, Controller, Param, Post, Request, UseGuards } from '@nestjs/commo
 import { FabrickAuthGuard } from '../auth/fabrick-auth.guard';
 import { SearchService } from './search.service';
 
+interface SearchRequestBody {
+  question: string;
+  reasoning?: boolean;
+}
+
 @Controller({ version: '1' })
 export class SearchController {
   constructor(private readonly searchService: SearchService) {}
@@ -12,8 +17,8 @@ export class SearchController {
     @Request() req: { user: { id: string } },
     @Param('orgSlug') orgSlug: string,
     @Param('projectSlug') projectSlug: string,
-    @Body('question') question: string,
+    @Body() body: SearchRequestBody,
   ) {
-    return this.searchService.search(req.user.id, orgSlug, projectSlug, question);
+    return this.searchService.search(req.user.id, orgSlug, projectSlug, body.question, body.reasoning);
   }
 }

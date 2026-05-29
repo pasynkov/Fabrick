@@ -28,6 +28,25 @@ const MAX_READ_PAGES_BATCH = 6;
 const SEARCH_MODEL = 'claude-sonnet-4-6';
 const PER_CALL_MAX_TOKENS = 4096;
 
+export type StopReason = 'end_turn' | 'budget' | 'max_tokens' | 'other';
+
+export interface SearchMetrics {
+  iters: number;
+  pagesRead: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  durationMs: number;
+  stopReason: StopReason;
+  perCallTokens: Array<{ inputTokens: number; outputTokens: number }>;
+}
+
+export interface SearchResult {
+  answer: string;
+  reasoning?: string;
+  sources: string[];
+  metrics: SearchMetrics;
+}
+
 const SYSTEM_PROMPT = `You are a search agent over a project wiki. The wiki is a curated set of markdown pages organized by category. The project's index page is provided as context.
 
 You can call these tools to explore the wiki:
@@ -45,30 +64,31 @@ Strategy hints (not rigid):
 - Be parsimonious — do not over-fetch.
 
 Final answer format:
-- Markdown body answering the question concisely and specifically.
+- A single concise paragraph answering the question, prefixed by a line containing only "BRIEF:".
+- If reasoning was requested by the caller, follow with a line containing only "REASONING:", then a detailed explanation.
 - The very last line MUST be: SOURCES: <slug>, <slug>, ...
-  using only the slugs whose content you actually used to construct the answer.
+  using only the slugs whose content you actually used.
 
 Worked examples:
 
-Example 1 — direct page hit:
+Example 1 — direct page hit (reasoning not requested):
   Q: "Where do trades land in BigQuery?"
   -> read_page("apps/harvester-reaper")
-  -> Answer with the relevant section.
-  -> Last line: SOURCES: apps/harvester-reaper
+  -> Answer:
+       BRIEF:
+       Trades land in the trades table.
+       SOURCES: apps/harvester-reaper
 
-Example 2 — multi-hop via read_related:
+Example 2 — multi-hop via read_related (reasoning requested):
   Q: "How does the reaper get triggered?"
   -> read_page("apps/harvester-reaper")
   -> read_related("apps/harvester-reaper", depth=1)
-  -> Answer integrating reaper + conductor.
-  -> Last line: SOURCES: apps/harvester-reaper, apps/harvester-conductor
-
-Example 3 — category browse:
-  Q: "Which NATS subjects do we expose?"
-  -> read_page("contracts/nats-subjects")
-  -> Answer listing the subjects.
-  -> Last line: SOURCES: contracts/nats-subjects
+  -> Answer:
+       BRIEF:
+       The reaper is triggered by the conductor.
+       REASONING:
+       Details about scheduling, NATS subjects, and conductor handoff.
+       SOURCES: apps/harvester-reaper, apps/harvester-conductor
 `;
 
 const TOOL_DEFS: Tool[] = [
@@ -130,8 +150,10 @@ const TOOL_DEFS: Tool[] = [
 interface LoopState {
   iter: number;
   pagesRead: number;
-  totalTokens: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
   readSlugs: Set<string>;
+  perCallTokens: Array<{ inputTokens: number; outputTokens: number }>;
 }
 
 interface ToolDispatchResult {
@@ -157,8 +179,11 @@ export class SearchImpl {
     projectId: string,
     question: string,
     apiKey: string,
-  ): Promise<{ answer: string; sources: string[] }> {
-    this.logger.log(`search started  projectId=${projectId}  q="${question.slice(0, 80)}"`);
+    opts?: { reasoning?: boolean },
+  ): Promise<SearchResult> {
+    const reasoning = opts?.reasoning === true;
+    const t0 = Date.now();
+    this.logger.log(`search started  projectId=${projectId}  reasoning=${reasoning}  q="${question.slice(0, 80)}"`);
 
     const indexPage = await this.wikiRepo.findBySlug(projectId, 'index');
     if (!indexPage) {
@@ -180,11 +205,20 @@ export class SearchImpl {
           },
         ],
       },
+      { role: 'user', content: [{ type: 'text', text: `Reasoning requested: ${reasoning ? 'true' : 'false'}` }] },
       { role: 'user', content: [{ type: 'text', text: `Question: ${question}` }] },
     ];
 
-    const state: LoopState = { iter: 0, pagesRead: 0, totalTokens: 0, readSlugs: new Set() };
+    const state: LoopState = {
+      iter: 0,
+      pagesRead: 0,
+      totalInputTokens: 0,
+      totalOutputTokens: 0,
+      readSlugs: new Set(),
+      perCallTokens: [],
+    };
     let finalText: string | null = null;
+    let stopReason: StopReason = 'other';
 
     while (true) {
       state.iter += 1;
@@ -199,13 +233,18 @@ export class SearchImpl {
 
       if (response.stop_reason === 'end_turn') {
         finalText = extractText(response.content);
+        stopReason = 'end_turn';
         break;
       }
 
       if (response.stop_reason === 'tool_use') {
         await this.handleToolUseTurn(projectId, response, messages, state);
-        if (state.iter >= this.budget.maxIters || state.totalTokens >= this.budget.maxTotalTokens) {
+        if (
+          state.iter >= this.budget.maxIters ||
+          state.totalInputTokens + state.totalOutputTokens >= this.budget.maxTotalTokens
+        ) {
           finalText = await this.finalizePartial(anthropic, system, messages, state, 'budget exhausted');
+          stopReason = 'budget';
           break;
         }
         continue;
@@ -214,10 +253,12 @@ export class SearchImpl {
       if (response.stop_reason === 'max_tokens') {
         await this.absorbAssistantTurn(response, messages);
         finalText = await this.finalizePartial(anthropic, system, messages, state, 'max_tokens during turn');
+        stopReason = 'max_tokens';
         break;
       }
 
       finalText = extractText(response.content);
+      stopReason = 'other';
       break;
     }
 
@@ -227,18 +268,42 @@ export class SearchImpl {
       this.logger.warn(`final answer missing SOURCES: line; falling back to slugs read during loop`);
       sources = Array.from(state.readSlugs);
     }
+    if (!parsed.hadBriefMarker) {
+      this.logger.warn(`final answer missing BRIEF: marker; returning full text as answer`);
+    }
+
+    const durationMs = Date.now() - t0;
     this.logger.log(
-      `search done  iters=${state.iter}  pagesRead=${state.pagesRead}  totalTokens=${state.totalTokens}  sources=${sources.length}`,
+      `search done  iters=${state.iter}  pagesRead=${state.pagesRead}  totalTokens=${state.totalInputTokens + state.totalOutputTokens}  sources=${sources.length}  stop=${stopReason}  duration=${durationMs}ms`,
     );
-    return { answer: parsed.answer, sources };
+
+    const result: SearchResult = {
+      answer: parsed.answer,
+      sources,
+      metrics: {
+        iters: state.iter,
+        pagesRead: state.pagesRead,
+        totalInputTokens: state.totalInputTokens,
+        totalOutputTokens: state.totalOutputTokens,
+        durationMs,
+        stopReason,
+        perCallTokens: state.perCallTokens,
+      },
+    };
+    if (parsed.reasoning !== undefined) {
+      result.reasoning = parsed.reasoning;
+    }
+    return result;
   }
 
   private recordUsage(response: Message, state: LoopState): void {
     const usedIn = response.usage?.input_tokens ?? 0;
     const usedOut = response.usage?.output_tokens ?? 0;
-    state.totalTokens += usedIn + usedOut;
+    state.totalInputTokens += usedIn;
+    state.totalOutputTokens += usedOut;
+    state.perCallTokens.push({ inputTokens: usedIn, outputTokens: usedOut });
     this.logger.log(
-      `iter ${state.iter}  stop=${response.stop_reason}  tokens(in=${usedIn} out=${usedOut} total=${state.totalTokens})  pagesRead=${state.pagesRead}`,
+      `iter ${state.iter}  stop=${response.stop_reason}  tokens(in=${usedIn} out=${usedOut} total=${state.totalInputTokens + state.totalOutputTokens})  pagesRead=${state.pagesRead}`,
     );
   }
 
@@ -287,7 +352,9 @@ export class SearchImpl {
     state: LoopState,
     reason: string,
   ): Promise<string> {
-    this.logger.warn(`partial finalization triggered  reason=${reason}  iter=${state.iter}  totalTokens=${state.totalTokens}`);
+    this.logger.warn(
+      `partial finalization triggered  reason=${reason}  iter=${state.iter}  totalTokens=${state.totalInputTokens + state.totalOutputTokens}`,
+    );
     const finalMessages: MessageParam[] = [
       ...messages,
       {
@@ -295,7 +362,7 @@ export class SearchImpl {
         content: [
           {
             type: 'text',
-            text: 'Budget exhausted. Give a partial answer using only the pages you have already read. End with a single line: SOURCES: <slug>, <slug>, ...',
+            text: 'Budget exhausted. Give a partial answer using only the pages you have already read. Use the same format: BRIEF: paragraph, optional REASONING: section, and end with a single SOURCES: <slug>, <slug>, ... line.',
           },
         ],
       },
@@ -445,22 +512,69 @@ function toContentBlockParams(content: ContentBlock[]): ContentBlockParam[] {
   });
 }
 
-export function parseFinalAnswer(text: string): { answer: string; sources: string[]; hadSourcesLine: boolean } {
+export interface ParsedFinalAnswer {
+  answer: string;
+  reasoning?: string;
+  sources: string[];
+  hadBriefMarker: boolean;
+  hadSourcesLine: boolean;
+}
+
+export function parseFinalAnswer(text: string): ParsedFinalAnswer {
   const lines = text.split(/\r?\n/);
+
+  // Find SOURCES: line (scanning from the end for trailing whitespace tolerance).
+  let sourcesIdx = -1;
+  let sources: string[] = [];
   for (let i = lines.length - 1; i >= 0; i -= 1) {
-    const line = lines[i];
-    const match = line.match(/^\s*SOURCES:\s*(.*)$/i);
-    if (match) {
-      const sources = match[1]
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean);
-      const answer = lines.slice(0, i).join('\n').trimEnd();
-      return { answer, sources, hadSourcesLine: true };
+    const m = lines[i].match(/^\s*SOURCES:\s*(.*)$/i);
+    if (m) {
+      sourcesIdx = i;
+      sources = m[1].split(',').map((s) => s.trim()).filter(Boolean);
+      break;
     }
-    if (line.trim()) break;
+    if (lines[i].trim()) break;
   }
-  return { answer: text.trim(), sources: [], hadSourcesLine: false };
+
+  const bodyEnd = sourcesIdx >= 0 ? sourcesIdx : lines.length;
+  const bodyLines = lines.slice(0, bodyEnd);
+
+  // Look for BRIEF: / REASONING: markers (case-sensitive on the marker).
+  let briefIdx = -1;
+  let reasoningIdx = -1;
+  for (let i = 0; i < bodyLines.length; i += 1) {
+    const stripped = bodyLines[i].trim();
+    if (briefIdx === -1 && /^BRIEF:\s*$/.test(stripped)) {
+      briefIdx = i;
+      continue;
+    }
+    if (briefIdx !== -1 && reasoningIdx === -1 && /^REASONING:\s*$/.test(stripped)) {
+      reasoningIdx = i;
+    }
+  }
+
+  const hadSourcesLine = sourcesIdx >= 0;
+  const hadBriefMarker = briefIdx >= 0;
+
+  if (!hadBriefMarker) {
+    // Fallback: full text minus the SOURCES line.
+    const answer = bodyLines.join('\n').trim();
+    return { answer, sources, hadBriefMarker, hadSourcesLine };
+  }
+
+  const briefStart = briefIdx + 1;
+  const briefEnd = reasoningIdx === -1 ? bodyLines.length : reasoningIdx;
+  const answer = bodyLines.slice(briefStart, briefEnd).join('\n').trim();
+
+  let reasoning: string | undefined;
+  if (reasoningIdx >= 0) {
+    reasoning = bodyLines.slice(reasoningIdx + 1).join('\n').trim();
+    if (reasoning.length === 0) reasoning = undefined;
+  }
+
+  const result: ParsedFinalAnswer = { answer, sources, hadBriefMarker, hadSourcesLine };
+  if (reasoning !== undefined) result.reasoning = reasoning;
+  return result;
 }
 
 function truncate(s: string, n = 200): string {

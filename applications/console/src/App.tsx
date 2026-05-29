@@ -5,6 +5,7 @@ import Login from './pages/Login';
 import OrgDetail from './pages/OrgDetail';
 import OrgList from './pages/OrgList';
 import OrgSettings from './pages/OrgSettings';
+import ProjectAnalytics from './pages/ProjectAnalytics';
 import ProjectDetail from './pages/ProjectDetail';
 import ProjectSettings from './pages/ProjectSettings';
 import Register from './pages/Register';
@@ -34,6 +35,7 @@ export default function App() {
           <Route path="/orgs/:orgSlug/projects/:projectSlug" element={<RequireAuth><ProjectDetail /></RequireAuth>} />
           <Route path="/orgs/:orgSlug/projects/:projectSlug/edit" element={<RequireAuth><RedirectProjectEdit /></RequireAuth>} />
           <Route path="/orgs/:orgSlug/projects/:projectSlug/settings" element={<RequireAuth><ProjectSettings /></RequireAuth>} />
+          <Route path="/orgs/:orgSlug/projects/:projectSlug/analytics" element={<RequireAuth><ProjectAnalytics /></RequireAuth>} />
         </Routes>
       </AuthProvider>
     </BrowserRouter>

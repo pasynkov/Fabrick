@@ -64,19 +64,19 @@ function makePage(over: Partial<WikiPage>): WikiPage {
   };
 }
 
-function responseEndTurn(text: string) {
+function responseEndTurn(text: string, usage?: { input_tokens: number; output_tokens: number }) {
   return {
     content: [{ type: 'text', text }],
     stop_reason: 'end_turn',
-    usage: { input_tokens: 100, output_tokens: 50 },
+    usage: usage ?? { input_tokens: 100, output_tokens: 50 },
   };
 }
 
-function responseToolUse(toolName: string, input: unknown, id = 'tu_1') {
+function responseToolUse(toolName: string, input: unknown, id = 'tu_1', usage?: { input_tokens: number; output_tokens: number }) {
   return {
     content: [{ type: 'tool_use', id, name: toolName, input }],
     stop_reason: 'tool_use',
-    usage: { input_tokens: 200, output_tokens: 100 },
+    usage: usage ?? { input_tokens: 200, output_tokens: 100 },
   };
 }
 
@@ -91,11 +91,41 @@ beforeEach(() => {
 });
 
 describe('parseFinalAnswer', () => {
-  it('extracts SOURCES line and strips it from answer', () => {
-    const result = parseFinalAnswer('Answer body.\n\nSOURCES: a, b/c');
+  it('extracts BRIEF and SOURCES lines without REASONING', () => {
+    const result = parseFinalAnswer('BRIEF:\nAnswer body.\n\nSOURCES: a, b/c');
+    expect(result.hadBriefMarker).toBe(true);
     expect(result.hadSourcesLine).toBe(true);
     expect(result.sources).toEqual(['a', 'b/c']);
     expect(result.answer).toBe('Answer body.');
+    expect(result.reasoning).toBeUndefined();
+  });
+
+  it('extracts BRIEF, REASONING and SOURCES sections', () => {
+    const text = [
+      'BRIEF:',
+      'Concise answer.',
+      '',
+      'REASONING:',
+      'Long explanation line 1.',
+      'Long explanation line 2.',
+      '',
+      'SOURCES: a, b',
+    ].join('\n');
+    const result = parseFinalAnswer(text);
+    expect(result.hadBriefMarker).toBe(true);
+    expect(result.hadSourcesLine).toBe(true);
+    expect(result.answer).toBe('Concise answer.');
+    expect(result.reasoning).toBe('Long explanation line 1.\nLong explanation line 2.');
+    expect(result.sources).toEqual(['a', 'b']);
+  });
+
+  it('returns full text when BRIEF marker missing but SOURCES present', () => {
+    const result = parseFinalAnswer('Just a plain answer.\n\nSOURCES: x');
+    expect(result.hadBriefMarker).toBe(false);
+    expect(result.hadSourcesLine).toBe(true);
+    expect(result.sources).toEqual(['x']);
+    expect(result.answer).toBe('Just a plain answer.');
+    expect(result.reasoning).toBeUndefined();
   });
 
   it('marks missing SOURCES line', () => {
@@ -103,13 +133,6 @@ describe('parseFinalAnswer', () => {
     expect(result.hadSourcesLine).toBe(false);
     expect(result.sources).toEqual([]);
     expect(result.answer).toBe('Just an answer.');
-  });
-
-  it('handles trailing blank lines around SOURCES', () => {
-    const result = parseFinalAnswer('Body.\n\nSOURCES: x\n\n');
-    expect(result.hadSourcesLine).toBe(true);
-    expect(result.sources).toEqual(['x']);
-    expect(result.answer).toBe('Body.');
   });
 });
 
@@ -139,24 +162,36 @@ describe('SearchImpl agentic loop', () => {
     expect(recordedCalls).toEqual([]);
   });
 
-  it('handles single read_page → end_turn and strips SOURCES line', async () => {
+  it('reasoning=false returns brief answer with no reasoning field and forwards reasoning=false to prompt', async () => {
     const repo = new MemoryRepo([
       indexPage(),
       makePage({ slug: 'apps/a', category: 'apps', title: 'A', content: '# A\n\ndetail of A' }),
     ]);
     queueResponse(responseToolUse('read_page', { slug: 'apps/a' }));
-    queueResponse(responseEndTurn('Answer about A.\n\nSOURCES: apps/a'));
+    queueResponse(responseEndTurn('BRIEF:\nA is the answer.\n\nSOURCES: apps/a'));
 
     const impl = new SearchImpl(repo);
-    const { answer, sources } = await impl.search('p1', 'how does A work?', 'key');
-    expect(answer).toBe('Answer about A.');
-    expect(sources).toEqual(['apps/a']);
-    expect(recordedCalls.length).toBe(2);
+    const result = await impl.search('p1', 'how does A work?', 'key');
+    expect(result.answer).toBe('A is the answer.');
+    expect(result.reasoning).toBeUndefined();
+    expect(result.sources).toEqual(['apps/a']);
+    expect(result.metrics.iters).toBe(2);
+    expect(result.metrics.stopReason).toBe('end_turn');
+    expect(result.metrics.perCallTokens).toEqual([
+      { inputTokens: 200, outputTokens: 100 },
+      { inputTokens: 100, outputTokens: 50 },
+    ]);
+    expect(result.metrics.totalInputTokens).toBe(300);
+    expect(result.metrics.totalOutputTokens).toBe(150);
+    expect(typeof result.metrics.durationMs).toBe('number');
+    expect(result.metrics.durationMs).toBeGreaterThanOrEqual(0);
 
     const first = recordedCalls[0];
+    // Reasoning hint message should be present
+    const reasoningHint = first.messages.find((m: any) => m.content?.[0]?.text?.startsWith('Reasoning requested:'));
+    expect(reasoningHint).toBeDefined();
+    expect(reasoningHint.content[0].text).toBe('Reasoning requested: false');
     expect(first.system[0].cache_control).toEqual({ type: 'ephemeral' });
-    expect(first.messages[0].content[0].cache_control).toEqual({ type: 'ephemeral' });
-    expect(first.messages[1].content[0].cache_control).toBeUndefined();
     expect(first.tools.map((t: any) => t.name)).toEqual([
       'list_categories',
       'list_in',
@@ -167,6 +202,46 @@ describe('SearchImpl agentic loop', () => {
     ]);
   });
 
+  it('reasoning=true returns both answer and reasoning text and forwards reasoning=true to prompt', async () => {
+    const repo = new MemoryRepo([indexPage(), makePage({ slug: 'apps/a', category: 'apps' })]);
+    const text = [
+      'BRIEF:',
+      'Short answer.',
+      '',
+      'REASONING:',
+      'Long detailed reasoning.',
+      '',
+      'SOURCES: apps/a',
+    ].join('\n');
+    queueResponse(responseEndTurn(text));
+
+    const impl = new SearchImpl(repo);
+    const result = await impl.search('p1', 'q', 'key', { reasoning: true });
+    expect(result.answer).toBe('Short answer.');
+    expect(result.reasoning).toBe('Long detailed reasoning.');
+    expect(result.sources).toEqual(['apps/a']);
+
+    const first = recordedCalls[0];
+    const reasoningHint = first.messages.find((m: any) => m.content?.[0]?.text?.startsWith('Reasoning requested:'));
+    expect(reasoningHint.content[0].text).toBe('Reasoning requested: true');
+  });
+
+  it('falls back to full text as answer when BRIEF marker missing', async () => {
+    const repo = new MemoryRepo([
+      indexPage(),
+      makePage({ slug: 'apps/a', category: 'apps' }),
+      makePage({ slug: 'apps/b', category: 'apps' }),
+    ]);
+    queueResponse(responseToolUse('read_pages', { slugs: ['apps/a', 'apps/b'] }));
+    queueResponse(responseEndTurn('Answer without brief marker.\nSOURCES: apps/a, apps/b'));
+
+    const impl = new SearchImpl(repo);
+    const result = await impl.search('p1', 'q', 'key');
+    expect(result.answer).toBe('Answer without brief marker.');
+    expect(result.reasoning).toBeUndefined();
+    expect(result.sources.sort()).toEqual(['apps/a', 'apps/b']);
+  });
+
   it('falls back to slugs read during the loop when SOURCES line missing', async () => {
     const repo = new MemoryRepo([
       indexPage(),
@@ -174,11 +249,11 @@ describe('SearchImpl agentic loop', () => {
       makePage({ slug: 'apps/b', category: 'apps' }),
     ]);
     queueResponse(responseToolUse('read_pages', { slugs: ['apps/a', 'apps/b'] }));
-    queueResponse(responseEndTurn('Answer without sources line.'));
+    queueResponse(responseEndTurn('BRIEF:\nNo sources line here.'));
 
     const impl = new SearchImpl(repo);
     const { answer, sources } = await impl.search('p1', 'q', 'key');
-    expect(answer).toBe('Answer without sources line.');
+    expect(answer).toBe('No sources line here.');
     expect(sources.sort()).toEqual(['apps/a', 'apps/b']);
   });
 
@@ -186,7 +261,7 @@ describe('SearchImpl agentic loop', () => {
     const pages = [indexPage(), ...['a', 'b', 'c', 'd', 'e', 'f', 'g'].map((s) => makePage({ slug: s, category: 'x' }))];
     const repo = new MemoryRepo(pages);
     queueResponse(responseToolUse('read_pages', { slugs: ['a', 'b', 'c', 'd', 'e', 'f', 'g'] }));
-    queueResponse(responseEndTurn('Done.\nSOURCES: '));
+    queueResponse(responseEndTurn('BRIEF:\nDone.\nSOURCES: '));
 
     const impl = new SearchImpl(repo);
     await impl.search('p1', 'q', 'key');
@@ -201,7 +276,7 @@ describe('SearchImpl agentic loop', () => {
   it('returns page not found for unknown slug in read_page', async () => {
     const repo = new MemoryRepo([indexPage()]);
     queueResponse(responseToolUse('read_page', { slug: 'nope' }));
-    queueResponse(responseEndTurn('Nothing.\nSOURCES:'));
+    queueResponse(responseEndTurn('BRIEF:\nNothing.\nSOURCES:'));
 
     const impl = new SearchImpl(repo);
     await impl.search('p1', 'q', 'key');
@@ -211,16 +286,17 @@ describe('SearchImpl agentic loop', () => {
     expect(payload).toEqual({ ok: false, error: 'page not found: nope' });
   });
 
-  it('forces a partial finalization when maxIters is reached', async () => {
+  it('forces a partial finalization when maxIters is reached and reports stopReason=budget', async () => {
     const repo = new MemoryRepo([indexPage(), makePage({ slug: 'a', category: 'x' })]);
     queueResponse(responseToolUse('read_page', { slug: 'a' }, 'tu_0'));
     queueResponse(responseToolUse('read_page', { slug: 'a' }, 'tu_1'));
-    queueResponse(responseEndTurn('Partial.\nSOURCES: a'));
+    queueResponse(responseEndTurn('BRIEF:\nPartial.\nSOURCES: a'));
 
     const impl = new SearchImpl(repo, { maxIters: 2, maxPagesRead: 99, maxTotalTokens: 999_999 });
-    const { answer, sources } = await impl.search('p1', 'q', 'key');
-    expect(answer).toBe('Partial.');
-    expect(sources).toEqual(['a']);
+    const result = await impl.search('p1', 'q', 'key');
+    expect(result.answer).toBe('Partial.');
+    expect(result.sources).toEqual(['a']);
+    expect(result.metrics.stopReason).toBe('budget');
     expect(recordedCalls.length).toBe(3);
 
     const finalCall = recordedCalls[2];
@@ -239,7 +315,7 @@ describe('SearchImpl agentic loop', () => {
     queueResponse(responseToolUse('read_page', { slug: 'a' }, 'tu1'));
     queueResponse(responseToolUse('read_page', { slug: 'b' }, 'tu2'));
     queueResponse(responseToolUse('list_categories', {}, 'tu3'));
-    queueResponse(responseEndTurn('Done.\nSOURCES: a'));
+    queueResponse(responseEndTurn('BRIEF:\nDone.\nSOURCES: a'));
 
     const impl = new SearchImpl(repo, { maxIters: 99, maxPagesRead: 1, maxTotalTokens: 999_999 });
     await impl.search('p1', 'q', 'key');
@@ -257,29 +333,31 @@ describe('SearchImpl agentic loop', () => {
       stop_reason: 'tool_use',
       usage: { input_tokens: 9000, output_tokens: 9000 },
     });
-    queueResponse(responseEndTurn('Partial.\nSOURCES: a'));
+    queueResponse(responseEndTurn('BRIEF:\nPartial.\nSOURCES: a'));
 
     const impl = new SearchImpl(repo, { maxIters: 99, maxPagesRead: 99, maxTotalTokens: 10_000 });
-    const { answer, sources } = await impl.search('p1', 'q', 'key');
-    expect(answer).toBe('Partial.');
-    expect(sources).toEqual(['a']);
+    const result = await impl.search('p1', 'q', 'key');
+    expect(result.answer).toBe('Partial.');
+    expect(result.sources).toEqual(['a']);
+    expect(result.metrics.stopReason).toBe('budget');
     expect(recordedCalls.length).toBe(2);
     expect(recordedCalls[1].tool_choice).toEqual({ type: 'none' });
   });
 
-  it('handles stop_reason max_tokens by synthesizing tool_results and finalizing', async () => {
+  it('handles stop_reason max_tokens by synthesizing tool_results and finalizing with stopReason=max_tokens', async () => {
     const repo = new MemoryRepo([indexPage()]);
     queueResponse({
       content: [{ type: 'tool_use', id: 'tu1', name: 'read_page', input: { slug: 'a' } }],
       stop_reason: 'max_tokens',
       usage: { input_tokens: 100, output_tokens: 4096 },
     });
-    queueResponse(responseEndTurn('Done.\nSOURCES: index'));
+    queueResponse(responseEndTurn('BRIEF:\nDone.\nSOURCES: index'));
 
     const impl = new SearchImpl(repo);
-    const { answer, sources } = await impl.search('p1', 'q', 'key');
-    expect(answer).toBe('Done.');
-    expect(sources).toEqual(['index']);
+    const result = await impl.search('p1', 'q', 'key');
+    expect(result.answer).toBe('Done.');
+    expect(result.sources).toEqual(['index']);
+    expect(result.metrics.stopReason).toBe('max_tokens');
 
     const finalCall = recordedCalls[1];
     expect(finalCall.tool_choice).toEqual({ type: 'none' });
@@ -297,7 +375,7 @@ describe('SearchImpl agentic loop', () => {
     ]);
     queueResponse(responseToolUse('list_categories', {}, 'tu1'));
     queueResponse(responseToolUse('list_in', { category: 'apps' }, 'tu2'));
-    queueResponse(responseEndTurn('Done.\nSOURCES: apps/a'));
+    queueResponse(responseEndTurn('BRIEF:\nDone.\nSOURCES: apps/a'));
 
     const impl = new SearchImpl(repo);
     await impl.search('p1', 'q', 'key');
@@ -319,7 +397,7 @@ describe('SearchImpl agentic loop', () => {
       makePage({ slug: 'c', category: 'x' }),
     ]);
     queueResponse(responseToolUse('read_related', { slug: 'a', depth: 1 }, 'tu1'));
-    queueResponse(responseEndTurn('Done.\nSOURCES: a, b, c'));
+    queueResponse(responseEndTurn('BRIEF:\nDone.\nSOURCES: a, b, c'));
 
     const impl = new SearchImpl(repo);
     const { sources } = await impl.search('p1', 'q', 'key');

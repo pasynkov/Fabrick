@@ -1,6 +1,6 @@
 ---
 name: cd-implementation-pipeline
-description: Orchestrate the end-to-end implementation pipeline from an implementation/<name> branch through a feature/<name> branch with an open PR to develop. Invokes seven subagents (gh-ops, change-applier, simplifier, reviewer, build-fixer, archiver, git-ops) across seven sequential steps, with a parallel build gate in step 4, a per-step retry budget, a build-attempt budget of 3, and a one-bounce TDD policy. Use when the CI workflow cd-implementation.yml triggers, or locally to drive a real change directory to PR readiness.
+description: Orchestrate the end-to-end implementation pipeline from an implementation/<name> branch through a feature/<name> branch with an open PR to develop. Invokes seven subagents (gh-ops, change-applier, simplifier, reviewer, build-fixer, archiver, git-ops) across six sequential steps, with a parallel build gate in step 4, a per-step retry budget, a build-attempt budget of 3, and a one-bounce TDD policy. Use when the CI workflow cd-implementation.yml triggers, or locally to drive a real change directory to PR readiness.
 license: MIT
 metadata:
   author: pasynkov
@@ -21,7 +21,7 @@ The skill is caller-agnostic — CI fills the arguments from workflow context; a
 - Available tools: `Agent`, `Bash`, `Read`, `Write`, `Edit`, `Skill`, `Glob`, `LS`.
 - Env vars expected to be present: `GH_TOKEN` (used by `gh-ops`), `CLAUDE_CODE_OAUTH_TOKEN` (used by the action). They are inherited by every subagent automatically.
 - State flows through subagent return values and the local filesystem (the `openspec/changes/<name>/` tree, the working tree, the local git log). Do NOT write `/tmp/*.md` or `/tmp/*.json` to pass text state between steps — pass it inline through prompts.
-- You operate on the currently checked-out branch. You MUST NOT switch branches yourself; only `git-ops` does that in step 7.
+- You operate on the currently checked-out branch. You MUST NOT switch branches yourself; only `git-ops` does that in step 6.
 
 ## State derivation (run once at the start)
 
@@ -45,13 +45,13 @@ else
 fi
 ```
 
-Use the flags to decide whether to invoke steps 1, 2, 3, and 5. Always invoke steps 0, 4, 6, and 7.
+Use the flags to decide whether to invoke steps 1, 2, 3, and 5. Always invoke steps 0, 4, and 6.
 
 If `openspec/changes/<NAME>/` does not exist AND `ARCHIVE_DONE=false`, abort the pipeline with a clear failure result — there is nothing to implement.
 
 ## Pipeline steps
 
-The seven steps run sequentially. Step 4 fans out 6 parallel `Bash` tool calls in one response.
+The six steps run sequentially. Step 4 fans out 6 parallel `Bash` tool calls in one response.
 
 ### Step 0 — gh-ops: label issue implementation:apply
 
@@ -119,7 +119,7 @@ If the reviewer returns a reply that starts with `ERROR: TDD gap on <task-refs>`
    )
    ```
 2. Re-invoke the reviewer.
-3. **At most one bounce per pipeline run.** If the second-pass reviewer still returns `ERROR: TDD gap`, record `TDD gap unresolved: <task-refs>` in the orchestrator's working notes (to surface in step 7's PR body) and proceed to step 4 without further bounces.
+3. **At most one bounce per pipeline run.** If the second-pass reviewer still returns `ERROR: TDD gap`, record `TDD gap unresolved: <task-refs>` in the orchestrator's working notes (to surface in step 6's PR body) and proceed to step 4 without further bounces.
 
 A reviewer crash (subagent error, timeout) is NOT a TDD signal — handle via the per-step retry policy below.
 
@@ -160,7 +160,7 @@ After `build-fixer` returns, re-run the same 6 parallel builds.
 
 Total build attempts across the step MUST NOT exceed 3 (1 initial parallel run + up to 2 build-fixer iterations). If the third attempt still leaves any build red:
 
-- Record `partial-red: <failed apps>` in the orchestrator's working notes (to surface in step 7's PR body).
+- Record `partial-red: <failed apps>` in the orchestrator's working notes (to surface in step 6's PR body).
 - Proceed to step 5.
 
 The build-fixer is the only doer invoked from step 4 and is the only doer that runs more than once per pipeline.
@@ -177,19 +177,7 @@ Agent(
 )
 ```
 
-### Step 6 — git-ops: push implementation branch
-
-Always run.
-
-```
-Agent(
-  subagent_type="git-ops",
-  description="Push implementation branch",
-  prompt="Branch: implementation/<NAME>. Push the current branch to origin. Do not create new branches. Return the current commit SHA after push."
-)
-```
-
-### Step 7 — promoter: rename to feature, open PR, label issue, comment
+### Step 6 — promoter: rename to feature, open PR, label issue, comment
 
 Always run. Two sub-invocations.
 
@@ -203,7 +191,8 @@ Agent(
 Source branch: implementation/<NAME>. Target branch: feature/<NAME>.
 1. Create feature/<NAME> from the current tip of implementation/<NAME>.
 2. Push feature/<NAME> to origin.
-3. Delete implementation/<NAME> on origin (`git push origin --delete implementation/<NAME>`).
+3. If implementation/<NAME> exists on origin, delete it (`git push origin --delete implementation/<NAME>`). Skip silently when it does not exist on origin.
+Do NOT push implementation/<NAME> to origin under any circumstance.
 Return the new branch name and the commit SHA.
 """
 )
@@ -250,8 +239,7 @@ After the second failed attempt:
 | 3 reviewer (crash, not TDD signal) | **ABORT** the pipeline. |
 | 4 build (within 3-attempt budget) | record `partial-red`, continue. |
 | 5 archiver | **ABORT** the pipeline. No promote runs. |
-| 6 git-ops push | **ABORT** the pipeline. |
-| 7 promoter | warn and continue. Branch may be renamed but PR not opened. |
+| 6 promoter | warn and continue. Branch may be renamed but PR not opened. |
 
 ## Doer commit contract
 
@@ -273,7 +261,7 @@ Doers commit their own work. The orchestrator never invokes `git commit` itself,
 | 2 | `build-fixer` agent → 6 parallel build re-runs |
 | 3 | `build-fixer` agent → 6 parallel build re-runs |
 
-After attempt 3, the orchestrator records `partial-red` and moves on. The PR opened in step 7 carries the flag.
+After attempt 3, the orchestrator records `partial-red` and moves on. The PR opened in step 6 carries the flag.
 
 ## Local dry-run
 

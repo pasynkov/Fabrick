@@ -36,7 +36,7 @@ fi
 
 # Promote job removed
 if grep -qE '^\s*promote:\s*$' "$NEW_WF"; then
-  fail "cd-implementation.yml must not contain a 'promote' job; promotion is pipeline step 7"
+  fail "cd-implementation.yml must not contain a 'promote' job; promotion is pipeline step 6"
 fi
 
 # Skill invocation in prompt

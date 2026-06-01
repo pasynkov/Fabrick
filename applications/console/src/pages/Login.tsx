@@ -26,11 +26,7 @@ export default function Login() {
       const res = await api.login(email, password, persistent);
       setAuth(res.access_token, res.user, res.refresh_token, persistent);
       const returnTo = params.get('return_to') || params.get('next');
-      if (res.user.isPlatformAdmin) {
-        navigate(returnTo || '/admin');
-      } else {
-        navigate(returnTo || '/');
-      }
+      navigate(returnTo || '/');
     } catch (err: any) {
       setError(err.message || 'Login failed');
     }

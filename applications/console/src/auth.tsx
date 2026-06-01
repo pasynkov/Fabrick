@@ -132,14 +132,10 @@ export function useAuth() {
 }
 
 export function RequireAuth({ children }: { children: ReactNode }) {
-  const { token, user, refreshing } = useAuth();
+  const { token, refreshing } = useAuth();
   const location = useLocation();
   if (refreshing) return <div className="min-h-screen flex items-center justify-center text-gray-400">Loading...</div>;
   if (!token) return <Navigate to={`/login?next=${encodeURIComponent(location.pathname + location.search)}`} replace />;
-  if (user?.isPlatformAdmin) {
-    const returnTo = new URLSearchParams(location.search).get('return_to');
-    return <Navigate to={returnTo || '/admin'} replace />;
-  }
   return <>{children}</>;
 }
 

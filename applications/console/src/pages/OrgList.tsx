@@ -19,6 +19,9 @@ export default function OrgList() {
       <header className="bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
         <span className="font-semibold text-gray-900">Fabrick</span>
         <div className="flex items-center gap-4 text-sm text-gray-500">
+          {user?.isPlatformAdmin && (
+            <a href="/admin" className="text-purple-600 hover:underline">Admin</a>
+          )}
           <span>{user?.email}</span>
           <button onClick={logout} className="text-red-500 hover:underline">Sign out</button>
         </div>

@@ -5,7 +5,6 @@
   },
   "routes": [
     { "route": "/admin", "rewrite": "/admin/index.html" },
-    { "route": "/admin/", "rewrite": "/admin/index.html" },
     { "route": "/admin/users", "rewrite": "/admin/index.html" },
     { "route": "/admin/users/*", "rewrite": "/admin/index.html" },
     { "route": "/admin/orgs", "rewrite": "/admin/index.html" },

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../api';
 import { ApiKeyForm } from './ApiKeyForm';
 import { ApiKeyStatusDisplay } from './ApiKeyStatusDisplay';
+import { Card } from './ui/Card';
 
 interface ApiKeySectionProps {
   orgId: string;
@@ -33,10 +34,10 @@ export function ApiKeySection({ orgId, isAdmin }: ApiKeySectionProps) {
   }
 
   if (!isAdmin) return null;
-  if (loading) return <p className="text-xs text-gray-400">Loading...</p>;
+  if (loading) return <p className="text-xs text-text-muted">Loading...</p>;
 
   return (
-    <div className="space-y-2">
+    <Card className="p-3 space-y-2">
       <div className="flex items-center justify-between">
         <ApiKeyStatusDisplay
           hasApiKey={status?.hasApiKey ?? false}
@@ -44,6 +45,6 @@ export function ApiKeySection({ orgId, isAdmin }: ApiKeySectionProps) {
         />
       </div>
       <ApiKeyForm onSave={handleSave} hasExistingKey={status?.hasApiKey ?? false} />
-    </div>
+    </Card>
   );
 }

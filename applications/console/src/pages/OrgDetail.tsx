@@ -3,6 +3,10 @@ import { Link, useParams } from 'react-router-dom';
 import { api } from '../api';
 import { ApiKeySection } from '../components/ApiKeySection';
 import { ApiKeyAuditLogs } from '../components/ApiKeyAuditLogs';
+import { AppLayout } from '../components/ui/AppLayout';
+import { Button } from '../components/ui/Button';
+import { Card } from '../components/ui/Card';
+import { Input } from '../components/ui/Input';
 
 interface Project { id: string; name: string; slug: string }
 interface Member { userId: string; email: string; role: string }
@@ -62,44 +66,46 @@ export default function OrgDetail() {
     }
   }
 
-  if (!org) return <div className="p-8 text-gray-400">Loading...</div>;
+  if (!org) return (
+    <div className="min-h-screen bg-surface flex items-center justify-center">
+      <p className="text-text-muted">Loading...</p>
+    </div>
+  );
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
-        <nav className="text-sm text-gray-500">
-          <Link to="/" className="hover:underline">Orgs</Link>
+    <AppLayout>
+      <div className="mb-6 flex items-center justify-between">
+        <nav className="text-sm text-text-muted">
+          <Link to="/" className="hover:text-text-primary transition-colors">Orgs</Link>
           <span className="mx-2">/</span>
-          <span className="text-gray-900 font-medium">{org.name}</span>
+          <span className="text-text-primary font-medium">{org.name}</span>
         </nav>
         {org.role === 'admin' && (
           <Link
             to={`/orgs/${orgSlug}/settings`}
-            className="text-xs text-gray-500 border border-gray-200 rounded px-2 py-1 hover:border-purple-400 hover:text-purple-600 transition"
+            className="inline-flex items-center justify-center rounded-lg font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-accent-indigo/50 border border-border bg-surface-1/50 text-text-primary hover:bg-surface-2 px-3 py-1.5 text-xs"
           >
             Edit Settings
           </Link>
         )}
-      </header>
-      <main className="max-w-2xl mx-auto py-10 px-4 space-y-10">
-        {error && <p className="text-red-500 text-sm">{error}</p>}
+      </div>
 
+      {error && <p className="text-danger text-sm mb-4">{error}</p>}
+
+      <div className="space-y-8">
         <section>
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Projects</h2>
+          <h2 className="text-lg font-semibold text-text-primary mb-4">Projects</h2>
           <ul className="space-y-2 mb-4">
             {projects.map((p) => (
               <li key={p.id} className="flex items-center gap-2">
-                <Link
-                  to={`/orgs/${orgSlug}/projects/${p.slug}`}
-                  className="flex-1 block bg-white border border-gray-200 rounded-lg px-4 py-3 hover:border-purple-400 transition"
-                >
-                  <span className="font-medium text-gray-900">{p.name}</span>
-                  <span className="ml-2 text-xs text-gray-400">{p.slug}</span>
-                </Link>
+                <Card interactive as={Link} to={`/orgs/${orgSlug}/projects/${p.slug}`} className="flex-1 block px-4 py-3">
+                  <span className="font-medium text-text-primary">{p.name}</span>
+                  <span className="ml-2 text-xs text-text-muted">{p.slug}</span>
+                </Card>
                 {org.role === 'admin' && (
                   <Link
                     to={`/orgs/${orgSlug}/projects/${p.slug}/settings`}
-                    className="text-xs text-gray-500 border border-gray-200 rounded px-2 py-1 hover:border-purple-400 hover:text-purple-600 transition"
+                    className="inline-flex items-center justify-center rounded-lg font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-accent-indigo/50 border border-border bg-surface-1/50 text-text-primary hover:bg-surface-2 px-3 py-1.5 text-xs"
                   >
                     Settings
                   </Link>
@@ -108,63 +114,59 @@ export default function OrgDetail() {
             ))}
           </ul>
           <form onSubmit={createProject} className="flex gap-2">
-            <input
+            <Input
               type="text"
               placeholder="New project name"
               value={newProjectName}
               onChange={(e) => setNewProjectName(e.target.value)}
-              className="border border-gray-300 rounded px-3 py-1.5 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-purple-500"
             />
-            <button type="submit" className="bg-purple-600 text-white rounded px-4 py-1.5 text-sm hover:bg-purple-700">
-              Add
-            </button>
+            <Button type="submit" variant="primary" size="sm">Add</Button>
           </form>
         </section>
 
         {org.role === 'admin' && (
           <section>
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">API Key</h2>
-            <div className="bg-white border border-gray-200 rounded-lg px-4 py-4 space-y-3">
-              <p className="text-xs text-gray-500">Configure the Anthropic API key used for synthesis. Projects can override this with their own key.</p>
+            <h2 className="text-lg font-semibold text-text-primary mb-4">API Key</h2>
+            <Card className="px-4 py-4 space-y-3">
+              <p className="text-xs text-text-muted">Configure the Anthropic API key used for synthesis. Projects can override this with their own key.</p>
               <ApiKeySection orgId={org.id} isAdmin={org.role === 'admin'} />
               <ApiKeyAuditLogs type="org" resourceId={org.id} />
-            </div>
+            </Card>
           </section>
         )}
 
         {org.role === 'admin' && (
           <section>
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Members</h2>
+            <h2 className="text-lg font-semibold text-text-primary mb-4">Members</h2>
             <ul className="space-y-2 mb-4">
               {members.map((m) => (
-                <li key={m.userId} className="bg-white border border-gray-200 rounded-lg px-4 py-3 flex justify-between">
-                  <span className="text-sm text-gray-900">{m.email}</span>
-                  <span className="text-xs text-purple-500">{m.role}</span>
+                <li key={m.userId}>
+                  <Card className="px-4 py-3 flex justify-between items-center">
+                    <span className="text-sm text-text-primary">{m.email}</span>
+                    <span className="text-xs text-accent-indigo">{m.role}</span>
+                  </Card>
                 </li>
               ))}
             </ul>
             {shownPassword && (
-              <div className="bg-yellow-50 border border-yellow-300 rounded p-3 text-sm mb-4">
-                <strong>Generated password (shown once):</strong>{' '}
-                <code className="font-mono">{shownPassword}</code>
+              <div className="bg-surface-2 border border-border rounded-lg p-3 text-sm mb-4">
+                <strong className="text-text-primary">Generated password (shown once):</strong>{' '}
+                <code className="font-mono text-accent-indigo">{shownPassword}</code>
               </div>
             )}
             <form onSubmit={addMember} className="flex gap-2">
-              <input
+              <Input
                 type="email"
                 placeholder="Member email"
                 value={newEmail}
                 onChange={(e) => setNewEmail(e.target.value)}
                 required
-                className="border border-gray-300 rounded px-3 py-1.5 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-purple-500"
               />
-              <button type="submit" className="bg-purple-600 text-white rounded px-4 py-1.5 text-sm hover:bg-purple-700">
-                Add member
-              </button>
+              <Button type="submit" variant="primary" size="sm">Add member</Button>
             </form>
           </section>
         )}
-      </main>
-    </div>
+      </div>
+    </AppLayout>
   );
 }

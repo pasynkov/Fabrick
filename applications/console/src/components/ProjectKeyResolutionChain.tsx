@@ -36,7 +36,7 @@ export function ProjectKeyResolutionChain({ orgId, projectId, isAdmin }: Project
     setStatus(updated);
   }
 
-  if (loading) return <p className="text-xs text-gray-400">Loading...</p>;
+  if (loading) return <p className="text-xs text-text-muted">Loading...</p>;
   if (!status) return null;
 
   const effectiveSource = status.effectiveSource;
@@ -45,27 +45,27 @@ export function ProjectKeyResolutionChain({ orgId, projectId, isAdmin }: Project
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2 text-sm">
-        <span className="text-gray-500">Effective API key:</span>
+        <span className="text-text-muted">Effective API key:</span>
         {noKey ? (
-          <span className="text-xs text-red-500">No API key configured</span>
+          <span className="text-xs text-danger">No API key configured</span>
         ) : (
-          <span className="text-xs text-green-600 font-medium">
+          <span className="text-xs text-green-500 font-medium">
             Using {effectiveSource}-level key
           </span>
         )}
       </div>
 
       <div className="grid grid-cols-2 gap-3 text-xs">
-        <div className="bg-gray-50 rounded p-2">
-          <p className="font-medium text-gray-700 mb-1">Project key</p>
+        <div className="bg-surface-2 rounded-lg p-2">
+          <p className="font-medium text-text-primary mb-1">Project key</p>
           <ApiKeyStatusDisplay
             hasApiKey={status.hasProjectApiKey}
             keyHash={status.keyHashes.project}
             source="project"
           />
         </div>
-        <div className="bg-gray-50 rounded p-2">
-          <p className="font-medium text-gray-700 mb-1">Organization key (fallback)</p>
+        <div className="bg-surface-2 rounded-lg p-2">
+          <p className="font-medium text-text-primary mb-1">Organization key (fallback)</p>
           <ApiKeyStatusDisplay
             hasApiKey={status.hasOrgApiKey}
             keyHash={status.keyHashes.organization}

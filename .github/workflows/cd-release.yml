@@ -247,6 +247,9 @@ jobs:
         working-directory: applications/admin
       - run: npm run build
         working-directory: applications/admin
+        env:
+          VITE_API_URL: https://api.fabrick.me
+          VITE_CONSOLE_URL: https://console.fabrick.me
       - name: Merge admin into console payload
         run: cp -r applications/admin/dist applications/console/dist/admin
       - uses: Azure/static-web-apps-deploy@v1

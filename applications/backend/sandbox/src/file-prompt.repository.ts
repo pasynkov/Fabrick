@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { createHash } from 'crypto';
-import { existsSync, readdirSync, readFileSync } from 'fs';
+import { readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { PromptRecord, PromptRepository } from '@app/shared';
 
@@ -29,11 +29,12 @@ function makeId(name: string, agent: string, files: Record<string, string>): str
 export class FilePromptRepository implements PromptRepository {
   async getLatest(name: string, agent: string): Promise<PromptRecord> {
     const promptDir = join(PROMPTS_DIR, name, agent);
-    if (!existsSync(promptDir)) {
+    let entries: ReturnType<typeof readdirSync>;
+    try {
+      entries = readdirSync(promptDir, { withFileTypes: true });
+    } catch {
       throw new Error(`No prompt found for (${name}, ${agent})`);
     }
-
-    const entries = readdirSync(promptDir, { withFileTypes: true });
     const files: Record<string, string> = {};
 
     for (const entry of entries) {

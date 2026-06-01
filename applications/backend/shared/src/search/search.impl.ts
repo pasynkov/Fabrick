@@ -49,7 +49,6 @@ export interface SearchResult {
   promptRevisionId: string;
 }
 
-
 const TOOL_DEFS: Tool[] = [
   {
     name: 'list_categories',

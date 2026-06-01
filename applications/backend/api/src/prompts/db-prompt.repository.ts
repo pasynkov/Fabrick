@@ -12,15 +12,8 @@ export class DbPromptRepository implements PromptRepository {
   ) {}
 
   async getLatest(name: string, agent: string): Promise<PromptRecord> {
-    const entity = await this.repo.findOne({
-      where: { name, agent },
-      order: { revision: 'DESC' },
-    });
-
-    if (!entity) {
-      throw new Error(`No prompt found for (${name}, ${agent})`);
-    }
-
+    const entity = await this.findLatestForNameAgent(name, agent);
+    if (!entity) throw new Error(`No prompt found for (${name}, ${agent})`);
     return {
       id: entity.id,
       name: entity.name,

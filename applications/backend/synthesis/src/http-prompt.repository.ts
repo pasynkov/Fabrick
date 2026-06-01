@@ -1,9 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { PromptRecord, PromptRepository } from '@app/shared';
 
 @Injectable()
 export class HttpPromptRepository implements PromptRepository {
-  private readonly logger = new Logger(HttpPromptRepository.name);
   private readonly apiBaseUrl = process.env.API_BASE_URL || 'http://localhost:3000';
 
   async getLatest(name: string, agent: string): Promise<PromptRecord> {

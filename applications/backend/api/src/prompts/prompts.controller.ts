@@ -26,15 +26,11 @@ export class InternalPromptsController {
     @Param('name') name: string,
     @Param('agent') agent: string,
   ) {
-    const row = await this.promptRepo.findLatestForNameAgent(name, agent);
-    if (!row) throw new NotFoundException(`No prompt found for (${name}, ${agent})`);
-    return {
-      id: row.id,
-      name: row.name,
-      agent: row.agent,
-      revision: row.revision,
-      content: row.content,
-    };
+    try {
+      return await this.promptRepo.getLatest(name, agent);
+    } catch {
+      throw new NotFoundException(`No prompt found for (${name}, ${agent})`);
+    }
   }
 }
 

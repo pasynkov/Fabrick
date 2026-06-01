@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { api, type MeResponse } from './api';
+import { api } from './api';
 
 const CONSOLE_ORIGIN = import.meta.env.VITE_CONSOLE_URL || 'http://localhost:5173';
 
@@ -20,7 +20,7 @@ export default function AdminGuard({ children }: Props) {
     }
 
     api.me()
-      .then((me: MeResponse) => {
+      .then((me) => {
         if (me.isPlatformAdmin) {
           setStatus('allowed');
         } else {

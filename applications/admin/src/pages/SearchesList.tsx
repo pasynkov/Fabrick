@@ -51,7 +51,6 @@ export default function SearchesList() {
     if (orgId) next.orgId = orgId;
     if (projectId) next.projectId = projectId;
     Object.assign(next, updates);
-    // Remove empty values
     Object.keys(next).forEach((k) => { if (!next[k]) delete next[k]; });
     setSearchParams(next);
   }

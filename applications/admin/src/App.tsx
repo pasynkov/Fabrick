@@ -5,6 +5,8 @@ import OrgDetail from './pages/OrgDetail';
 import OrgsList from './pages/OrgsList';
 import ProjectDetail from './pages/ProjectDetail';
 import ProjectsList from './pages/ProjectsList';
+import PromptDetail from './pages/PromptDetail';
+import PromptsList from './pages/PromptsList';
 import SearchesList from './pages/SearchesList';
 import UserDetail from './pages/UserDetail';
 import UsersList from './pages/UsersList';
@@ -35,6 +37,8 @@ export default function App() {
             <Route path="/projects" element={<ProjectsList />} />
             <Route path="/projects/:id" element={<ProjectDetail />} />
             <Route path="/searches" element={<SearchesList />} />
+            <Route path="/prompts" element={<PromptsList />} />
+            <Route path="/prompts/:name/:agent" element={<PromptDetail />} />
           </Routes>
         </Layout>
       </AdminGuard>

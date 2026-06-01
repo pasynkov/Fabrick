@@ -10,7 +10,9 @@ import { WikiPage } from '../entities/wiki-page.entity';
 import { SearchController } from './search.controller';
 import { SearchService } from './search.service';
 import { TypeOrmWikiRepository } from './typeorm-wiki.repository';
-import { SearchImpl, WIKI_REPOSITORY } from '@app/shared';
+import { SearchImpl, WIKI_REPOSITORY, PROMPT_REPOSITORY } from '@app/shared';
+import { PromptsModule } from '../prompts/prompts.module';
+import { DbPromptRepository } from '../prompts/db-prompt.repository';
 
 @Module({
   imports: [
@@ -18,12 +20,14 @@ import { SearchImpl, WIKI_REPOSITORY } from '@app/shared';
     ApiKeysModule,
     AuthModule,
     AnalyticsModule,
+    PromptsModule,
   ],
   controllers: [SearchController],
   providers: [
     SearchService,
     TypeOrmWikiRepository,
     { provide: WIKI_REPOSITORY, useExisting: TypeOrmWikiRepository },
+    { provide: PROMPT_REPOSITORY, useExisting: DbPromptRepository },
     SearchImpl,
   ],
 })

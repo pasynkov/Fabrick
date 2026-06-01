@@ -12,6 +12,7 @@ import { User } from './entities/user.entity';
 import { WikiPage } from './entities/wiki-page.entity';
 import { SearchRequest } from './entities/search-request.entity';
 import { TokenUsage } from './entities/token-usage.entity';
+import { PromptRevision } from './entities/prompt-revision.entity';
 import { HealthController } from './health/health.controller';
 import { migrations } from './migrations';
 import { OrgsModule } from './orgs/orgs.module';
@@ -20,6 +21,7 @@ import { SkillsModule } from './skills/skills.module';
 import { SynthesisModule } from './synthesis/synthesis.module';
 import { SearchModule } from './search/search.module';
 import { AnalyticsModule } from './analytics/analytics.module';
+import { PromptsModule } from './prompts/prompts.module';
 
 @Module({
   imports: [
@@ -31,7 +33,7 @@ import { AnalyticsModule } from './analytics/analytics.module';
         database: process.env.DB_NAME || 'fabrick',
         username: process.env.DB_USER || 'fabrick',
         password: process.env.DB_PASS || 'fabrick',
-        entities: [User, Organization, OrgMember, Project, Repository, ApiKeyAuditLog, WikiPage, SearchRequest, TokenUsage],
+        entities: [User, Organization, OrgMember, Project, Repository, ApiKeyAuditLog, WikiPage, SearchRequest, TokenUsage, PromptRevision],
         synchronize: false,
         migrationsRun: true,
         migrations,
@@ -48,6 +50,7 @@ import { AnalyticsModule } from './analytics/analytics.module';
     SearchModule,
     AnalyticsModule,
     AdminModule,
+    PromptsModule,
   ],
   controllers: [HealthController],
 })

@@ -1,4 +1,4 @@
-import { IsInt, IsString, Min } from 'class-validator';
+import { IsInt, IsOptional, IsString, IsUUID, Min } from 'class-validator';
 
 export class RecordTokenUsageDto {
   @IsString()
@@ -14,4 +14,8 @@ export class RecordTokenUsageDto {
   @IsInt()
   @Min(0)
   outputTokens: number;
+
+  @IsOptional()
+  @IsUUID()
+  promptRevisionId?: string | null;
 }

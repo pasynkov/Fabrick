@@ -6,6 +6,7 @@ import {
   extractOneLiner,
 } from '../../../shared/src/wiki-repository.interface';
 import { WikiPageData } from '../../../shared/src/wiki-page.types';
+import { PromptRepository, PromptRecord } from '../../../shared/src/prompt-repository.interface';
 
 const createMock = jest.fn();
 const recordedCalls: any[] = [];
@@ -29,6 +30,32 @@ jest.mock('@anthropic-ai/sdk', () => {
     })),
   };
 });
+
+const MOCK_PROMPT_RECORD: PromptRecord = {
+  id: 'prompt-rev-id-1',
+  name: 'search',
+  agent: 'claude',
+  revision: 1,
+  content: {
+    files: {
+      'prompt.md': 'You are a search agent over a project wiki.',
+    },
+  },
+};
+
+class MockPromptRepo implements PromptRepository {
+  private readonly record: PromptRecord;
+  readonly calls: Array<{ name: string; agent: string }> = [];
+
+  constructor(record: PromptRecord = MOCK_PROMPT_RECORD) {
+    this.record = record;
+  }
+
+  async getLatest(name: string, agent: string): Promise<PromptRecord> {
+    this.calls.push({ name, agent });
+    return this.record;
+  }
+}
 
 class MemoryRepo implements WikiRepository {
   constructor(private readonly pages: WikiPage[]) {}
@@ -157,7 +184,7 @@ describe('SearchImpl agentic loop', () => {
 
   it('throws when index page is missing and does not call Anthropic', async () => {
     const repo = new MemoryRepo([]);
-    const impl = new SearchImpl(repo);
+    const impl = new SearchImpl(repo, new MockPromptRepo());
     await expect(impl.search('p1', 'q', 'key')).rejects.toThrow(/No wiki pages found/);
     expect(recordedCalls).toEqual([]);
   });
@@ -170,7 +197,7 @@ describe('SearchImpl agentic loop', () => {
     queueResponse(responseToolUse('read_page', { slug: 'apps/a' }));
     queueResponse(responseEndTurn('BRIEF:\nA is the answer.\n\nSOURCES: apps/a'));
 
-    const impl = new SearchImpl(repo);
+    const impl = new SearchImpl(repo, new MockPromptRepo());
     const result = await impl.search('p1', 'how does A work?', 'key');
     expect(result.answer).toBe('A is the answer.');
     expect(result.reasoning).toBeUndefined();
@@ -215,7 +242,7 @@ describe('SearchImpl agentic loop', () => {
     ].join('\n');
     queueResponse(responseEndTurn(text));
 
-    const impl = new SearchImpl(repo);
+    const impl = new SearchImpl(repo, new MockPromptRepo());
     const result = await impl.search('p1', 'q', 'key', { reasoning: true });
     expect(result.answer).toBe('Short answer.');
     expect(result.reasoning).toBe('Long detailed reasoning.');
@@ -235,7 +262,7 @@ describe('SearchImpl agentic loop', () => {
     queueResponse(responseToolUse('read_pages', { slugs: ['apps/a', 'apps/b'] }));
     queueResponse(responseEndTurn('Answer without brief marker.\nSOURCES: apps/a, apps/b'));
 
-    const impl = new SearchImpl(repo);
+    const impl = new SearchImpl(repo, new MockPromptRepo());
     const result = await impl.search('p1', 'q', 'key');
     expect(result.answer).toBe('Answer without brief marker.');
     expect(result.reasoning).toBeUndefined();
@@ -251,7 +278,7 @@ describe('SearchImpl agentic loop', () => {
     queueResponse(responseToolUse('read_pages', { slugs: ['apps/a', 'apps/b'] }));
     queueResponse(responseEndTurn('BRIEF:\nNo sources line here.'));
 
-    const impl = new SearchImpl(repo);
+    const impl = new SearchImpl(repo, new MockPromptRepo());
     const { answer, sources } = await impl.search('p1', 'q', 'key');
     expect(answer).toBe('No sources line here.');
     expect(sources.sort()).toEqual(['apps/a', 'apps/b']);
@@ -263,7 +290,7 @@ describe('SearchImpl agentic loop', () => {
     queueResponse(responseToolUse('read_pages', { slugs: ['a', 'b', 'c', 'd', 'e', 'f', 'g'] }));
     queueResponse(responseEndTurn('BRIEF:\nDone.\nSOURCES: '));
 
-    const impl = new SearchImpl(repo);
+    const impl = new SearchImpl(repo, new MockPromptRepo());
     await impl.search('p1', 'q', 'key');
 
     const tr = lastToolResult(recordedCalls[1]);
@@ -278,7 +305,7 @@ describe('SearchImpl agentic loop', () => {
     queueResponse(responseToolUse('read_page', { slug: 'nope' }));
     queueResponse(responseEndTurn('BRIEF:\nNothing.\nSOURCES:'));
 
-    const impl = new SearchImpl(repo);
+    const impl = new SearchImpl(repo, new MockPromptRepo());
     await impl.search('p1', 'q', 'key');
 
     const tr = lastToolResult(recordedCalls[1]);
@@ -292,7 +319,7 @@ describe('SearchImpl agentic loop', () => {
     queueResponse(responseToolUse('read_page', { slug: 'a' }, 'tu_1'));
     queueResponse(responseEndTurn('BRIEF:\nPartial.\nSOURCES: a'));
 
-    const impl = new SearchImpl(repo, { maxIters: 2, maxPagesRead: 99, maxTotalTokens: 999_999 });
+    const impl = new SearchImpl(repo, new MockPromptRepo(), { maxIters: 2, maxPagesRead: 99, maxTotalTokens: 999_999 });
     const result = await impl.search('p1', 'q', 'key');
     expect(result.answer).toBe('Partial.');
     expect(result.sources).toEqual(['a']);
@@ -317,7 +344,7 @@ describe('SearchImpl agentic loop', () => {
     queueResponse(responseToolUse('list_categories', {}, 'tu3'));
     queueResponse(responseEndTurn('BRIEF:\nDone.\nSOURCES: a'));
 
-    const impl = new SearchImpl(repo, { maxIters: 99, maxPagesRead: 1, maxTotalTokens: 999_999 });
+    const impl = new SearchImpl(repo, new MockPromptRepo(), { maxIters: 99, maxPagesRead: 1, maxTotalTokens: 999_999 });
     await impl.search('p1', 'q', 'key');
 
     const blockedTr = lastToolResult(recordedCalls[2]);
@@ -335,7 +362,7 @@ describe('SearchImpl agentic loop', () => {
     });
     queueResponse(responseEndTurn('BRIEF:\nPartial.\nSOURCES: a'));
 
-    const impl = new SearchImpl(repo, { maxIters: 99, maxPagesRead: 99, maxTotalTokens: 10_000 });
+    const impl = new SearchImpl(repo, new MockPromptRepo(), { maxIters: 99, maxPagesRead: 99, maxTotalTokens: 10_000 });
     const result = await impl.search('p1', 'q', 'key');
     expect(result.answer).toBe('Partial.');
     expect(result.sources).toEqual(['a']);
@@ -353,7 +380,7 @@ describe('SearchImpl agentic loop', () => {
     });
     queueResponse(responseEndTurn('BRIEF:\nDone.\nSOURCES: index'));
 
-    const impl = new SearchImpl(repo);
+    const impl = new SearchImpl(repo, new MockPromptRepo());
     const result = await impl.search('p1', 'q', 'key');
     expect(result.answer).toBe('Done.');
     expect(result.sources).toEqual(['index']);
@@ -377,7 +404,7 @@ describe('SearchImpl agentic loop', () => {
     queueResponse(responseToolUse('list_in', { category: 'apps' }, 'tu2'));
     queueResponse(responseEndTurn('BRIEF:\nDone.\nSOURCES: apps/a'));
 
-    const impl = new SearchImpl(repo);
+    const impl = new SearchImpl(repo, new MockPromptRepo());
     await impl.search('p1', 'q', 'key');
 
     const categoriesPayload = JSON.parse(lastToolResult(recordedCalls[1]).content);
@@ -399,10 +426,35 @@ describe('SearchImpl agentic loop', () => {
     queueResponse(responseToolUse('read_related', { slug: 'a', depth: 1 }, 'tu1'));
     queueResponse(responseEndTurn('BRIEF:\nDone.\nSOURCES: a, b, c'));
 
-    const impl = new SearchImpl(repo);
+    const impl = new SearchImpl(repo, new MockPromptRepo());
     const { sources } = await impl.search('p1', 'q', 'key');
     expect(sources.sort()).toEqual(['a', 'b', 'c']);
     const tr = JSON.parse(lastToolResult(recordedCalls[1]).content);
     expect(tr.pages.map((p: any) => p.slug).sort()).toEqual(['b', 'c']);
+  });
+
+  it('calls getLatest once per search() and propagates promptRevisionId', async () => {
+    const repo = new MemoryRepo([indexPage()]);
+    const promptRepo = new MockPromptRepo();
+    queueResponse(responseEndTurn('BRIEF:\nDone.\nSOURCES: index'));
+
+    const impl = new SearchImpl(repo, promptRepo);
+    const result = await impl.search('p1', 'q', 'key');
+
+    expect(promptRepo.calls).toHaveLength(1);
+    expect(promptRepo.calls[0]).toEqual({ name: 'search', agent: 'claude' });
+    expect(result.promptRevisionId).toBe(MOCK_PROMPT_RECORD.id);
+  });
+
+  it('bubbles up getLatest rejection unchanged', async () => {
+    const repo = new MemoryRepo([indexPage()]);
+    const failingPromptRepo: PromptRepository = {
+      async getLatest(name: string, agent: string): Promise<PromptRecord> {
+        throw new Error(`Prompt not found: (${name}, ${agent})`);
+      },
+    };
+
+    const impl = new SearchImpl(repo, failingPromptRepo);
+    await expect(impl.search('p1', 'q', 'key')).rejects.toThrow(/Prompt not found: \(search, claude\)/);
   });
 });

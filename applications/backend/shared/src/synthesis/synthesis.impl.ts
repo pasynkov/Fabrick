@@ -1,7 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import Anthropic from '@anthropic-ai/sdk';
 import { WikiPageData, ExistingPage } from '../wiki-page.types';
-import { SYNTHESIS_SYSTEM_PROMPT } from './synthesis-prompt';
+import { PROMPT_REPOSITORY, PromptRepository } from '../prompt-repository.interface';
 
 export interface RepoWikiInput {
   slug: string;
@@ -12,6 +12,10 @@ export interface RepoWikiInput {
 @Injectable()
 export class SynthesisImpl {
   private readonly logger = new Logger(SynthesisImpl.name);
+
+  constructor(
+    @Inject(PROMPT_REPOSITORY) private readonly promptRepo: PromptRepository,
+  ) {}
 
   buildContext(
     repoWikis: RepoWikiInput[],
@@ -54,7 +58,10 @@ export class SynthesisImpl {
   async synthesize(
     context: string,
     apiKey: string,
-  ): Promise<{ rawText: string; usage: { inputTokens: number; outputTokens: number } | null }> {
+  ): Promise<{ rawText: string; usage: { inputTokens: number; outputTokens: number } | null; promptRevisionId: string }> {
+    const promptRecord = await this.promptRepo.getLatest('synthesis', 'claude');
+    const systemPromptText = promptRecord.content.files['prompt.md'];
+
     const anthropic = new Anthropic({ apiKey });
     let rawText = '';
     let stopReason: string | null = null;
@@ -64,7 +71,7 @@ export class SynthesisImpl {
     const stream = anthropic.messages.stream({
       model: 'claude-sonnet-4-6',
       max_tokens: 32000,
-      system: SYNTHESIS_SYSTEM_PROMPT,
+      system: systemPromptText,
       messages: [{ role: 'user', content: context }],
     });
 
@@ -92,7 +99,7 @@ export class SynthesisImpl {
       inputTokens != null && outputTokens != null
         ? { inputTokens, outputTokens }
         : null;
-    return { rawText, usage };
+    return { rawText, usage, promptRevisionId: promptRecord.id };
   }
 
   parseResponse(rawText: string): { pages: WikiPageData[]; deleteSlugs: string[] } {

@@ -1,5 +1,6 @@
 import { Column, CreateDateColumn, Entity, Index, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
 import { Project } from './project.entity';
+import { PromptRevision } from './prompt-revision.entity';
 
 @Entity('search_requests')
 @Index('idx_search_requests_project_created', ['projectId', 'createdAt'])
@@ -45,6 +46,12 @@ export class SearchRequest {
 
   @Column('text', { array: true, default: '{}' })
   sources: string[];
+
+  @Column('uuid', { nullable: true })
+  promptRevisionId: string | null;
+
+  @ManyToOne(() => PromptRevision, { onDelete: 'SET NULL', nullable: true })
+  promptRevision: PromptRevision | null;
 
   @CreateDateColumn()
   createdAt: Date;

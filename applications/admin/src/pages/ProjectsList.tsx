@@ -50,13 +50,13 @@ export default function ProjectsList() {
               <tr key={p.id} className="hover:bg-gray-50">
                 <td className="p-2 border border-gray-200 font-mono text-xs">{p.id}</td>
                 <td className="p-2 border border-gray-200">
-                  <Link to={`/admin/projects/${p.id}`} className="text-purple-600 hover:underline">
+                  <Link to={`/projects/${p.id}`} className="text-purple-600 hover:underline">
                     {p.name}
                   </Link>
                 </td>
                 <td className="p-2 border border-gray-200">{p.slug}</td>
                 <td className="p-2 border border-gray-200">
-                  <Link to={`/admin/orgs/${p.orgId}`} className="text-purple-600 hover:underline">
+                  <Link to={`/orgs/${p.orgId}`} className="text-purple-600 hover:underline">
                     {p.orgName}
                   </Link>
                 </td>

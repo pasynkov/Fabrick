@@ -22,7 +22,7 @@ export default function UserDetail() {
 
   return (
     <div className="p-6">
-      <Link to="/admin/users" className="text-purple-600 hover:underline text-sm mb-4 block">&larr; Back to Users</Link>
+      <Link to="/users" className="text-purple-600 hover:underline text-sm mb-4 block">&larr; Back to Users</Link>
       <h2 className="text-lg font-semibold mb-2">User: {user.email}</h2>
       <dl className="grid grid-cols-2 gap-2 text-sm mb-6 max-w-lg">
         <dt className="text-gray-500">ID</dt>
@@ -51,7 +51,7 @@ export default function UserDetail() {
             {user.organizations.map((o) => (
               <tr key={o.orgId} className="hover:bg-gray-50">
                 <td className="p-2 border border-gray-200">
-                  <Link to={`/admin/orgs/${o.orgId}`} className="text-purple-600 hover:underline">
+                  <Link to={`/orgs/${o.orgId}`} className="text-purple-600 hover:underline">
                     {o.orgName}
                   </Link>
                 </td>

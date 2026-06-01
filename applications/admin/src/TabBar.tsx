@@ -1,10 +1,10 @@
 import { NavLink } from 'react-router-dom';
 
 const tabs = [
-  { label: 'Users', to: '/admin/users' },
-  { label: 'Orgs', to: '/admin/orgs' },
-  { label: 'Projects', to: '/admin/projects' },
-  { label: 'Searches', to: '/admin/searches' },
+  { label: 'Users', to: '/users' },
+  { label: 'Orgs', to: '/orgs' },
+  { label: 'Projects', to: '/projects' },
+  { label: 'Searches', to: '/searches' },
 ];
 
 export default function TabBar() {

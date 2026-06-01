@@ -22,7 +22,7 @@ export default function OrgDetail() {
 
   return (
     <div className="p-6">
-      <Link to="/admin/orgs" className="text-purple-600 hover:underline text-sm mb-4 block">&larr; Back to Orgs</Link>
+      <Link to="/orgs" className="text-purple-600 hover:underline text-sm mb-4 block">&larr; Back to Orgs</Link>
       <h2 className="text-lg font-semibold mb-2">Org: {org.name}</h2>
       <dl className="grid grid-cols-2 gap-2 text-sm mb-6 max-w-lg">
         <dt className="text-gray-500">ID</dt>
@@ -49,7 +49,7 @@ export default function OrgDetail() {
             {org.members.map((m) => (
               <tr key={m.userId} className="hover:bg-gray-50">
                 <td className="p-2 border border-gray-200">
-                  <Link to={`/admin/users/${m.userId}`} className="text-purple-600 hover:underline font-mono text-xs">
+                  <Link to={`/users/${m.userId}`} className="text-purple-600 hover:underline font-mono text-xs">
                     {m.userId}
                   </Link>
                 </td>
@@ -79,7 +79,7 @@ export default function OrgDetail() {
               <tr key={p.id} className="hover:bg-gray-50">
                 <td className="p-2 border border-gray-200 font-mono text-xs">{p.id}</td>
                 <td className="p-2 border border-gray-200">
-                  <Link to={`/admin/projects/${p.id}`} className="text-purple-600 hover:underline">
+                  <Link to={`/projects/${p.id}`} className="text-purple-600 hover:underline">
                     {p.name}
                   </Link>
                 </td>

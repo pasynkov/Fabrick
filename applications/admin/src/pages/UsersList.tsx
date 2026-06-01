@@ -48,7 +48,7 @@ export default function UsersList() {
             {users.map((u) => (
               <tr key={u.id} className="hover:bg-gray-50">
                 <td className="p-2 border border-gray-200">
-                  <Link to={`/admin/users/${u.id}`} className="text-purple-600 hover:underline font-mono text-xs">
+                  <Link to={`/users/${u.id}`} className="text-purple-600 hover:underline font-mono text-xs">
                     {u.id}
                   </Link>
                 </td>

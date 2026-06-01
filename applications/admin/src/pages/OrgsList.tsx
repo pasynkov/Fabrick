@@ -49,7 +49,7 @@ export default function OrgsList() {
               <tr key={o.id} className="hover:bg-gray-50">
                 <td className="p-2 border border-gray-200 font-mono text-xs">{o.id}</td>
                 <td className="p-2 border border-gray-200">
-                  <Link to={`/admin/orgs/${o.id}`} className="text-purple-600 hover:underline">
+                  <Link to={`/orgs/${o.id}`} className="text-purple-600 hover:underline">
                     {o.name}
                   </Link>
                 </td>

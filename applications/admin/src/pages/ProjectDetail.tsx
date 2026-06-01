@@ -29,7 +29,7 @@ export default function ProjectDetail() {
 
   return (
     <div className="p-6">
-      <Link to="/admin/projects" className="text-purple-600 hover:underline text-sm mb-4 block">&larr; Back to Projects</Link>
+      <Link to="/projects" className="text-purple-600 hover:underline text-sm mb-4 block">&larr; Back to Projects</Link>
       <h2 className="text-lg font-semibold mb-2">Project: {project.name}</h2>
       <dl className="grid grid-cols-2 gap-2 text-sm mb-6 max-w-lg">
         <dt className="text-gray-500">ID</dt>
@@ -38,7 +38,7 @@ export default function ProjectDetail() {
         <dd>{project.slug}</dd>
         <dt className="text-gray-500">Org</dt>
         <dd>
-          <Link to={`/admin/orgs/${project.orgId}`} className="text-purple-600 hover:underline">
+          <Link to={`/orgs/${project.orgId}`} className="text-purple-600 hover:underline">
             {project.orgName}
           </Link>
         </dd>

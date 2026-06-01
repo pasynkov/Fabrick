@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { Button } from './ui/Button';
+import { Input } from './ui/Input';
 
 interface ApiKeyFormProps {
   onSave: (apiKey: string | null) => Promise<void>;
@@ -45,7 +47,7 @@ export function ApiKeyForm({ onSave, hasExistingKey }: ApiKeyFormProps) {
       <div className="flex items-center gap-2">
         <button
           onClick={() => setShowForm(true)}
-          className="text-sm text-purple-600 hover:underline"
+          className="text-sm text-accent-indigo hover:text-accent-indigo-dim transition-colors"
         >
           {hasExistingKey ? 'Update API key' : 'Set API key'}
         </button>
@@ -53,12 +55,12 @@ export function ApiKeyForm({ onSave, hasExistingKey }: ApiKeyFormProps) {
           <button
             onClick={handleDelete}
             disabled={saving}
-            className="text-sm text-red-500 hover:underline disabled:opacity-50"
+            className="text-sm text-danger hover:opacity-80 transition-opacity disabled:opacity-50"
           >
             Remove
           </button>
         )}
-        {error && <span className="text-xs text-red-500">{error}</span>}
+        {error && <span className="text-xs text-danger">{error}</span>}
       </div>
     );
   }
@@ -66,30 +68,31 @@ export function ApiKeyForm({ onSave, hasExistingKey }: ApiKeyFormProps) {
   return (
     <form onSubmit={handleSave} className="flex flex-col gap-2">
       <div className="flex gap-2">
-        <input
+        <Input
           type="password"
           value={apiKey}
           onChange={(e) => setApiKey(e.target.value)}
           placeholder="sk-ant-..."
-          className="border border-gray-300 rounded px-3 py-1.5 text-sm flex-1 font-mono focus:outline-none focus:ring-2 focus:ring-purple-500"
+          className="font-mono"
           autoFocus
         />
-        <button
+        <Button
           type="submit"
+          variant="primary"
+          size="sm"
           disabled={saving || !apiKey.trim()}
-          className="bg-purple-600 text-white rounded px-3 py-1.5 text-sm hover:bg-purple-700 disabled:opacity-50"
         >
           {saving ? 'Saving...' : 'Save'}
-        </button>
+        </Button>
         <button
           type="button"
           onClick={() => { setShowForm(false); setApiKey(''); setError(''); }}
-          className="text-sm text-gray-500 hover:underline"
+          className="text-sm text-text-muted hover:text-text-primary transition-colors"
         >
           Cancel
         </button>
       </div>
-      {error && <p className="text-xs text-red-500">{error}</p>}
+      {error && <p className="text-xs text-danger">{error}</p>}
     </form>
   );
 }

@@ -6,6 +6,9 @@ import { ApiKeyAuditLogs } from '../components/ApiKeyAuditLogs';
 import { WikiSearch } from '../components/WikiSearch';
 import { WikiPagesTable } from '../components/WikiPagesTable';
 import { WikiPageView } from '../components/WikiPageView';
+import { AppLayout } from '../components/ui/AppLayout';
+import { Button } from '../components/ui/Button';
+import { Card } from '../components/ui/Card';
 
 interface Repo { id: string; name: string; slug: string; gitRemote: string }
 interface Project { id: string; name: string; slug: string }
@@ -88,51 +91,52 @@ export default function ProjectDetail() {
     }
   }
 
-  if (!project) return <div className="p-8 text-gray-400">Loading...</div>;
+  if (!project) return (
+    <div className="min-h-screen bg-surface flex items-center justify-center">
+      <p className="text-text-muted">Loading...</p>
+    </div>
+  );
 
   const noApiKey = hasEffectiveApiKey === false;
   const synthButtonDisabled = synthTriggering || synthStatus === 'running' || noApiKey;
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
-        <nav className="text-sm text-gray-500">
-          <Link to="/" className="hover:underline">Orgs</Link>
+    <AppLayout>
+      <div className="mb-6 flex items-center justify-between">
+        <nav className="text-sm text-text-muted">
+          <Link to="/" className="hover:text-text-primary transition-colors">Orgs</Link>
           <span className="mx-2">/</span>
-          <Link to={`/orgs/${orgSlug}`} className="hover:underline">{orgSlug}</Link>
+          <Link to={`/orgs/${orgSlug}`} className="hover:text-text-primary transition-colors">{orgSlug}</Link>
           <span className="mx-2">/</span>
-          <span className="text-gray-900 font-medium">{project.name}</span>
+          <span className="text-text-primary font-medium">{project.name}</span>
         </nav>
         <div className="flex items-center gap-2">
-          <Link
-            to={`/orgs/${orgSlug}/projects/${projectSlug}/analytics`}
-            className="text-xs text-gray-500 border border-gray-200 rounded px-2 py-1 hover:border-purple-400 hover:text-purple-600 transition"
-          >
+          <Button as={Link} to={`/orgs/${orgSlug}/projects/${projectSlug}/analytics`} variant="secondary" size="sm">
             Analytics
-          </Link>
+          </Button>
           {orgInfo?.role === 'admin' && (
-            <Link
-              to={`/orgs/${orgSlug}/projects/${projectSlug}/settings`}
-              className="text-xs text-gray-500 border border-gray-200 rounded px-2 py-1 hover:border-purple-400 hover:text-purple-600 transition"
-            >
+            <Button as={Link} to={`/orgs/${orgSlug}/projects/${projectSlug}/settings`} variant="secondary" size="sm">
               Edit Settings
-            </Link>
+            </Button>
           )}
         </div>
-      </header>
-      <main className="max-w-2xl mx-auto py-10 px-4 space-y-8">
+      </div>
+
+      <div className="space-y-8">
         <section>
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Repositories</h2>
+          <h2 className="text-lg font-semibold text-text-primary mb-4">Repositories</h2>
           {loading ? (
-            <p className="text-gray-400">Loading...</p>
+            <p className="text-text-muted">Loading...</p>
           ) : repos.length === 0 ? (
-            <p className="text-gray-400">No repositories. Run <code className="bg-gray-100 px-1 rounded">fabrick init</code> in a repo.</p>
+            <p className="text-text-muted">No repositories. Run <code className="bg-surface-2 px-1 rounded text-text-primary">fabrick init</code> in a repo.</p>
           ) : (
             <ul className="space-y-2">
               {repos.map((r) => (
-                <li key={r.id} className="bg-white border border-gray-200 rounded-lg px-4 py-3">
-                  <span className="font-medium text-gray-900">{r.name}</span>
-                  <span className="ml-2 text-xs text-gray-400 font-mono">{r.gitRemote}</span>
+                <li key={r.id}>
+                  <Card className="px-4 py-3">
+                    <span className="font-medium text-text-primary">{r.name}</span>
+                    <span className="ml-2 text-xs text-text-muted font-mono">{r.gitRemote}</span>
+                  </Card>
                 </li>
               ))}
             </ul>
@@ -141,8 +145,8 @@ export default function ProjectDetail() {
 
         {orgInfo && (
           <section>
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">API Key</h2>
-            <div className="bg-white border border-gray-200 rounded-lg px-4 py-4 space-y-3">
+            <h2 className="text-lg font-semibold text-text-primary mb-4">API Key</h2>
+            <Card className="px-4 py-4 space-y-3">
               <ProjectKeyResolutionChain
                 orgId={orgInfo.id}
                 projectId={project.id}
@@ -151,26 +155,27 @@ export default function ProjectDetail() {
               {orgInfo.role === 'admin' && (
                 <ApiKeyAuditLogs type="project" resourceId={project.id} />
               )}
-            </div>
+            </Card>
           </section>
         )}
 
         <section>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">Synthesis</h2>
+            <h2 className="text-lg font-semibold text-text-primary">Synthesis</h2>
             <div className="flex flex-col items-end gap-1">
-              <button
+              <Button
                 onClick={handleRunSynthesis}
                 disabled={synthButtonDisabled}
-                className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                variant="primary"
+                size="sm"
               >
                 {synthStatus === 'running' ? 'Running...' : 'Run Synthesis'}
-              </button>
+              </Button>
               {noApiKey && (
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-text-muted">
                   <Link
                     to={`/orgs/${orgSlug}/projects/${projectSlug}/settings`}
-                    className="text-purple-600 hover:underline"
+                    className="text-accent-indigo hover:text-accent-indigo-dim"
                   >
                     Add API key to enable synthesis
                   </Link>
@@ -180,11 +185,11 @@ export default function ProjectDetail() {
           </div>
 
           {synthStatus === 'idle' && (
-            <p className="text-gray-400 text-sm">No synthesis yet. Push wiki and run synthesis.</p>
+            <p className="text-text-muted text-sm">No synthesis yet. Push wiki and run synthesis.</p>
           )}
 
           {synthStatus === 'running' && (
-            <div className="flex items-center gap-2 text-blue-600 text-sm">
+            <div className="flex items-center gap-2 text-accent-indigo text-sm">
               <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
@@ -194,21 +199,22 @@ export default function ProjectDetail() {
           )}
 
           {synthStatus === 'error' && (
-            <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">
-              <span className="font-medium">Error:</span> {synthError || 'Unknown error'}
-            </div>
+            <Card className="px-4 py-3 border-danger/30">
+              <span className="font-medium text-danger text-sm">Error:</span>{' '}
+              <span className="text-sm text-text-primary">{synthError || 'Unknown error'}</span>
+            </Card>
           )}
         </section>
 
         {orgSlug && projectSlug && synthStatus === 'done' && (
           <>
             <section>
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Search Wiki</h2>
+              <h2 className="text-lg font-semibold text-text-primary mb-4">Search Wiki</h2>
               <WikiSearch orgSlug={orgSlug} projectSlug={projectSlug} hasApiKey={!noApiKey} />
             </section>
 
             <section>
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Wiki Pages</h2>
+              <h2 className="text-lg font-semibold text-text-primary mb-4">Wiki Pages</h2>
               {selectedWikiSlug ? (
                 <WikiPageView
                   orgSlug={orgSlug}
@@ -228,7 +234,7 @@ export default function ProjectDetail() {
             </section>
           </>
         )}
-      </main>
-    </div>
+      </div>
+    </AppLayout>
   );
 }

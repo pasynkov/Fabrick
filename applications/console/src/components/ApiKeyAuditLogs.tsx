@@ -39,7 +39,7 @@ export function ApiKeyAuditLogs({ type, resourceId }: ApiKeyAuditLogsProps) {
     <div>
       <button
         onClick={() => setOpen((v) => !v)}
-        className="text-xs text-gray-500 hover:text-gray-700 hover:underline"
+        className="text-xs text-text-muted hover:text-text-primary transition-colors"
       >
         {open ? 'Hide' : 'Show'} audit logs ({total})
       </button>
@@ -47,13 +47,13 @@ export function ApiKeyAuditLogs({ type, resourceId }: ApiKeyAuditLogsProps) {
       {open && (
         <div className="mt-2">
           {loading ? (
-            <p className="text-xs text-gray-400">Loading...</p>
+            <p className="text-xs text-text-muted">Loading...</p>
           ) : logs.length === 0 ? (
-            <p className="text-xs text-gray-400">No audit logs yet.</p>
+            <p className="text-xs text-text-muted">No audit logs yet.</p>
           ) : (
             <table className="w-full text-xs border-collapse">
               <thead>
-                <tr className="text-gray-500 border-b">
+                <tr className="text-text-muted border-b border-border">
                   <th className="text-left py-1 pr-3">Time</th>
                   <th className="text-left py-1 pr-3">Action</th>
                   <th className="text-left py-1 pr-3">User</th>
@@ -62,23 +62,23 @@ export function ApiKeyAuditLogs({ type, resourceId }: ApiKeyAuditLogsProps) {
               </thead>
               <tbody>
                 {logs.map((log) => (
-                  <tr key={log.id} className="border-b border-gray-100">
-                    <td className="py-1 pr-3 text-gray-400">
+                  <tr key={log.id} className="border-b border-border">
+                    <td className="py-1 pr-3 text-text-muted">
                       {new Date(log.timestamp).toLocaleString()}
                     </td>
                     <td className="py-1 pr-3">
                       <span className={`font-medium ${
-                        log.action === 'delete' ? 'text-red-600' :
-                        log.action === 'validation_failed' ? 'text-orange-600' :
-                        'text-gray-700'
+                        log.action === 'delete' ? 'text-danger' :
+                        log.action === 'validation_failed' ? 'text-yellow-500' :
+                        'text-text-primary'
                       }`}>
                         {log.action}
                       </span>
                     </td>
-                    <td className="py-1 pr-3 text-gray-600 font-mono truncate max-w-xs">
+                    <td className="py-1 pr-3 text-text-muted font-mono truncate max-w-xs">
                       {log.userId}
                     </td>
-                    <td className="py-1 text-gray-400 font-mono">...{log.keyHash}</td>
+                    <td className="py-1 text-text-muted font-mono">...{log.keyHash}</td>
                   </tr>
                 ))}
               </tbody>

@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api';
 import { useAuth } from '../auth';
+import { Button } from '../components/ui/Button';
+import { Card } from '../components/ui/Card';
+import { ThemeToggle } from '../components/ui/ThemeToggle';
 
 export default function CliAuth() {
   const { token, logout } = useAuth();
@@ -39,21 +42,35 @@ export default function CliAuth() {
     });
   }, [token, port, state]);
 
-  if (status === 'error') {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <p className="text-red-500">{errorMsg}</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="text-center text-gray-500">
-        {status === 'pending' ? 'Authorizing CLI...' : 'Done. You can close this tab.'}
+    <div className="min-h-screen bg-surface flex items-center justify-center relative overflow-hidden">
+      {/* Glow blobs */}
+      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-accent-indigo/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute bottom-1/4 right-1/4 w-64 h-64 bg-accent-cyan/10 rounded-full blur-3xl pointer-events-none" />
+
+      {/* Theme toggle top-right */}
+      <div className="absolute top-4 right-4">
+        <ThemeToggle />
       </div>
+
+      <Card className="w-full max-w-sm p-8 relative z-10 text-center">
+        {status === 'error' ? (
+          <>
+            <h1 className="text-xl font-semibold mb-4 text-text-primary animate-fade-up">Authorization Error</h1>
+            <p className="text-danger text-sm mb-6">{errorMsg}</p>
+            <Button variant="secondary" onClick={() => navigate('/')}>
+              Go to dashboard
+            </Button>
+          </>
+        ) : (
+          <>
+            <h1 className="text-xl font-semibold mb-4 text-text-primary animate-fade-up">CLI Authorization</h1>
+            <p className="text-text-muted text-sm animate-fade-up animate-delay-100">
+              {status === 'pending' ? 'Authorizing CLI...' : 'Done. You can close this tab.'}
+            </p>
+          </>
+        )}
+      </Card>
     </div>
   );
 }

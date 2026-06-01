@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api';
 import { ApiKeyStatusDisplay } from '../components/ApiKeyStatusDisplay';
+import { AppLayout } from '../components/ui/AppLayout';
+import { Button } from '../components/ui/Button';
+import { Input } from '../components/ui/Input';
 
 export default function OrgSettings() {
   const { orgSlug } = useParams<{ orgSlug: string }>();
@@ -63,66 +66,62 @@ export default function OrgSettings() {
     }
   }
 
-  if (initializing) return <div className="p-8 text-gray-400">Loading...</div>;
+  if (initializing) return (
+    <div className="min-h-screen bg-surface flex items-center justify-center">
+      <p className="text-text-muted">Loading...</p>
+    </div>
+  );
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b border-gray-200 px-6 py-4">
-        <nav className="text-sm text-gray-500">
-          <Link to="/" className="hover:underline">Orgs</Link>
+    <AppLayout>
+      <div className="mb-6">
+        <nav className="text-sm text-text-muted">
+          <Link to="/" className="hover:text-text-primary transition-colors">Orgs</Link>
           <span className="mx-2">/</span>
-          <Link to={`/orgs/${orgSlug}`} className="hover:underline">{orgSlug}</Link>
+          <Link to={`/orgs/${orgSlug}`} className="hover:text-text-primary transition-colors">{orgSlug}</Link>
           <span className="mx-2">/</span>
-          <span className="text-gray-900 font-medium">Settings</span>
+          <span className="text-text-primary font-medium">Settings</span>
         </nav>
-      </header>
-      <main className="max-w-md mx-auto py-10 px-4">
-        <h2 className="text-xl font-semibold mb-6 text-gray-900">Organization Settings</h2>
-        {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
+      </div>
+
+      <div className="max-w-md">
+        <h2 className="text-xl font-semibold mb-6 text-text-primary">Organization Settings</h2>
+        {error && <p className="text-danger text-sm mb-4">{error}</p>}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
-            <input
+            <label className="block text-sm font-medium text-text-primary mb-1">Name</label>
+            <Input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               maxLength={128}
               required
-              className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
             />
-            <p className="text-xs text-gray-400 mt-1">{name.length}/128</p>
+            <p className="text-xs text-text-muted mt-1">{name.length}/128</p>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Anthropic API Key</label>
+            <label className="block text-sm font-medium text-text-primary mb-1">Anthropic API Key</label>
             <div className="mb-1">
               <ApiKeyStatusDisplay hasApiKey={hasApiKey} keyHash={apiKeyHash} />
             </div>
-            <input
+            <Input
               type="password"
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
               placeholder={hasApiKey ? 'Enter new key to replace current' : 'sk-ant-...'}
-              className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
             />
-            <p className="text-xs text-gray-400 mt-1">Leave empty to keep existing key</p>
+            <p className="text-xs text-text-muted mt-1">Leave empty to keep existing key</p>
           </div>
           <div className="flex gap-2">
-            <button
-              type="submit"
-              disabled={loading}
-              className="bg-purple-600 text-white rounded px-4 py-2 text-sm hover:bg-purple-700 disabled:opacity-50"
-            >
+            <Button type="submit" variant="primary" disabled={loading}>
               {loading ? 'Saving...' : 'Save'}
-            </button>
-            <Link
-              to={`/orgs/${orgSlug}`}
-              className="border border-gray-300 rounded px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-            >
+            </Button>
+            <Button as={Link} to={`/orgs/${orgSlug}`} variant="secondary">
               Cancel
-            </Link>
+            </Button>
           </div>
         </form>
-      </main>
-    </div>
+      </div>
+    </AppLayout>
   );
 }

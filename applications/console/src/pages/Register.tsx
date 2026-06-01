@@ -2,6 +2,10 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { useAuth } from '../auth';
+import { Button } from '../components/ui/Button';
+import { Card } from '../components/ui/Card';
+import { Input } from '../components/ui/Input';
+import { ThemeToggle } from '../components/ui/ThemeToggle';
 
 export default function Register() {
   const { setAuth } = useAuth();
@@ -31,27 +35,34 @@ export default function Register() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="w-full max-w-sm bg-white rounded-lg shadow p-8">
-        <h1 className="text-2xl font-semibold mb-6 text-gray-900">Create account</h1>
-        {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
+    <div className="min-h-screen bg-surface flex items-center justify-center relative overflow-hidden">
+      {/* Glow blobs */}
+      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-accent-indigo/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute bottom-1/4 right-1/4 w-64 h-64 bg-accent-cyan/10 rounded-full blur-3xl pointer-events-none" />
+
+      {/* Theme toggle top-right */}
+      <div className="absolute top-4 right-4">
+        <ThemeToggle />
+      </div>
+
+      <Card className="w-full max-w-sm p-8 relative z-10">
+        <h1 className="text-2xl font-semibold mb-6 text-text-primary animate-fade-up">Create account</h1>
+        {error && <p className="text-danger text-sm mb-4">{error}</p>}
         <form onSubmit={submit} className="space-y-4">
-          <input
+          <Input
             type="email"
             placeholder="Email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
-            className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
           />
-          <input
+          <Input
             type="password"
             placeholder="Password (min 8 chars)"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             minLength={8}
             required
-            className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
           />
           <div className="flex items-center">
             <input
@@ -59,24 +70,21 @@ export default function Register() {
               id="persistent-register"
               checked={persistent}
               onChange={handlePersistentChange}
-              className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
+              className="h-4 w-4 rounded border-border"
             />
-            <label htmlFor="persistent-register" className="ml-2 block text-sm text-gray-700">
+            <label htmlFor="persistent-register" className="ml-2 block text-sm text-text-muted">
               Save Login
             </label>
           </div>
-          <p className="text-xs text-gray-500">Stay signed in across browser sessions</p>
-          <button
-            type="submit"
-            className="w-full bg-purple-600 text-white rounded py-2 text-sm font-medium hover:bg-purple-700"
-          >
+          <p className="text-xs text-text-muted">Stay signed in across browser sessions</p>
+          <Button type="submit" variant="primary" className="w-full animate-fade-up animate-delay-100">
             Create account
-          </button>
+          </Button>
         </form>
-        <p className="mt-4 text-sm text-gray-500 text-center">
-          Already have an account? <Link to="/login" className="text-purple-600 hover:underline">Sign in</Link>
+        <p className="mt-4 text-sm text-text-muted text-center">
+          Already have an account? <Link to="/login" className="text-accent-indigo hover:text-accent-indigo-dim">Sign in</Link>
         </p>
-      </div>
+      </Card>
     </div>
   );
 }

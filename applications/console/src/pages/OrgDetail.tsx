@@ -81,12 +81,9 @@ export default function OrgDetail() {
           <span className="text-text-primary font-medium">{org.name}</span>
         </nav>
         {org.role === 'admin' && (
-          <Link
-            to={`/orgs/${orgSlug}/settings`}
-            className="inline-flex items-center justify-center rounded-lg font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-accent-indigo/50 border border-border bg-surface-1/50 text-text-primary hover:bg-surface-2 px-3 py-1.5 text-xs"
-          >
+          <Button as={Link} to={`/orgs/${orgSlug}/settings`} variant="secondary" size="sm">
             Edit Settings
-          </Link>
+          </Button>
         )}
       </div>
 
@@ -103,12 +100,9 @@ export default function OrgDetail() {
                   <span className="ml-2 text-xs text-text-muted">{p.slug}</span>
                 </Card>
                 {org.role === 'admin' && (
-                  <Link
-                    to={`/orgs/${orgSlug}/projects/${p.slug}/settings`}
-                    className="inline-flex items-center justify-center rounded-lg font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-accent-indigo/50 border border-border bg-surface-1/50 text-text-primary hover:bg-surface-2 px-3 py-1.5 text-xs"
-                  >
+                  <Button as={Link} to={`/orgs/${orgSlug}/projects/${p.slug}/settings`} variant="secondary" size="sm">
                     Settings
-                  </Link>
+                  </Button>
                 )}
               </li>
             ))}

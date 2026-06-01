@@ -116,12 +116,9 @@ export default function OrgSettings() {
             <Button type="submit" variant="primary" disabled={loading}>
               {loading ? 'Saving...' : 'Save'}
             </Button>
-            <Link
-              to={`/orgs/${orgSlug}`}
-              className="inline-flex items-center justify-center rounded-lg font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-accent-indigo/50 border border-border bg-surface-1/50 text-text-primary hover:bg-surface-2 px-4 py-2 text-sm"
-            >
+            <Button as={Link} to={`/orgs/${orgSlug}`} variant="secondary">
               Cancel
-            </Link>
+            </Button>
           </div>
         </form>
       </div>

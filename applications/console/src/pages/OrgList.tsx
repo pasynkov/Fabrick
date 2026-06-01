@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
 import { AppLayout } from '../components/ui/AppLayout';
+import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 
 interface Org { id: string; name: string; slug: string; role: string }
@@ -31,12 +32,9 @@ export default function OrgList() {
                 <span className="ml-2 text-xs text-accent-indigo">{org.role}</span>
               </Card>
               {org.role === 'admin' && (
-                <Link
-                  to={`/orgs/${org.slug}/edit`}
-                  className="inline-flex items-center justify-center rounded-lg font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-accent-indigo/50 border border-border bg-surface-1/50 text-text-primary hover:bg-surface-2 px-3 py-1.5 text-xs"
-                >
+                <Button as={Link} to={`/orgs/${org.slug}/edit`} variant="secondary" size="sm">
                   Edit
-                </Link>
+                </Button>
               )}
             </li>
           ))}

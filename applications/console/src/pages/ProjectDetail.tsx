@@ -111,19 +111,13 @@ export default function ProjectDetail() {
           <span className="text-text-primary font-medium">{project.name}</span>
         </nav>
         <div className="flex items-center gap-2">
-          <Link
-            to={`/orgs/${orgSlug}/projects/${projectSlug}/analytics`}
-            className="inline-flex items-center justify-center rounded-lg font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-accent-indigo/50 border border-border bg-surface-1/50 text-text-primary hover:bg-surface-2 px-3 py-1.5 text-xs"
-          >
+          <Button as={Link} to={`/orgs/${orgSlug}/projects/${projectSlug}/analytics`} variant="secondary" size="sm">
             Analytics
-          </Link>
+          </Button>
           {orgInfo?.role === 'admin' && (
-            <Link
-              to={`/orgs/${orgSlug}/projects/${projectSlug}/settings`}
-              className="inline-flex items-center justify-center rounded-lg font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-accent-indigo/50 border border-border bg-surface-1/50 text-text-primary hover:bg-surface-2 px-3 py-1.5 text-xs"
-            >
+            <Button as={Link} to={`/orgs/${orgSlug}/projects/${projectSlug}/settings`} variant="secondary" size="sm">
               Edit Settings
-            </Link>
+            </Button>
           )}
         </div>
       </div>

@@ -1,9 +1,12 @@
-import { type ButtonHTMLAttributes } from 'react';
+import { type ElementType, type ComponentPropsWithoutRef } from 'react';
 
-interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+type ButtonProps<T extends ElementType = 'button'> = {
+  as?: T;
   variant?: 'primary' | 'secondary' | 'danger';
   size?: 'sm' | 'md' | 'lg';
-}
+  className?: string;
+  children?: React.ReactNode;
+} & Omit<ComponentPropsWithoutRef<T>, 'as' | 'variant' | 'size' | 'className' | 'children'>;
 
 const variantClasses: Record<string, string> = {
   primary: 'bg-gradient-to-r from-accent-indigo to-accent-cyan text-white hover:opacity-90 disabled:opacity-50',
@@ -17,15 +20,17 @@ const sizeClasses: Record<string, string> = {
   lg: 'px-6 py-3 text-base',
 };
 
-export function Button({
+export function Button<T extends ElementType = 'button'>({
+  as,
   variant = 'primary',
   size = 'md',
   className = '',
   children,
   ...props
-}: ButtonProps) {
+}: ButtonProps<T>) {
+  const Tag = (as ?? 'button') as ElementType;
   return (
-    <button
+    <Tag
       {...props}
       className={[
         'inline-flex items-center justify-center rounded-lg font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-accent-indigo/50 cursor-pointer disabled:cursor-not-allowed',
@@ -37,6 +42,6 @@ export function Button({
         .join(' ')}
     >
       {children}
-    </button>
+    </Tag>
   );
 }

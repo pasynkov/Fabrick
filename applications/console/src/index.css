@@ -107,12 +107,12 @@
 }
 
 .markdown-body a {
-  color: #6366f1;
+  color: var(--color-accent-indigo);
   text-decoration: underline;
 }
 
 .markdown-body a:hover {
-  color: #4f46e5;
+  color: var(--color-accent-indigo-dim);
 }
 
 .markdown-body ul,
@@ -131,7 +131,7 @@
 }
 
 .markdown-body blockquote {
-  border-left: 3px solid #6366f1;
+  border-left: 3px solid var(--color-accent-indigo);
   padding-left: 1em;
   margin-left: 0;
   color: var(--text-muted);

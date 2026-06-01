@@ -17,6 +17,6 @@ import { TokenUsageRepository } from './token-usage.repository';
   ],
   controllers: [AnalyticsController],
   providers: [AnalyticsService, SearchRequestRepository, TokenUsageRepository],
-  exports: [SearchRequestRepository, TokenUsageRepository],
+  exports: [AnalyticsService, SearchRequestRepository, TokenUsageRepository],
 })
 export class AnalyticsModule {}

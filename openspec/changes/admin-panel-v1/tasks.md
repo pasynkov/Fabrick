@@ -54,8 +54,8 @@
 
 ## 7. Console Redirect & Static Web App Config
 
-- [ ] 7.1 In the console, after login (and on any console-route load) read `me.isPlatformAdmin`; if true redirect to `/admin`, honoring an optional `?return_to=` query param
-- [ ] 7.2 Update `applications/console/public/staticwebapp.config.json` to add `routes` for `/admin` and `/admin/*` rewriting to `/admin/index.html` and `navigationFallback.exclude` for `/admin/*` and `/assets/*`
+- [x] 7.1 In the console, after login (and on any console-route load) read `me.isPlatformAdmin`; if true redirect to `/admin`, honoring an optional `?return_to=` query param
+- [x] 7.2 Update `applications/console/public/staticwebapp.config.json` to add `routes` for `/admin` and `/admin/*` rewriting to `/admin/index.html` and `navigationFallback.exclude` for `/admin/*` and `/assets/*`
 - [ ] 7.3 Verify locally that a manual merge (copying `applications/admin/dist/*` into `applications/console/dist/admin/`) produces a working SPA at `/admin` when served by a static server with the SWA config applied
 
 ## 8. CI & Release Pipeline
@@ -67,13 +67,13 @@
 
 ## 9. Skill Updates
 
-- [ ] 9.1 Update `.claude/skills/cd-implementation-pipeline/SKILL.md` (or its referenced step-4 instructions) so the orchestrator dispatches seven parallel build calls including `applications/admin/`
+- [x] 9.1 Update `.claude/skills/cd-implementation-pipeline/SKILL.md` (or its referenced step-4 instructions) so the orchestrator dispatches seven parallel build calls including `applications/admin/`
 - [ ] 9.2 Update `.claude/agents/build-fixer.md` (or equivalent) if it enumerates the buildable apps, to add `applications/admin/`
 
 ## 10. Verification
 
 - [ ] 10.1 Run `cd applications/backend/api && npm run test:unit` — all unit tests green
-- [ ] 10.2 Run `cd applications/backend/api && npm run test:e2e` — all e2e tests green
+- [x] 10.2 Run `cd applications/backend/api && npm run test:e2e` — all e2e tests green
 - [ ] 10.3 Run `cd applications/admin && npm run build` — admin build green
 - [ ] 10.4 Run `cd applications/console && npm run build` — console build green (no regression from SWA config change)
 - [ ] 10.5 Manual smoke: log into console as the seeded admin, observe redirect to `/admin`, visit all four tabs, drill-down user → org → project, verify Searches dropdown filters change the API call

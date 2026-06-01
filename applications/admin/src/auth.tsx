@@ -1,8 +1,7 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import { Navigate, useLocation } from 'react-router-dom';
 import { clearRefreshCookie, doRefresh, getRefreshCookie, isTokenExpired, isTokenExpiringSoon, setRefreshCookie } from './tokenRefresh';
 
-interface AuthUser { id: string; email: string; isPlatformAdmin?: boolean }
+export interface AuthUser { id: string; email: string; isPlatformAdmin: boolean }
 
 interface AuthCtx {
   user: AuthUser | null;
@@ -84,7 +83,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (cookieRefresh) {
         try {
           const result = await doRefresh(cookieRefresh);
-          const parsedUser = storedUser ? JSON.parse(storedUser) : parseTokenUser(result.access_token);
+          const parsedUser = storedUser ? JSON.parse(storedUser) : null;
           if (parsedUser) {
             setAuth(result.access_token, parsedUser, result.refresh_token, true);
           }
@@ -94,7 +93,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else if (storedRefresh) {
         try {
           const result = await doRefresh(storedRefresh);
-          const parsedUser = storedUser ? JSON.parse(storedUser) : parseTokenUser(result.access_token);
+          const parsedUser = storedUser ? JSON.parse(storedUser) : null;
           if (parsedUser) {
             setAuth(result.access_token, parsedUser, result.refresh_token, false);
           }
@@ -129,26 +128,4 @@ export function useAuth() {
   const ctx = useContext(Ctx);
   if (!ctx) throw new Error('useAuth outside AuthProvider');
   return ctx;
-}
-
-export function RequireAuth({ children }: { children: ReactNode }) {
-  const { token, user, refreshing } = useAuth();
-  const location = useLocation();
-  if (refreshing) return <div className="min-h-screen flex items-center justify-center text-gray-400">Loading...</div>;
-  if (!token) return <Navigate to={`/login?next=${encodeURIComponent(location.pathname + location.search)}`} replace />;
-  if (user?.isPlatformAdmin) {
-    const returnTo = new URLSearchParams(location.search).get('return_to');
-    return <Navigate to={returnTo || '/admin'} replace />;
-  }
-  return <>{children}</>;
-}
-
-function parseTokenUser(token: string): AuthUser | null {
-  try {
-    const payload = JSON.parse(atob(token.split('.')[1]));
-    if (!payload.sub || !payload.email) return null;
-    return { id: payload.sub, email: payload.email };
-  } catch {
-    return null;
-  }
 }

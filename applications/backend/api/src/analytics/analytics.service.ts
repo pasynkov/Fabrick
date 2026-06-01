@@ -1,7 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository as TypeOrmRepository } from 'typeorm';
-import { OrgMember } from '../entities/org-member.entity';
 import { Project } from '../entities/project.entity';
 import { SearchRequest } from '../entities/search-request.entity';
 import { TokenUsage } from '../entities/token-usage.entity';
@@ -39,21 +38,15 @@ export class AnalyticsService {
   constructor(
     @InjectRepository(Project)
     private readonly projectRepo: TypeOrmRepository<Project>,
-    @InjectRepository(OrgMember)
-    private readonly memberRepo: TypeOrmRepository<OrgMember>,
     private readonly searchRequestRepository: SearchRequestRepository,
     private readonly tokenUsageRepository: TokenUsageRepository,
   ) {}
 
   async getUsageForProject(
     projectId: string,
-    userId: string,
   ): Promise<{ searchRequests: SearchRequestRow[]; tokenUsage: TokenUsageRow[] }> {
     const project = await this.projectRepo.findOne({ where: { id: projectId } });
     if (!project) throw new NotFoundException('Project not found');
-
-    const member = await this.memberRepo.findOne({ where: { orgId: project.orgId, userId } });
-    if (!member) throw new NotFoundException('Project not found');
 
     const [searchRequests, tokenUsage] = await Promise.all([
       this.searchRequestRepository.findRecentForProject(projectId),

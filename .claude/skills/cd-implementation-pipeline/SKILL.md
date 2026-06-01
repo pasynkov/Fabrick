@@ -125,12 +125,13 @@ A reviewer crash (subagent error, timeout) is NOT a TDD signal — handle via th
 
 ### Step 4 — parallel build gate
 
-Always run. Issue ONE response with SIX `Bash` tool calls — one per app — to build them in parallel:
+Always run. Issue ONE response with SEVEN `Bash` tool calls — one per app — to build them in parallel:
 
 ```
 Bash("cd applications/backend/api && npm run build")
 Bash("cd applications/backend/synthesis && npm run build")
 Bash("cd applications/console && VITE_API_URL=https://api.fabrick.me npm run build")
+Bash("cd applications/admin && npm ci --legacy-peer-deps && npm run build")
 Bash("cd applications/landing && npm run build")
 Bash("cd applications/cli && npm run build")
 Bash("cd applications/mcp && npm run build")

@@ -18,7 +18,7 @@ function validateFilesJson(text: string): string {
   if (Object.keys(obj).length === 0) {
     return 'At least one file is required';
   }
-  for (const [, value] of Object.entries(obj)) {
+  for (const value of Object.values(obj)) {
     if (typeof value !== 'string') {
       return 'All values must be strings';
     }
@@ -30,7 +30,6 @@ export default function PromptDetail() {
   const { name, agent } = useParams<{ name: string; agent: string }>();
   const [activeTab, setActiveTab] = useState<Tab>('edit');
 
-  // Edit tab state
   const [row, setRow] = useState<AdminPromptRevision | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(true);
   const [detailError, setDetailError] = useState('');
@@ -41,10 +40,8 @@ export default function PromptDetail() {
   const [saveError, setSaveError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
 
-  // History tab state
-  const [history, setHistory] = useState<AdminPromptHistoryItem[]>([]);
+  const [history, setHistory] = useState<AdminPromptHistoryItem[] | null>(null);
   const [loadingHistory, setLoadingHistory] = useState(false);
-  const [historyLoaded, setHistoryLoaded] = useState(false);
   const [historyError, setHistoryError] = useState('');
   const [selectedRevision, setSelectedRevision] = useState<AdminPromptRevision | null>(null);
   const [loadingRevision, setLoadingRevision] = useState(false);
@@ -95,7 +92,7 @@ export default function PromptDetail() {
 
   function handleTabChange(tab: Tab) {
     setActiveTab(tab);
-    if (tab === 'history' && !historyLoaded) {
+    if (tab === 'history' && history === null) {
       loadHistory();
     }
   }
@@ -105,10 +102,7 @@ export default function PromptDetail() {
     setLoadingHistory(true);
     setHistoryError('');
     api.admin.prompts.history(name, agent)
-      .then((data) => {
-        setHistory(data);
-        setHistoryLoaded(true);
-      })
+      .then(setHistory)
       .catch((e) => setHistoryError(e.message))
       .finally(() => setLoadingHistory(false));
   }
@@ -183,10 +177,10 @@ export default function PromptDetail() {
         <div>
           {loadingHistory && <div className="text-gray-400 text-sm">Loading history...</div>}
           {historyError && <div className="text-red-500 text-sm">{historyError}</div>}
-          {!loadingHistory && !historyError && history.length === 0 && (
+          {!loadingHistory && !historyError && history !== null && history.length === 0 && (
             <p className="text-sm text-gray-400">No history found.</p>
           )}
-          {history.length > 0 && (
+          {history !== null && history.length > 0 && (
             <div className="flex gap-6">
               <div className="flex-shrink-0">
                 <table className="text-sm border-collapse">

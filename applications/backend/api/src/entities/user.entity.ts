@@ -11,6 +11,9 @@ export class User {
   @Column()
   passwordHash: string;
 
+  @Column({ default: false })
+  isPlatformAdmin: boolean;
+
   @CreateDateColumn()
   createdAt: Date;
 }

@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { AdminModule } from './admin/admin.module';
 import { AuthModule } from './auth/auth.module';
 import { ContextModule } from './context/context.module';
 import { ApiKeyAuditLog } from './entities/api-key-audit-log.entity';
@@ -46,6 +47,7 @@ import { AnalyticsModule } from './analytics/analytics.module';
     SynthesisModule,
     SearchModule,
     AnalyticsModule,
+    AdminModule,
   ],
   controllers: [HealthController],
 })

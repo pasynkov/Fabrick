@@ -117,13 +117,13 @@ interface AuditLog {
 
 export const api = {
   register: (email: string, password: string, persistent?: boolean) =>
-    request<{ access_token: string; refresh_token?: string; user: { id: string; email: string } }>('/auth/register', {
+    request<{ access_token: string; refresh_token?: string; user: { id: string; email: string; isPlatformAdmin: boolean } }>('/auth/register', {
       method: 'POST',
       body: JSON.stringify({ email, password, persistent }),
     }),
 
   login: (email: string, password: string, persistent?: boolean) =>
-    request<{ access_token: string; refresh_token?: string; user: { id: string; email: string } }>('/auth/login', {
+    request<{ access_token: string; refresh_token?: string; user: { id: string; email: string; isPlatformAdmin: boolean } }>('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password, persistent }),
     }),

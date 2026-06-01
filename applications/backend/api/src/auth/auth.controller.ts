@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Get,
   HttpCode,
   Post,
   Request,
@@ -66,5 +67,12 @@ export class AuthController {
     @Body() body: McpTokenDto,
   ) {
     return this.authService.issueMcpToken(req.user.id, body.orgSlug, body.projectSlug, body.repoId);
+  }
+
+  @Get('me')
+  @HttpCode(200)
+  @UseGuards(JwtAuthGuard)
+  async me(@Request() req: { user: { id: string; email: string; isPlatformAdmin: boolean } }) {
+    return { id: req.user.id, email: req.user.email, isPlatformAdmin: req.user.isPlatformAdmin };
   }
 }

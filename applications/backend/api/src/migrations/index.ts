@@ -5,6 +5,7 @@ import { WidenKeyHash1745200000000 } from './1745200000000-WidenKeyHash';
 import { AddAutoSynthesisEnabled1745300000000 } from './1745300000000-AddAutoSynthesisEnabled';
 import { AddWikiPages1746700000000 } from './1746700000000-AddWikiPages';
 import { AddUsageAnalytics1748000000000 } from './1748000000000-AddUsageAnalytics';
+import { AddPlatformAdmin1748100000000 } from './1748100000000-AddPlatformAdmin';
 
 export const migrations = [
   Init1700000000000,
@@ -14,4 +15,5 @@ export const migrations = [
   AddAutoSynthesisEnabled1745300000000,
   AddWikiPages1746700000000,
   AddUsageAnalytics1748000000000,
+  AddPlatformAdmin1748100000000,
 ];

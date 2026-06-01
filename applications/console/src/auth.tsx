@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useRef, useState, type ReactNode 
 import { Navigate, useLocation } from 'react-router-dom';
 import { clearRefreshCookie, doRefresh, getRefreshCookie, isTokenExpired, isTokenExpiringSoon, setRefreshCookie } from './tokenRefresh';
 
-interface AuthUser { id: string; email: string }
+interface AuthUser { id: string; email: string; isPlatformAdmin?: boolean }
 
 interface AuthCtx {
   user: AuthUser | null;
@@ -132,10 +132,14 @@ export function useAuth() {
 }
 
 export function RequireAuth({ children }: { children: ReactNode }) {
-  const { token, refreshing } = useAuth();
+  const { token, user, refreshing } = useAuth();
   const location = useLocation();
   if (refreshing) return <div className="min-h-screen flex items-center justify-center text-gray-400">Loading...</div>;
   if (!token) return <Navigate to={`/login?next=${encodeURIComponent(location.pathname + location.search)}`} replace />;
+  if (user?.isPlatformAdmin) {
+    const returnTo = new URLSearchParams(location.search).get('return_to');
+    return <Navigate to={returnTo || '/admin'} replace />;
+  }
   return <>{children}</>;
 }
 

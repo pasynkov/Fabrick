@@ -25,7 +25,7 @@ fi
 | `implementation/47-add-agentic-search` | `openspec/changes/47-add-agentic-search/` (exact match exists) | `47-add-agentic-search` (no strip) |
 | `implementation/multi-agent-implementation-pipeline` | `openspec/changes/multi-agent-implementation-pipeline/` | `multi-agent-implementation-pipeline` |
 
-The `<issue>` value used by step 0 (label) and step 7 (issue comment) is the leading numeric prefix of the **original** `<full_name>`, regardless of whether it was stripped from `<change-name>`:
+The `<issue>` value used by step 0 (label) and step 6 (issue comment) is the leading numeric prefix of the **original** `<full_name>`, regardless of whether it was stripped from `<change-name>`:
 
 ```bash
 ISSUE=$(echo "$FULL_NAME" | grep -oE '^[0-9]+' || true)

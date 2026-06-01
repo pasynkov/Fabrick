@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api';
 import type { SearchRequestRow, TokenUsageRow } from '../api';
+import { AppLayout } from '../components/ui/AppLayout';
+import { Card } from '../components/ui/Card';
 
 export default function ProjectAnalytics() {
   const { orgSlug, projectSlug } = useParams<{ orgSlug: string; projectSlug: string }>();
@@ -57,44 +59,44 @@ export default function ProjectAnalytics() {
   const isEmpty = !loading && searchRequests.length === 0 && tokenUsage.length === 0;
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
-        <nav className="text-sm text-gray-500">
-          <Link to="/" className="hover:underline">Orgs</Link>
+    <AppLayout>
+      <div className="mb-6">
+        <nav className="text-sm text-text-muted">
+          <Link to="/" className="hover:text-text-primary transition-colors">Orgs</Link>
           <span className="mx-2">/</span>
-          <Link to={`/orgs/${orgSlug}`} className="hover:underline">{orgSlug}</Link>
+          <Link to={`/orgs/${orgSlug}`} className="hover:text-text-primary transition-colors">{orgSlug}</Link>
           <span className="mx-2">/</span>
-          <Link to={`/orgs/${orgSlug}/projects/${projectSlug}`} className="hover:underline">{projectSlug}</Link>
+          <Link to={`/orgs/${orgSlug}/projects/${projectSlug}`} className="hover:text-text-primary transition-colors">{projectSlug}</Link>
           <span className="mx-2">/</span>
-          <span className="text-gray-900 font-medium">Analytics</span>
+          <span className="text-text-primary font-medium">Analytics</span>
         </nav>
-      </header>
-      <main className="max-w-4xl mx-auto py-10 px-4 space-y-8">
+      </div>
+
+      <div className="space-y-8">
         {error && (
-          <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">{error}</div>
+          <Card className="px-4 py-3 border-danger/30">
+            <span className="text-sm text-danger">{error}</span>
+          </Card>
         )}
-        {loading && <p className="text-gray-400">Loading analytics...</p>}
+        {loading && <p className="text-text-muted">Loading analytics...</p>}
 
         {!loading && isEmpty && (
-          <div
-            className="bg-white border border-gray-200 rounded-lg px-6 py-8 text-center text-gray-500"
-            data-testid="analytics-empty-state"
-          >
-            <p className="text-sm">No search or token usage recorded in the last 30 days.</p>
-            <p className="text-xs mt-1">Run a search or synthesis to populate this view.</p>
-          </div>
+          <Card className="px-6 py-8 text-center" data-testid="analytics-empty-state">
+            <p className="text-sm text-text-muted">No search or token usage recorded in the last 30 days.</p>
+            <p className="text-xs text-text-muted mt-1">Run a search or synthesis to populate this view.</p>
+          </Card>
         )}
 
         {!loading && !isEmpty && (
           <>
             <section data-testid="search-requests-section">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Search Requests (last 30 days)</h2>
+              <h2 className="text-lg font-semibold text-text-primary mb-4">Search Requests (last 30 days)</h2>
               {searchRequests.length === 0 ? (
-                <p className="text-gray-400 text-sm">No search requests yet.</p>
+                <p className="text-text-muted text-sm">No search requests yet.</p>
               ) : (
-                <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                <Card className="overflow-hidden">
                   <table className="w-full text-sm">
-                    <thead className="bg-gray-50 text-gray-600">
+                    <thead className="bg-surface-2 text-text-muted">
                       <tr>
                         <th className="text-left px-4 py-2"></th>
                         <th className="text-left px-4 py-2">Date</th>
@@ -121,18 +123,18 @@ export default function ProjectAnalytics() {
                       })}
                     </tbody>
                   </table>
-                </div>
+                </Card>
               )}
             </section>
 
             <section data-testid="token-usage-section">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Token Usage (last 30 days)</h2>
+              <h2 className="text-lg font-semibold text-text-primary mb-4">Token Usage (last 30 days)</h2>
               {tokenUsage.length === 0 ? (
-                <p className="text-gray-400 text-sm">No token usage yet.</p>
+                <p className="text-text-muted text-sm">No token usage yet.</p>
               ) : (
-                <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                <Card className="overflow-hidden">
                   <table className="w-full text-sm">
-                    <thead className="bg-gray-50 text-gray-600">
+                    <thead className="bg-surface-2 text-text-muted">
                       <tr>
                         <th className="text-left px-4 py-2">Date</th>
                         <th className="text-left px-4 py-2">Operation</th>
@@ -144,25 +146,24 @@ export default function ProjectAnalytics() {
                     </thead>
                     <tbody>
                       {tokenUsage.map((r) => (
-                        <tr key={r.id} className="border-t border-gray-100">
-                          <td className="px-4 py-2 text-gray-600">{formatDate(r.createdAt)}</td>
-                          <td className="px-4 py-2">{r.operation}</td>
-                          <td className="px-4 py-2 text-right">{r.inputTokens}</td>
-                          <td className="px-4 py-2 text-right">{r.outputTokens}</td>
-                          <td className="px-4 py-2 text-right">{r.inputTokens + r.outputTokens}</td>
-                          <td className="px-4 py-2 text-gray-600">{r.provider}</td>
+                        <tr key={r.id} className="border-t border-border">
+                          <td className="px-4 py-2 text-text-muted">{formatDate(r.createdAt)}</td>
+                          <td className="px-4 py-2 text-text-primary">{r.operation}</td>
+                          <td className="px-4 py-2 text-right text-text-primary">{r.inputTokens}</td>
+                          <td className="px-4 py-2 text-right text-text-primary">{r.outputTokens}</td>
+                          <td className="px-4 py-2 text-right text-text-primary">{r.inputTokens + r.outputTokens}</td>
+                          <td className="px-4 py-2 text-text-muted">{r.provider}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
-                </div>
+                </Card>
               )}
             </section>
           </>
         )}
-
-      </main>
-    </div>
+      </div>
+    </AppLayout>
   );
 }
 
@@ -180,45 +181,45 @@ function RowFragment({
   const total = row.totalInputTokens + row.totalOutputTokens;
   return (
     <>
-      <tr className="border-t border-gray-100">
+      <tr className="border-t border-border">
         <td className="px-4 py-2">
           <button
             type="button"
             onClick={onToggle}
-            className="text-purple-600 hover:underline text-xs"
+            className="text-accent-indigo hover:text-accent-indigo-dim text-xs"
             aria-label={expanded ? 'Collapse row' : 'Expand row'}
           >
             {expanded ? '−' : '+'}
           </button>
         </td>
-        <td className="px-4 py-2 text-gray-600 whitespace-nowrap">{formatDate(row.createdAt)}</td>
-        <td className="px-4 py-2 max-w-xs truncate" title={row.question}>{row.question}</td>
-        <td className="px-4 py-2 max-w-xs truncate" title={row.answerBrief}>{row.answerBrief}</td>
-        <td className="px-4 py-2 text-right">{row.iters}</td>
-        <td className="px-4 py-2 text-right">{row.durationMs}</td>
-        <td className="px-4 py-2 text-right">{total}</td>
+        <td className="px-4 py-2 text-text-muted whitespace-nowrap">{formatDate(row.createdAt)}</td>
+        <td className="px-4 py-2 text-text-primary max-w-xs truncate" title={row.question}>{row.question}</td>
+        <td className="px-4 py-2 text-text-primary max-w-xs truncate" title={row.answerBrief}>{row.answerBrief}</td>
+        <td className="px-4 py-2 text-right text-text-primary">{row.iters}</td>
+        <td className="px-4 py-2 text-right text-text-primary">{row.durationMs}</td>
+        <td className="px-4 py-2 text-right text-text-primary">{total}</td>
       </tr>
       {expanded && (
-        <tr className="bg-gray-50" data-testid={`expanded-${row.id}`}>
+        <tr className="bg-surface-2" data-testid={`expanded-${row.id}`}>
           <td></td>
-          <td colSpan={6} className="px-4 py-3 text-sm text-gray-700 space-y-3">
+          <td colSpan={6} className="px-4 py-3 text-sm text-text-primary space-y-3">
             {row.answerReasoning ? (
               <div>
-                <div className="font-medium text-gray-800 mb-1">Reasoning</div>
-                <pre className="whitespace-pre-wrap bg-white border border-gray-200 rounded p-2 text-xs">
+                <div className="font-medium text-text-primary mb-1">Reasoning</div>
+                <pre className="whitespace-pre-wrap bg-surface-1 border border-border rounded p-2 text-xs text-text-primary">
                   {row.answerReasoning}
                 </pre>
               </div>
             ) : (
-              <div className="text-xs text-gray-500">No reasoning recorded (reasoning was not requested).</div>
+              <div className="text-xs text-text-muted">No reasoning recorded (reasoning was not requested).</div>
             )}
             <div>
-              <div className="font-medium text-gray-800 mb-1">Per-call token usage</div>
+              <div className="font-medium text-text-primary mb-1">Per-call token usage</div>
               {linkedUsage.length === 0 ? (
-                <div className="text-xs text-gray-500">No linked token rows found.</div>
+                <div className="text-xs text-text-muted">No linked token rows found.</div>
               ) : (
                 <table className="w-full text-xs">
-                  <thead className="text-gray-500">
+                  <thead className="text-text-muted">
                     <tr>
                       <th className="text-left py-1">Date</th>
                       <th className="text-right py-1">Input</th>
@@ -228,11 +229,11 @@ function RowFragment({
                   </thead>
                   <tbody>
                     {linkedUsage.map((u) => (
-                      <tr key={u.id} className="border-t border-gray-200">
-                        <td className="py-1 text-gray-600">{formatDate(u.createdAt)}</td>
-                        <td className="py-1 text-right">{u.inputTokens}</td>
-                        <td className="py-1 text-right">{u.outputTokens}</td>
-                        <td className="py-1 text-right">{u.inputTokens + u.outputTokens}</td>
+                      <tr key={u.id} className="border-t border-border">
+                        <td className="py-1 text-text-muted">{formatDate(u.createdAt)}</td>
+                        <td className="py-1 text-right text-text-primary">{u.inputTokens}</td>
+                        <td className="py-1 text-right text-text-primary">{u.outputTokens}</td>
+                        <td className="py-1 text-right text-text-primary">{u.inputTokens + u.outputTokens}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -240,13 +241,13 @@ function RowFragment({
               )}
             </div>
             <div>
-              <div className="font-medium text-gray-800 mb-1">Sources</div>
+              <div className="font-medium text-text-primary mb-1">Sources</div>
               {row.sources.length === 0 ? (
-                <div className="text-xs text-gray-500">No sources recorded.</div>
+                <div className="text-xs text-text-muted">No sources recorded.</div>
               ) : (
                 <div className="flex flex-wrap gap-1">
                   {row.sources.map((s) => (
-                    <span key={s} className="inline-block bg-white border border-gray-200 text-gray-600 rounded px-1.5 py-0.5 text-xs font-mono">
+                    <span key={s} className="inline-block bg-surface-1 border border-border text-text-muted rounded px-1.5 py-0.5 text-xs font-mono">
                       {s}
                     </span>
                   ))}

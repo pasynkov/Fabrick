@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { api } from '../api';
+import { Card } from './ui/Card';
 
 interface Props {
   orgSlug: string;
@@ -43,17 +44,17 @@ export function WikiPageView({ orgSlug, projectSlug, slug, onBack, onNavigate }:
     <div className="space-y-4">
       <button
         onClick={onBack}
-        className="text-sm text-gray-500 hover:text-gray-800 flex items-center gap-1"
+        className="text-sm text-text-muted hover:text-text-primary transition-colors flex items-center gap-1"
       >
         ← Back to pages
       </button>
 
-      {loading && <p className="text-gray-400 text-sm">Loading...</p>}
-      {error && <p className="text-red-500 text-sm">{error}</p>}
+      {loading && <p className="text-text-muted text-sm">Loading...</p>}
+      {error && <p className="text-danger text-sm">{error}</p>}
 
       {content && (
-        <div className="bg-white border border-gray-200 rounded-lg px-6 py-5">
-          <div className="prose prose-sm max-w-none text-gray-800">
+        <Card className="px-6 py-5">
+          <div className="markdown-body">
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               components={{
@@ -63,20 +64,20 @@ export function WikiPageView({ orgSlug, projectSlug, slug, onBack, onNavigate }:
                     return (
                       <button
                         onClick={() => handleLinkClick(href)}
-                        className="text-purple-600 hover:underline"
+                        className="text-accent-indigo hover:text-accent-indigo-dim underline"
                       >
                         {children}
                       </button>
                     );
                   }
-                  return <a href={href} target="_blank" rel="noreferrer" className="text-purple-600 hover:underline">{children}</a>;
+                  return <a href={href} target="_blank" rel="noreferrer" className="text-accent-indigo hover:text-accent-indigo-dim underline">{children}</a>;
                 },
               }}
             >
               {content}
             </ReactMarkdown>
           </div>
-        </div>
+        </Card>
       )}
     </div>
   );

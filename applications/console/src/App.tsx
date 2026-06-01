@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes, useParams } from 'react-router-dom';
 import { AuthProvider, RequireAuth } from './auth';
+import { ThemeProvider } from './components/ui/ThemeProvider';
 import CliAuth from './pages/CliAuth';
 import Login from './pages/Login';
 import OrgDetail from './pages/OrgDetail';
@@ -22,6 +23,7 @@ function RedirectProjectEdit() {
 
 export default function App() {
   return (
+    <ThemeProvider>
     <BrowserRouter>
       <AuthProvider>
         <Routes>
@@ -39,5 +41,6 @@ export default function App() {
         </Routes>
       </AuthProvider>
     </BrowserRouter>
+    </ThemeProvider>
   );
 }

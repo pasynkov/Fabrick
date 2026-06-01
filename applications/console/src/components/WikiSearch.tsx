@@ -3,6 +3,9 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { api } from '../api';
 import { Link } from 'react-router-dom';
+import { Button } from './ui/Button';
+import { Card } from './ui/Card';
+import { Input } from './ui/Input';
 
 interface Props {
   orgSlug: string;
@@ -45,12 +48,12 @@ export function WikiSearch({ orgSlug, projectSlug, hasApiKey }: Props) {
 
   if (!hasApiKey) {
     return (
-      <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-sm text-gray-500">
-        <Link to={`/orgs/${orgSlug}/projects/${projectSlug}/settings`} className="text-purple-600 hover:underline">
+      <Card className="px-4 py-3 text-sm text-text-muted">
+        <Link to={`/orgs/${orgSlug}/projects/${projectSlug}/settings`} className="text-accent-indigo hover:text-accent-indigo-dim">
           Add an API key
         </Link>{' '}
         to enable wiki search.
-      </div>
+      </Card>
     );
   }
 
@@ -58,23 +61,23 @@ export function WikiSearch({ orgSlug, projectSlug, hasApiKey }: Props) {
     <div className="space-y-4">
       <form onSubmit={handleSearch} className="space-y-2">
         <div className="flex gap-2">
-          <input
+          <Input
             type="text"
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
             placeholder="Ask about architecture, APIs, flows..."
             disabled={loading}
-            className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 disabled:opacity-50"
           />
-          <button
+          <Button
             type="submit"
+            variant="primary"
+            size="md"
             disabled={loading || !question.trim()}
-            className="px-4 py-2 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? 'Searching...' : 'Search'}
-          </button>
+          </Button>
         </div>
-        <label className="flex items-center gap-2 text-xs text-gray-600">
+        <label className="flex items-center gap-2 text-xs text-text-muted">
           <input
             type="checkbox"
             checked={reasoning}
@@ -86,35 +89,35 @@ export function WikiSearch({ orgSlug, projectSlug, hasApiKey }: Props) {
       </form>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">
-          {error}
-        </div>
+        <Card className="px-4 py-3 border-danger/30">
+          <span className="text-sm text-danger">{error}</span>
+        </Card>
       )}
 
       {answer && (
-        <div className="bg-white border border-gray-200 rounded-lg px-5 py-4 space-y-3">
-          <div className="prose prose-sm max-w-none text-gray-800">
+        <Card className="px-5 py-4 space-y-3">
+          <div className="markdown-body text-sm">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{answer}</ReactMarkdown>
           </div>
           {reasoningText && (
-            <details className="border-t border-gray-100 pt-2 text-sm text-gray-700">
-              <summary className="cursor-pointer font-medium">Reasoning</summary>
-              <div className="prose prose-sm max-w-none mt-2">
+            <details className="border-t border-border pt-2 text-sm text-text-muted">
+              <summary className="cursor-pointer font-medium text-text-primary">Reasoning</summary>
+              <div className="markdown-body text-sm mt-2">
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{reasoningText}</ReactMarkdown>
               </div>
             </details>
           )}
           {sources.length > 0 && (
-            <div className="text-xs text-gray-500 border-t border-gray-100 pt-2">
+            <div className="text-xs text-text-muted border-t border-border pt-2">
               <span className="font-medium">Sources:</span>{' '}
               {sources.map((slug) => (
-                <span key={slug} className="inline-block bg-gray-100 text-gray-600 rounded px-1.5 py-0.5 mr-1 font-mono">
+                <span key={slug} className="inline-block bg-surface-2 border border-border text-text-muted rounded px-1.5 py-0.5 mr-1 font-mono">
                   {slug}
                 </span>
               ))}
             </div>
           )}
-        </div>
+        </Card>
       )}
     </div>
   );

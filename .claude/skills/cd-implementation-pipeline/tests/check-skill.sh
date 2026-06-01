@@ -30,8 +30,8 @@ echo "$frontmatter" | grep -qE '^metadata:' \
 echo "$body" | grep -qE '/cd-implementation-pipeline[[:space:]]+<[^>]*repo[^>]*>[[:space:]]+<[^>]*(change-)?name[^>]*>' \
   || fail "body must document the unified argv: /cd-implementation-pipeline <repo> <change-name>"
 
-# All seven step headings (Step 0..7)
-for n in 0 1 2 3 4 5 6 7; do
+# All six step headings (Step 0..6)
+for n in 0 1 2 3 4 5 6; do
   echo "$body" | grep -qE "^###[[:space:]]*Step[[:space:]]+${n}[[:space:]—-]" \
     || fail "body missing 'Step ${n}' heading"
 done

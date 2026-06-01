@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useRef, useState, type ReactNode 
 import { Navigate, useLocation } from 'react-router-dom';
 import { clearRefreshCookie, doRefresh, getRefreshCookie, isTokenExpired, isTokenExpiringSoon, setRefreshCookie } from './tokenRefresh';
 
-interface AuthUser { id: string; email: string }
+interface AuthUser { id: string; email: string; isPlatformAdmin?: boolean }
 
 interface AuthCtx {
   user: AuthUser | null;

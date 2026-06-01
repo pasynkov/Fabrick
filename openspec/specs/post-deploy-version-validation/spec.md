@@ -1,5 +1,7 @@
-## ADDED Requirements
+## Purpose
 
+Defines the post-deployment validation step in the release pipeline (cd-release.yml) that confirms each deployed application reports the expected release version before the pipeline is marked successful.
+## Requirements
 ### Requirement: Post-deployment version validation job
 The CI/CD pipeline (cd-release.yml) SHALL include a validation step that runs after all deployments complete to verify deployed application versions match expected version.
 
@@ -11,7 +13,8 @@ The CI/CD pipeline (cd-release.yml) SHALL include a validation step that runs af
 
 #### Scenario: Validation checks frontend versions
 - **WHEN** validation job executes after frontend deployments
-- **THEN** job calls `GET /health.json` on each deployed frontend (Console, Landing)
+- **THEN** job calls `GET /health.json` on each deployed frontend (Console, Landing, Admin)
+- **AND** for the Admin SPA the URL is `https://console.fabrick.me/admin/health.json` (served as a subpath of the console Static Web App)
 - **AND** compares returned `version` value against expected version from release branch
 - **AND** job passes if all versions match
 
@@ -35,3 +38,4 @@ The validation checks SHALL include retry logic to handle transient network issu
 - **WHEN** a version check fails due to network timeout
 - **THEN** validation job retries the check (max 3 attempts)
 - **AND** succeeds if any attempt returns expected version
+

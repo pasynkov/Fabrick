@@ -47,7 +47,7 @@ export class AuthService {
     );
     const access_token = this.signJwt(user);
     const refresh_token = persistent ? this.signRefreshJwt(user) : undefined;
-    return { access_token, refresh_token, user: { id: user.id, email: user.email } };
+    return { access_token, refresh_token, user: { id: user.id, email: user.email, isPlatformAdmin: user.isPlatformAdmin } };
   }
 
   async login(email: string, password: string, persistent?: boolean) {
@@ -59,7 +59,7 @@ export class AuthService {
     return {
       access_token: this.signJwt(user),
       refresh_token,
-      user: { id: user.id, email: user.email },
+      user: { id: user.id, email: user.email, isPlatformAdmin: user.isPlatformAdmin },
     };
   }
 

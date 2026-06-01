@@ -25,7 +25,8 @@ export default function Login() {
     try {
       const res = await api.login(email, password, persistent);
       setAuth(res.access_token, res.user, res.refresh_token, persistent);
-      navigate(params.get('next') || '/');
+      const returnTo = params.get('return_to') || params.get('next');
+      navigate(returnTo || '/');
     } catch (err: any) {
       setError(err.message || 'Login failed');
     }

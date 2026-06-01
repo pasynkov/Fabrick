@@ -21,4 +21,9 @@ function healthJsonPlugin(): Plugin {
 export default defineConfig({
   base: '/admin/',
   plugins: [react(), tailwindcss(), healthJsonPlugin()],
+  test: {
+    environment: 'jsdom',
+    globals: true,
+    setupFiles: ['./src/test-setup.ts'],
+  },
 })

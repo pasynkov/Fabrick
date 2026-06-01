@@ -44,7 +44,12 @@ export class SynthesisService {
     private readonly tokenUsageRepository: TokenUsageRepository,
   ) {}
 
-  async recordSynthesisTokenUsage(projectId: string, inputTokens: number, outputTokens: number): Promise<void> {
+  async recordSynthesisTokenUsage(
+    projectId: string,
+    inputTokens: number,
+    outputTokens: number,
+    promptRevisionId?: string | null,
+  ): Promise<void> {
     try {
       await this.tokenUsageRepository.create({
         projectId,
@@ -53,6 +58,7 @@ export class SynthesisService {
         inputTokens,
         outputTokens,
         provider: 'claude',
+        promptRevisionId: promptRevisionId ?? null,
       });
     } catch (err: any) {
       this.logger.error(`failed to record synthesis token_usage row: ${err?.message ?? err}`);

@@ -7,6 +7,7 @@ import { Project } from '../src/entities/project.entity';
 import { Repository } from '../src/entities/repository.entity';
 import { SearchRequest } from '../src/entities/search-request.entity';
 import { TokenUsage } from '../src/entities/token-usage.entity';
+import { PromptRevision } from '../src/entities/prompt-revision.entity';
 
 const host = process.env.DB_HOST || 'localhost';
 const port = parseInt(process.env.DB_PORT || '5432', 10);
@@ -35,7 +36,7 @@ export default async function globalSetup() {
     database: testDb,
     username,
     password,
-    entities: [User, Organization, OrgMember, Project, Repository, SearchRequest, TokenUsage],
+    entities: [User, Organization, OrgMember, Project, Repository, SearchRequest, TokenUsage, PromptRevision],
     migrations,
   });
   await ds.initialize();

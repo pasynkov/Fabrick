@@ -74,9 +74,9 @@ export class SynthesisProcessor implements OnModuleInit {
       const context = this.synthesisImpl.buildContext(repoWikis, existingPages, changedRepos);
       this.logger.log(`[${projectSlug}] calling Anthropic, input ~${context.length} chars`);
 
-      const { rawText, usage } = await this.synthesisImpl.synthesize(context, anthropicApiKey);
+      const { rawText, usage, promptRevisionId } = await this.synthesisImpl.synthesize(context, anthropicApiKey);
       if (usage) {
-        await this.recordTokenUsage(projectId, callbackToken, usage.inputTokens, usage.outputTokens);
+        await this.recordTokenUsage(projectId, callbackToken, usage.inputTokens, usage.outputTokens, promptRevisionId);
       } else {
         this.logger.warn(`[${projectSlug}] synthesis Anthropic response missing usage payload`);
       }
@@ -143,12 +143,13 @@ export class SynthesisProcessor implements OnModuleInit {
     callbackToken: string,
     inputTokens: number,
     outputTokens: number,
+    promptRevisionId?: string,
   ): Promise<void> {
     try {
       const res = await fetch(`${this.apiBaseUrl}/v1/internal/synthesis/token-usage`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projectId, callbackToken, inputTokens, outputTokens }),
+        body: JSON.stringify({ projectId, callbackToken, inputTokens, outputTokens, promptRevisionId }),
       });
       if (!res.ok) {
         this.logger.warn(`[${projectId}] token-usage callback failed: HTTP ${res.status}`);

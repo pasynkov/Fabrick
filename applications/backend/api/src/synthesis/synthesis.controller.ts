@@ -65,7 +65,12 @@ export class SynthesisController {
   @HttpCode(204)
   async recordTokenUsage(@Body() body: RecordTokenUsageDto): Promise<void> {
     this.synthesisService.verifyCallbackToken(body.callbackToken, body.projectId);
-    await this.synthesisService.recordSynthesisTokenUsage(body.projectId, body.inputTokens, body.outputTokens);
+    await this.synthesisService.recordSynthesisTokenUsage(
+      body.projectId,
+      body.inputTokens,
+      body.outputTokens,
+      body.promptRevisionId,
+    );
   }
 
   @Post('projects/:id/synthesis')

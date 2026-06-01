@@ -11,6 +11,7 @@ export interface CreateTokenUsageInput {
   inputTokens: number;
   outputTokens: number;
   provider: string;
+  promptRevisionId?: string | null;
 }
 
 @Injectable()

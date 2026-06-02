@@ -100,7 +100,7 @@ export class SandboxController {
     const context = this.synthesisImpl.buildContext(repoWikis, existingPages, changedRepos);
     this.logger.log(`Synthesizing, context ~${context.length} chars`);
 
-    const rawText = await this.synthesisImpl.synthesize(context, apiKey);
+    const { rawText } = await this.synthesisImpl.synthesize(context, apiKey);
     const { pages, deleteSlugs } = this.synthesisImpl.parseResponse(rawText);
 
     if (pages.length === 0) {

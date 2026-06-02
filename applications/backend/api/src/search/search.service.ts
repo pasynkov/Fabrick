@@ -95,6 +95,7 @@ export class SearchService {
         answerBrief: result.answer,
         answerReasoning: result.reasoning ?? null,
         sources: result.sources,
+        promptRevisionId: result.promptRevisionId ?? null,
       });
       searchRequestId = row.id;
     } catch (err: any) {
@@ -111,6 +112,7 @@ export class SearchService {
           inputTokens: call.inputTokens,
           outputTokens: call.outputTokens,
           provider: 'claude',
+          promptRevisionId: result.promptRevisionId ?? null,
         });
       } catch (err: any) {
         this.logger.error(`failed to insert token_usage row: ${err?.message ?? err}`);

@@ -175,6 +175,41 @@ export interface MeResponse {
   isPlatformAdmin: boolean;
 }
 
+export interface AdminPromptListItem {
+  id: string;
+  name: string;
+  agent: string;
+  revision: number;
+  updatedAt: string;
+  createdBy: string;
+}
+
+export interface AdminPromptRevision {
+  id: string;
+  name: string;
+  agent: string;
+  revision: number;
+  content: { files: Record<string, string> };
+  note: string | null;
+  createdBy: string;
+  createdAt: string;
+}
+
+export interface AdminPromptHistoryItem {
+  id: string;
+  name: string;
+  agent: string;
+  revision: number;
+  note: string | null;
+  createdBy: string;
+  createdAt: string;
+}
+
+export interface CreatePromptRevisionBody {
+  files: Record<string, string>;
+  note?: string;
+}
+
 export const api = {
   me: () => request<MeResponse>('/auth/me'),
 
@@ -208,6 +243,21 @@ export const api = {
         if (params.projectId) qs.set('projectId', params.projectId);
         return request<PaginatedResponse<AdminSearchRequest>>(`/admin/search-requests?${qs.toString()}`);
       },
+    },
+    prompts: {
+      list: () =>
+        request<AdminPromptListItem[]>('/admin/prompts'),
+      latest: (name: string, agent: string) =>
+        request<AdminPromptRevision>(`/admin/prompts/${encodeURIComponent(name)}/${encodeURIComponent(agent)}`),
+      history: (name: string, agent: string) =>
+        request<AdminPromptHistoryItem[]>(`/admin/prompts/${encodeURIComponent(name)}/${encodeURIComponent(agent)}/history`),
+      revision: (name: string, agent: string, revision: number) =>
+        request<AdminPromptRevision>(`/admin/prompts/${encodeURIComponent(name)}/${encodeURIComponent(agent)}/${revision}`),
+      create: (name: string, agent: string, body: CreatePromptRevisionBody) =>
+        request<{ id: string; revision: number }>(`/admin/prompts/${encodeURIComponent(name)}/${encodeURIComponent(agent)}`, {
+          method: 'POST',
+          body: JSON.stringify(body),
+        }),
     },
   },
 };

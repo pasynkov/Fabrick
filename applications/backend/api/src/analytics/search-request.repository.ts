@@ -17,6 +17,7 @@ export interface CreateSearchRequestInput {
   answerBrief: string;
   answerReasoning: string | null;
   sources: string[];
+  promptRevisionId?: string | null;
 }
 
 @Injectable()

@@ -6,6 +6,9 @@ import { AddAutoSynthesisEnabled1745300000000 } from './1745300000000-AddAutoSyn
 import { AddWikiPages1746700000000 } from './1746700000000-AddWikiPages';
 import { AddUsageAnalytics1748000000000 } from './1748000000000-AddUsageAnalytics';
 import { AddPlatformAdmin1748100000000 } from './1748100000000-AddPlatformAdmin';
+import { AddPromptRevisions1748200000000 } from './1748200000000-AddPromptRevisions';
+import { SeedPromptRevisions1748200100000 } from './1748200100000-SeedPromptRevisions';
+import { AddPromptRevisionIdToAnalytics1748200200000 } from './1748200200000-AddPromptRevisionIdToAnalytics';
 
 export const migrations = [
   Init1700000000000,
@@ -16,4 +19,7 @@ export const migrations = [
   AddWikiPages1746700000000,
   AddUsageAnalytics1748000000000,
   AddPlatformAdmin1748100000000,
+  AddPromptRevisions1748200000000,
+  SeedPromptRevisions1748200100000,
+  AddPromptRevisionIdToAnalytics1748200200000,
 ];

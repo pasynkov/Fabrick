@@ -5,6 +5,7 @@ const tabs = [
   { label: 'Orgs', to: '/orgs' },
   { label: 'Projects', to: '/projects' },
   { label: 'Searches', to: '/searches' },
+  { label: 'Prompts', to: '/prompts' },
 ];
 
 export default function TabBar() {

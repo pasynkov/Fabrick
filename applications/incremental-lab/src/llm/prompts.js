@@ -1,5 +1,14 @@
 const FORMAT_HINT = `Return ONLY the markdown content. No \`\`\`markdown fences, no preamble, no explanation. Do not use any tools — all the source code you need is in this prompt.`;
 
+const TAXONOMY_HINT = `Wiki taxonomy (production fabrick-analyze convention):
+- entities/  domain models, data structures, DB schemas, k8s resources
+- logic/     business flows, algorithms, processes (top-level functions)
+- contracts/ API endpoints, request/response schemas, shared interfaces
+- transport/ messaging topics/events, queues, gRPC, NATS subjects
+- config/    environment variables and module-level configuration
+
+The PAGE SLUG above already reflects the chosen category — write content that belongs in that category.`;
+
 export function generatePagePrompt({ slug, symbols, sources }) {
   const symbolList = symbols.map((s) => `  - ${s.id} (${s.kind})`).join('\n');
   const sourceBlocks = sources.map((s) => `[file: ${s.file}]\n${s.content}`).join('\n\n');
@@ -13,6 +22,8 @@ ${symbolList}
 
 SOURCE CODE:
 ${sourceBlocks}
+
+${TAXONOMY_HINT}
 
 INSTRUCTIONS:
 - Start with a level-1 heading using the primary symbol's name.
@@ -80,6 +91,8 @@ ${symbolList}${referencesSection}
 CURRENT SOURCE CODE:
 ${sourceBlocks}
 
+${TAXONOMY_HINT}
+
 INSTRUCTIONS:
 - The CURRENT SOURCE CODE is the source of truth. The EXISTING PAGE may be out of date.
 - Verify every concrete claim in the existing page against the current source:
@@ -90,6 +103,7 @@ INSTRUCTIONS:
 - If existing page says "X" but source says "X, Y, Z" — rewrite to include Y and Z.
 - If existing page says "three" but source has five — change the number AND the list.
 - Do NOT preserve outdated facts just because they were already written.
+- DO NOT REMOVE existing factual details (env var lists, fallback behavior, file path conventions, ts-ignore reasons, edge-case notes) just because they were not what triggered this update. Preserve them unless the source contradicts them.
 - For sections still accurate, keep wording close to existing to minimize churn.
 - If a documented symbol no longer exists in the source, remove its mention.
 - Do NOT write a "## Related" section — it is auto-generated from the code graph.

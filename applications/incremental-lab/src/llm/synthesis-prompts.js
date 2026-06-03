@@ -1,86 +1,176 @@
-const FORMAT_HINT = `Return ONLY the markdown content. No fences, no preamble, no explanation. Do not use any tools.`;
+const FORMAT_HINT = `Return ONLY the markdown content. No fences, no preamble. Do not use any tools.`;
 
-export function generateArchPagePrompt({ archSlug, wikiExcerpts }) {
-  const blocks = wikiExcerpts.map(({ repo, slug, body }) =>
-    `--- WIKI: ${repo}/${slug} ---\n${body}`,
-  ).join('\n\n');
+/**
+ * Production synthesis prompt, taken from
+ * applications/backend/api/src/migrations/1748200100000-SeedPromptRevisions.ts
+ * (Anthropic / Fabrick canonical synthesis policy).
+ *
+ * Input format expected from the caller (single user message):
+ *   === REPO: <name> ===   { full content of all wiki pages in repo, each preceded by its slug }
+ *   === REPO-INDEX: <name> ===   { index.md content only, for repos with no changes }
+ *   === EXISTING: <slug> ===   { existing project wiki page, full markdown body }
+ *
+ * Output format produced by the model:
+ *   === PAGE: <slug> ===
+ *   ---
+ *   slug: ...
+ *   category: ...
+ *   sources: [...repos...]
+ *   ---
+ *   <markdown content>
+ *
+ *   === DELETE: <slug> ===     (incremental mode only)
+ */
+export const SYNTHESIS_PROMPT = `You are a software architect synthesizing a project-level wiki from repository wikis.
 
-  return `You are a software architect writing one architecture document by synthesizing per-component wiki pages from multiple repos.
+## Your task
 
-ARCH PAGE SLUG: ${archSlug}
+Merge wiki pages from one or more repositories into a unified, concept-centric project wiki. Organize knowledge by concept, not by repository.
 
-WIKI PAGES (input from repos):
-${blocks}
+## Input format
 
-INSTRUCTIONS:
-- Write the architecture page about "${archSlug}".
-- Synthesize cross-repo: tie services in the code repo to their deployments in the infra repo, name explicit links.
-- Cite each repo as plain text when relevant (e.g. "backend1/AssetsService → kustomize/Deployment assets-registry").
-- Concise, factual, no marketing.
-- Sections: # Title, 1–2 paragraph overview, ## Components (bullet list per repo), ## Cross-repo links, ## Notes (if any).
-- Do NOT write a "## Related" section — it is auto-generated.
+Repository wikis are provided in this format:
 
-${FORMAT_HINT}
+=== REPO: {repo-name} ===
+{all wiki pages from that repo, each with frontmatter and content}
+
+=== REPO-INDEX: {repo-name} ===
+{index.md content only — for unchanged repos in incremental mode}
+
+=== EXISTING: {slug} ===
+{existing project wiki page — for incremental mode}
+
+## Instructions
+
+- Merge same entities that appear in multiple repos into unified pages
+- Discover cross-repo flows (e.g. frontend calls backend endpoint)
+- Create system-level overview and integration maps
+- Track which repos contributed to each page in sources[] (use repo slugs, not file paths)
+- Always output an index page listing all pages with 1-line summaries, grouped by category
+- Always output an mcp-description page (see below)
+- Add Related Pages section at the bottom of each page (except index and mcp-description)
+
+## Taxonomy (starter categories — add custom ones if warranted)
+
+- entities/ — domain models, data structures, database schemas
+- logic/ — business flows, algorithms, processes
+- contracts/ — API endpoints, request/response schemas, shared interfaces
+- transport/ — messaging topics/events, gRPC services, WebSocket channels
+- config/ — environment variables grouped by concern
+- overview — system-level summary and architecture description
+
+## mcp-description page
+
+Generate a page with slug "mcp-description" containing ~200 words describing what knowledge is available. Format as a tool description (2nd person: "you can find...", "ask about..."). Include:
+- List of all repos/apps with 1-line purpose each
+- Knowledge categories available (entities, endpoints, flows, transport, config)
+- Notable specifics (e.g. "15 REST endpoints", "3 NATS topics")
+
+## mcp-instructions page
+
+Generate a page with slug "mcp-instructions" containing ~80 words of plain text (no markdown headers). This text is used as server-level instructions for the AI agent. It must:
+- State when to call \`fabrick_search\`: when working in one layer and needing context from another
+- List the actual layers/apps present in the project (e.g. "frontend", "backend", "infra") so the agent can match its current context
+- Give 2-3 concrete cross-layer trigger examples based only on layers that exist
+- Explicitly state NOT to call the tool for questions answerable from local file context
+- Do NOT say "always use this tool"
+
+## Output format
+
+Output ONLY page sections — no explanation, no JSON, no code blocks wrapping the whole response.
+
+Each page:
+
+=== PAGE: {slug} ===
+---
+slug: {slug}
+category: {category}
+title: {title}
+sources: [{repo-slug1}, {repo-slug2}]
+related: [{slug1}, {slug2}]
+---
+
+{markdown content}
+
+## Related Pages
+- [{Title}]({slug}) — {relationship description}
+
+IMPORTANT: All internal links (index page entries, Related Pages) MUST use the slug as the path — no \`.md\` extension. Example: \`(apps/harvester-conductor)\` not \`(apps/harvester-conductor.md)\`.
+
+To delete a page (incremental mode only):
+
+=== DELETE: {slug} ===
+
+## Incremental mode instructions
+
+When existing project pages are provided:
+- Update ONLY pages sourced from changed repos
+- Create new pages if new concepts appeared
+- Mark pages for deletion with === DELETE: slug === if source content was removed
+- Always output updated index and mcp-description pages
+- DO NOT output unchanged pages (they will be preserved as-is)
 `;
+
+/**
+ * Build the user input block for synthesis (full mode).
+ *
+ * @param {Object[]} repos          [{ name, pages: { slug: body } }]
+ */
+export function buildSynthesisFullInput({ repos }) {
+  const blocks = repos.map(({ name, pages }) => {
+    const ordered = Object.entries(pages).sort(([a], [b]) => (a < b ? -1 : 1));
+    const inner = ordered.map(([slug, body]) => `[${slug}]\n${body}`).join('\n\n');
+    return `=== REPO: ${name} ===\n${inner}`;
+  });
+  return blocks.join('\n\n');
 }
 
-export function patchArchPagePrompt({ archSlug, existingPage, narrative, wikiExcerpts, changeReasons }) {
-  const blocks = wikiExcerpts.map(({ repo, slug, body }) =>
-    `--- WIKI: ${repo}/${slug} ---\n${body}`,
-  ).join('\n\n');
-
-  return `You are updating an architecture page in response to per-repo wiki updates.
-
-ARCH PAGE SLUG: ${archSlug}
-
-EXISTING ARCH PAGE:
----
-${existingPage}
----
-
-CHANGES THAT HAPPENED ACROSS REPOS (narrator summary, authoritative):
----
-${narrative}
----
-
-WHICH WIKI PAGES TRIGGERED THIS UPDATE:
-${changeReasons.map((r) => `  - ${r}`).join('\n')}
-
-CURRENT WIKI PAGES (source of truth for facts):
-${blocks}
-
-INSTRUCTIONS:
-- Source of truth: the current wiki pages above. Verify every claim in the existing arch page.
-- Update narrative-anchored sections (counts, lists, named services) against the wikis.
-- Preserve sections that are still accurate.
-- Cross-repo links (code service → k8s deployment) are the highest-value content — keep them current.
-- Do NOT write a "## Related" section — it is auto-generated.
-
-${FORMAT_HINT}
-`;
+/**
+ * Build the user input block for synthesis (incremental mode).
+ *
+ * @param {Object} args
+ * @param {Object[]} args.changedRepos      [{ name, pages }] — full content of changed-repo wikis
+ * @param {Object[]} args.unchangedRepos    [{ name, indexBody }] — index.md only
+ * @param {Object[]} args.existingPages     [{ slug, body }] — current project wiki pages
+ */
+export function buildSynthesisIncrementalInput({ changedRepos, unchangedRepos, existingPages }) {
+  const out = [];
+  for (const { name, pages } of changedRepos) {
+    const ordered = Object.entries(pages).sort(([a], [b]) => (a < b ? -1 : 1));
+    out.push(`=== REPO: ${name} ===\n${ordered.map(([slug, body]) => `[${slug}]\n${body}`).join('\n\n')}`);
+  }
+  for (const { name, indexBody } of unchangedRepos) {
+    out.push(`=== REPO-INDEX: ${name} ===\n${indexBody}`);
+  }
+  for (const { slug, body } of existingPages) {
+    out.push(`=== EXISTING: ${slug} ===\n${body}`);
+  }
+  return out.join('\n\n');
 }
 
-export function synthesisNarratorPrompt({ diff, recentWikiUpdates }) {
-  const lines = ['You are an architect summarizing a cross-repo update. Read the wiki-page diff across all repos and produce a 2-5 sentence narrative of what changed at the architecture level.', ''];
-  lines.push('WIKI DIFF (per repo):');
-  for (const [repo, changes] of Object.entries(diff)) {
-    const all = [...changes.added.map((s) => `+${s}`), ...changes.changed.map((s) => `~${s}`), ...changes.deleted.map((s) => `-${s}`)];
-    if (all.length === 0) continue;
-    lines.push(`  ${repo}: ${all.join(', ')}`);
+/**
+ * Parse the model's output into pages and deletions.
+ * Format:
+ *   === PAGE: <slug> ===
+ *   <body until next === or EOF>
+ *   === DELETE: <slug> ===
+ */
+export function parseSynthesisOutput(raw) {
+  const pages = [];
+  const deletions = [];
+  if (!raw) return { pages, deletions };
+  const re = /===\s*(PAGE|DELETE):\s*([^\s=]+)\s*===\s*\n?/g;
+  const tokens = [];
+  let m;
+  while ((m = re.exec(raw)) !== null) {
+    tokens.push({ kind: m[1], slug: m[2], start: m.index, contentStart: re.lastIndex });
   }
-  if (recentWikiUpdates?.length) {
-    lines.push('', 'EXCERPTS OF UPDATED WIKI PAGES (for context):');
-    for (const { repo, slug, body } of recentWikiUpdates.slice(0, 5)) {
-      lines.push(`--- ${repo}/${slug} (first 800 chars) ---`);
-      lines.push(body.slice(0, 800));
-      lines.push('');
-    }
+  for (let i = 0; i < tokens.length; i++) {
+    const t = tokens[i];
+    const next = tokens[i + 1];
+    const body = raw.slice(t.contentStart, next ? next.start : raw.length).trim();
+    if (t.kind === 'PAGE') pages.push({ slug: t.slug, body });
+    else deletions.push(t.slug);
   }
-  lines.push('', 'INSTRUCTIONS:');
-  lines.push('- 2–5 sentences in plain prose.');
-  lines.push('- Focus on architectural significance: new services, capacity changes, infra wiring, breaking interface shifts.');
-  lines.push('- Skip non-architectural noise (formatting, doc cleanup).');
-  lines.push('- No marketing, no bullets, no markdown fences.');
-  lines.push('- Return ONLY the summary text.');
-  return lines.join('\n');
+  return { pages, deletions };
 }

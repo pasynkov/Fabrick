@@ -1,4 +1,12 @@
-const TOP_LEVEL_KINDS = new Set(['class', 'interface', 'type', 'function', 'enum', 'const']);
+const TOP_LEVEL_KINDS = new Set([
+  // TS/JS
+  'class', 'interface', 'type', 'function', 'enum', 'const',
+  // K8s YAML
+  'Deployment', 'Service', 'ConfigMap', 'Secret', 'Kustomization',
+  'StatefulSet', 'DaemonSet', 'Job', 'CronJob', 'Ingress',
+  'PersistentVolumeClaim', 'ServiceAccount', 'Role', 'RoleBinding',
+  'ClusterRole', 'ClusterRoleBinding', 'YamlDoc',
+]);
 
 export function synthSourcemap(snapshot) {
   const pages = { 'index.md': { symbols: [], files: [] } };
@@ -18,8 +26,16 @@ export function synthSourcemap(snapshot) {
 
 function pageSlugFor(s) {
   const kindDir = {
+    // TS
     class: 'entities', interface: 'entities', type: 'types',
     function: 'logic', enum: 'enums', const: 'consts',
+    // K8s
+    Deployment: 'entities', Service: 'entities', ConfigMap: 'entities',
+    Secret: 'entities', Kustomization: 'entities', StatefulSet: 'entities',
+    DaemonSet: 'entities', Job: 'entities', CronJob: 'entities',
+    Ingress: 'entities', PersistentVolumeClaim: 'entities',
+    ServiceAccount: 'entities', Role: 'entities', RoleBinding: 'entities',
+    ClusterRole: 'entities', ClusterRoleBinding: 'entities', YamlDoc: 'misc',
   }[s.kind] ?? 'misc';
   const safeName = s.name.replace(/[^a-zA-Z0-9._-]/g, '_');
   return `${kindDir}/${safeName}.md`;

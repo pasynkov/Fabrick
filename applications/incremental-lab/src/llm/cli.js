@@ -10,7 +10,7 @@ export async function callClaude(prompt, {
   slim = true,
   disabledPlugins = DEFAULT_DISABLED_PLUGINS,
   maxBudgetUsd = 1,
-  timeoutMs = 120_000,
+  timeoutMs = 300_000,
   cwd = process.cwd(),
 } = {}) {
   const args = [

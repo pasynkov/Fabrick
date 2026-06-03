@@ -30,15 +30,15 @@ import { buildIndex } from '../src/wiki/index-builder.js';
 import { stableJson } from '../src/snapshot/store.js';
 import { buildSynthesisSnapshot } from '../src/synthesis/snapshot.js';
 import { diffSynthesisSnapshots, diffHasChanges } from '../src/synthesis/diff.js';
-import { invalidateArchPages } from '../src/synthesis/invalidate.js';
-import { buildArchSourcemap, DEFAULT_ARCH_TAXONOMY } from '../src/synthesis/sourcemap.js';
-import { generateArchPage, patchArchPage, generateSynthesisNarrative } from '../src/synthesis/page-generator.js';
+import { synthesizeFull, synthesizeIncremental } from '../src/synthesis/page-generator.js';
 import { judge } from '../src/llm/judge.js';
+import { pMap } from '../src/util/concurrent.js';
 
 const argv = process.argv.slice(2);
 const N_ITERS = Number(argv.find((a) => a.startsWith('--iters='))?.split('=')[1] ?? 3);
 const MAX_COST = Number(argv.find((a) => a.startsWith('--max-cost='))?.split('=')[1] ?? 20);
 const MODEL = argv.find((a) => a.startsWith('--model='))?.split('=')[1] ?? 'sonnet';
+const CONCURRENCY = Number(argv.find((a) => a.startsWith('--concurrency='))?.split('=')[1] ?? 5);
 
 const REPOS = [
   { name: 'backend1', role: 'code',  path: process.env.NAMI_REPO_BACKEND1,  subdir: '.', dates: ['2025-09-22', '2025-09-28', '2025-10-08', '2025-10-13'] },
@@ -68,9 +68,21 @@ for (const r of REPOS) {
   await simpleGit(r.path).clone(r.path, tmp, ['--no-local']).catch(async () =>
     simpleGit(r.path).clone(r.path, tmp),
   );
+  // Pre-compute SHAs for all iteration dates BEFORE any checkout
+  // (checkout moves HEAD and contaminates date-based log queries).
+  const srcGit = simpleGit(r.path);
+  const sourceShas = {};
+  for (const date of r.dates) {
+    const raw = await srcGit.raw(['log', '--until', `${date}T23:59:59`, '--pretty=%H', '-1']);
+    const sha = raw.trim();
+    if (!sha) throw new Error(`${r.name}: no commit before ${date}`);
+    sourceShas[date] = sha;
+  }
+  console.log(`[${r.name}] iteration SHAs:`, Object.entries(sourceShas).map(([d, s]) => `${d}=${s.slice(0,7)}`).join(' '));
   repoState[r.name] = {
     tmp,
     git: simpleGit(tmp),
+    sourceShas,
     snap: null,
     smap: null,
     pageBodies: new Map(),
@@ -81,10 +93,8 @@ for (const r of REPOS) {
   };
 }
 
-// arch state across iterations
-let archSourcemap = null;
-const archPages = new Map();        // archSlug → assembled markdown
-const archBodies = new Map();       // archSlug → LLM body for patching
+// arch (project wiki) state across iterations
+const archBodies = new Map();       // slug → markdown body
 let prevSynthSnap = null;
 
 const iterReports = [];
@@ -96,29 +106,52 @@ for (let iter = 0; iter <= N_ITERS; iter++) {
 
   const iterRecord = { iter, date: null, repos: {}, synthesis: null, cost: { wiki: 0, narrative: 0, synthesis: 0 } };
 
-  // Step 1: advance each repo, wiki update
-  for (const r of REPOS) {
+  // Step 1: advance each repo, wiki update (parallel across repos)
+  await pMap(REPOS, async (r) => {
     const state = repoState[r.name];
     const date = state.dates[iter];
     iterRecord.date = date;
-    const sha = await pickShaByDate(state.git, date);
+    const sha = state.sourceShas[date];
     console.log(`[${r.name}] checkout ${sha.slice(0,7)} (${date})`);
     await state.git.checkout(sha);
     const subPath = join(state.tmp, state.subdir);
 
+    const repoDir = join(iterDir, 'wiki-incremental', r.name);
+    const patchesDir = join(repoDir, 'patches');
+    const beforeDir = join(repoDir, 'before');
+    const afterDir = join(repoDir, 'after');
+    mkdirSync(patchesDir, { recursive: true });
+    mkdirSync(beforeDir, { recursive: true });
+    mkdirSync(afterDir, { recursive: true });
+
+    // Snapshot wiki BEFORE this iteration's patches (only meaningful for iter > 0)
+    for (const [slug, content] of state.pages) writeFileSync(join(beforeDir, safeFile(slug)), content);
+
     if (iter === 0) {
-      // baseline full scan
+      // baseline full scan — parallel page generation
       state.snap = buildSnapshot(subPath);
       state.smap = synthSourcemap(state.snap);
       console.log(`[${r.name}] baseline files=${Object.keys(state.snap.files).length} symbols=${state.snap.symbols.length} pages=${Object.keys(state.smap.pages).length - 1}`);
+      const jobs = Object.entries(state.smap.pages)
+        .filter(([slug, p]) => slug !== 'index.md' && p.symbols.length > 0)
+        .map(([slug, page]) => ({ slug, page, symbols: state.snap.symbols.filter((s) => page.symbols.includes(s.id)) }));
+      const t0 = Date.now();
+      const results = await pMap(jobs, async (j) => {
+        const res = await generatePage({ slug: j.slug, symbols: j.symbols, repoRoot: subPath, claudeOpts });
+        return { slug: j.slug, page: j.page, res };
+      }, { concurrency: CONCURRENCY });
+      console.log(`[${r.name}] baseline ${jobs.length} pages done in ${((Date.now() - t0)/1000).toFixed(1)}s (concurrency=${CONCURRENCY})`);
       let repoCost = 0;
-      for (const [slug, page] of Object.entries(state.smap.pages)) {
-        if (slug === 'index.md' || page.symbols.length === 0) continue;
-        const symbols = state.snap.symbols.filter((s) => page.symbols.includes(s.id));
-        const res = await generatePage({ slug, symbols, repoRoot: subPath, claudeOpts });
+      for (const { slug, page, res } of results) {
         state.pageBodies.set(slug, res.content);
         const related = computeRelated({ slug, sourcemap: state.smap, snapshot: state.snap });
         state.pages.set(slug, assemblePage({ slug, body: res.content, page, sourcemap: state.smap, snapshot: state.snap, relatedSlugs: related, updated: sha.slice(0,7) }));
+        // save generation artifact
+        const slugDir = join(patchesDir, safeFile(slug).replace(/\.md$/, ''));
+        mkdirSync(slugDir, { recursive: true });
+        writeFileSync(join(slugDir, 'action.txt'), 'baseline-generate\n');
+        writeFileSync(join(slugDir, 'prompt.txt'), res.prompt ?? '(prompt not captured)');
+        writeFileSync(join(slugDir, 'llm-response.md'), res.rawResponse ?? res.content);
         log('baseline', res); repoCost += res.costUsd ?? 0;
       }
       state.pages.set('index.md', buildIndex({ sourcemap: state.smap, snapshot: state.snap, pages: state.pages, updated: sha.slice(0,7) }));
@@ -141,35 +174,61 @@ for (let iter = 0; iter <= N_ITERS; iter++) {
         narrative = narrRes.narrative;
         log('narrative', narrRes); narrativeCost += narrRes.costUsd ?? 0;
       }
-      const patchedSlugs = [];
-      for (const slug of inv.pagesInvalidated) {
-        if (slug === 'index.md') continue;
-        const page = state.smap.pages[slug];
-        if (!page || page.symbols.length === 0) continue;
-        const symbols = after.symbols.filter((s) => page.symbols.includes(s.id));
-        if (!symbols.length) continue;
-        const existingBody = state.pageBodies.get(slug) ?? '';
+      // parallel patches
+      const patchJobs = inv.pagesInvalidated
+        .filter((slug) => slug !== 'index.md')
+        .map((slug) => ({ slug, page: state.smap.pages[slug] }))
+        .filter((j) => j.page && j.page.symbols.length > 0)
+        .map((j) => ({ ...j, symbols: after.symbols.filter((s) => j.page.symbols.includes(s.id)) }))
+        .filter((j) => j.symbols.length > 0);
+      // save narrative artifact
+      if (narrative) writeFileSync(join(repoDir, 'narrative.md'), narrative + '\n');
+
+      const patchResults = await pMap(patchJobs, async (j) => {
+        const existingBody = state.pageBodies.get(j.slug) ?? '';
         const res = await patchPage({
-          slug, existingPage: existingBody, changes: inv.reasons[slug] ?? [],
-          symbols, repoRoot: subPath, claudeOpts,
+          slug: j.slug, existingPage: existingBody, changes: inv.reasons[j.slug] ?? [],
+          symbols: j.symbols, repoRoot: subPath, claudeOpts,
           beforeSnapshotSymbols: before.symbols, afterSnapshotSymbols: after.symbols,
         });
+        return { ...j, existingBody, res };
+      }, { concurrency: CONCURRENCY });
+      const patchedSlugs = [];
+      for (const { slug, page, existingBody, res } of patchResults) {
         state.pageBodies.set(slug, res.content);
         const related = computeRelated({ slug, sourcemap: state.smap, snapshot: state.snap });
         state.pages.set(slug, assemblePage({ slug, body: res.content, page, sourcemap: state.smap, snapshot: state.snap, relatedSlugs: related, updated: sha.slice(0,7) }));
+        // save patch artifact
+        const slugDir = join(patchesDir, safeFile(slug).replace(/\.md$/, ''));
+        mkdirSync(slugDir, { recursive: true });
+        writeFileSync(join(slugDir, 'action.txt'), 'patch\n');
+        writeFileSync(join(slugDir, 'existing-body.md'), existingBody);
+        writeFileSync(join(slugDir, 'change-reasons.txt'), (inv.reasons[slug] ?? []).join('\n') + '\n');
+        writeFileSync(join(slugDir, 'prompt.txt'), res.prompt ?? '');
+        writeFileSync(join(slugDir, 'llm-response.md'), res.rawResponse ?? res.content);
         patchedSlugs.push(slug);
         log('patch', res); repoCost += res.costUsd ?? 0;
       }
-      for (const sym of inv.newSymbols) {
-        const slug = slugFor(sym);
-        if (state.pages.has(slug)) continue;
-        const symbols = after.symbols.filter((s) => s.file === sym.file && (s.name === sym.name || s.name.startsWith(sym.name + '.')));
-        if (!symbols.length) continue;
-        const res = await generatePage({ slug, symbols, repoRoot: subPath, claudeOpts });
+      // parallel new-symbol page generations
+      const newJobs = inv.newSymbols
+        .map((sym) => ({ sym, slug: slugFor(sym) }))
+        .filter((j) => !state.pages.has(j.slug))
+        .map((j) => ({ ...j, symbols: after.symbols.filter((s) => s.file === j.sym.file && (s.name === j.sym.name || s.name.startsWith(j.sym.name + '.'))) }))
+        .filter((j) => j.symbols.length > 0);
+      const newResults = await pMap(newJobs, async (j) => {
+        const res = await generatePage({ slug: j.slug, symbols: j.symbols, repoRoot: subPath, claudeOpts });
+        return { ...j, res };
+      }, { concurrency: CONCURRENCY });
+      for (const { sym, slug, symbols, res } of newResults) {
         state.pageBodies.set(slug, res.content);
         const page = { symbols: symbols.map((s) => s.id), files: [sym.file] };
         const related = computeRelated({ slug, sourcemap: state.smap, snapshot: state.snap });
         state.pages.set(slug, assemblePage({ slug, body: res.content, page, sourcemap: state.smap, snapshot: state.snap, relatedSlugs: related, updated: sha.slice(0,7) }));
+        const slugDir = join(patchesDir, safeFile(slug).replace(/\.md$/, ''));
+        mkdirSync(slugDir, { recursive: true });
+        writeFileSync(join(slugDir, 'action.txt'), 'new-page\n');
+        writeFileSync(join(slugDir, 'prompt.txt'), res.prompt ?? '');
+        writeFileSync(join(slugDir, 'llm-response.md'), res.rawResponse ?? res.content);
         log('new', res); repoCost += res.costUsd ?? 0;
       }
       // refresh related + index for touched repo
@@ -187,15 +246,11 @@ for (let iter = 0; iter <= N_ITERS; iter++) {
       iterRecord.cost.narrative += narrativeCost;
     }
 
-    // save per-repo wiki
-    const repoDir = join(iterDir, 'repos', r.name);
-    mkdirSync(repoDir, { recursive: true });
-    for (const [slug, content] of state.pages) {
-      writeFileSync(join(repoDir, slug.replace(/[/]/g, '_')), content);
-    }
-  }
+    // Snapshot AFTER: final wiki state for this iteration
+    for (const [slug, content] of state.pages) writeFileSync(join(afterDir, safeFile(slug)), content);
+  }, { concurrency: 2 });
 
-  // Step 2: synthesis layer
+  // Step 2: synthesis layer (production-aligned: single-call concept-centric)
   const perRepoWikiPages = {};
   for (const r of REPOS) {
     perRepoWikiPages[r.name] = {};
@@ -203,47 +258,54 @@ for (let iter = 0; iter <= N_ITERS; iter++) {
   }
   const synthSnap = buildSynthesisSnapshot(perRepoWikiPages);
 
-  const repoRoles = Object.fromEntries(REPOS.map((r) => [r.name, r.role]));
-  const perRepoSlugs = Object.fromEntries(REPOS.map((r) => [r.name, [...repoState[r.name].pageBodies.keys()]]));
-  archSourcemap = buildArchSourcemap({ perRepoSlugs, repoRoles });
+  const archDir = join(iterDir, 'synthesis-incremental');
+  const archBeforeDir = join(archDir, 'before');
+  const archAfterDir = join(archDir, 'after');
+  const archCallDir = join(archDir, 'call');
+  const archFullDir = join(iterDir, 'synthesis-fullrebuild');
+  const archFullCallDir = join(archFullDir, 'call');
+  mkdirSync(archBeforeDir, { recursive: true });
+  mkdirSync(archAfterDir, { recursive: true });
+  mkdirSync(archCallDir, { recursive: true });
+  mkdirSync(archFullDir, { recursive: true });
+  mkdirSync(archFullCallDir, { recursive: true });
+
+  // Snapshot project wiki BEFORE this iteration
+  for (const [slug, body] of archBodies) writeFileSync(join(archBeforeDir, safeFile(slug.endsWith('.md') ? slug : slug + '.md')), body);
 
   let synthesisCost = 0;
+  let synthResults = null;
   if (iter === 0) {
-    // full synthesis from scratch
-    for (const archSlug of Object.keys(DEFAULT_ARCH_TAXONOMY)) {
-      const wikiExcerpts = wikiExcerptsFor(archSlug, archSourcemap, repoState);
-      const res = await generateArchPage({ archSlug, wikiExcerpts, claudeOpts });
-      archBodies.set(archSlug, res.content);
-      archPages.set(archSlug, res.content);  // arch page is body itself for now
-      log('arch-gen', res); synthesisCost += res.costUsd ?? 0;
-    }
-    iterRecord.synthesis = { mode: 'full', invalidated: Object.keys(DEFAULT_ARCH_TAXONOMY), cost: synthesisCost };
+    // baseline full synthesis: one LLM call, all pages produced
+    const repos = REPOS.map((r) => ({ name: r.name, pages: perRepoWikiPages[r.name] }));
+    synthResults = await synthesizeFull({ repos, claudeOpts });
+    for (const p of synthResults.pages) archBodies.set(p.slug, p.body);
+    writeFileSync(join(archCallDir, 'action.txt'), 'baseline-full\n');
+    writeFileSync(join(archCallDir, 'prompt.txt'), synthResults.prompt ?? '');
+    writeFileSync(join(archCallDir, 'llm-response.md'), synthResults.rawResponse ?? '');
+    log('synth-full', synthResults); synthesisCost += synthResults.costUsd ?? 0;
+    iterRecord.synthesis = { mode: 'full', pagesProduced: synthResults.pages.length, deletions: synthResults.deletions.length, cost: synthesisCost };
   } else {
-    // incremental synthesis
+    // incremental synthesis: pass changed repos full, unchanged as index-only,
+    // existing project pages that might overlap with changes
     const synthDiff = diffSynthesisSnapshots(prevSynthSnap, synthSnap);
-    const { archInvalidated, reasons } = invalidateArchPages({ diff: synthDiff, archSourcemap });
-    let synthNarrative = '';
-    let synthNarrCost = 0;
-    if (archInvalidated.length > 0 && diffHasChanges(synthDiff)) {
-      const recentUpdates = [];
-      for (const [repo, changes] of Object.entries(synthDiff)) {
-        for (const slug of changes.changed.concat(changes.added).slice(0, 3)) {
-          recentUpdates.push({ repo, slug, body: repoState[repo].pageBodies.get(slug) ?? '' });
-        }
-      }
-      const narrRes = await generateSynthesisNarrative({ diff: synthDiff, recentWikiUpdates: recentUpdates, claudeOpts });
-      synthNarrative = narrRes.narrative;
-      synthNarrCost = narrRes.costUsd ?? 0;
-      log('synth-narrative', narrRes);
-      writeFileSync(join(iterDir, 'synth-narrative.md'), synthNarrative + '\n');
-    }
-    for (const archSlug of archInvalidated) {
-      const wikiExcerpts = wikiExcerptsFor(archSlug, archSourcemap, repoState);
-      const existing = archBodies.get(archSlug) ?? '';
-      const res = await patchArchPage({ archSlug, existingPage: existing, narrative: synthNarrative, wikiExcerpts, changeReasons: reasons[archSlug] ?? [], claudeOpts });
-      archBodies.set(archSlug, res.content);
-      archPages.set(archSlug, res.content);
-      log('arch-patch', res); synthesisCost += res.costUsd ?? 0;
+    const changedRepoNames = new Set(Object.entries(synthDiff).filter(([, c]) => c.added.length || c.changed.length || c.deleted.length).map(([n]) => n));
+    const changedRepos = REPOS.filter((r) => changedRepoNames.has(r.name)).map((r) => ({ name: r.name, pages: perRepoWikiPages[r.name] }));
+    const unchangedRepos = REPOS.filter((r) => !changedRepoNames.has(r.name)).map((r) => ({ name: r.name, indexBody: perRepoWikiPages[r.name]['index.md'] ?? '' }));
+    const existingPages = [...archBodies.entries()].map(([slug, body]) => ({ slug, body }));
+
+    if (!diffHasChanges(synthDiff)) {
+      iterRecord.synthesis = { mode: 'no-change', pagesProduced: 0, deletions: 0, cost: 0 };
+      synthResults = { pages: [], deletions: [], rawResponse: '', prompt: '' };
+    } else {
+      synthResults = await synthesizeIncremental({ changedRepos, unchangedRepos, existingPages, claudeOpts });
+      for (const p of synthResults.pages) archBodies.set(p.slug, p.body);
+      for (const slug of synthResults.deletions) archBodies.delete(slug);
+      writeFileSync(join(archCallDir, 'action.txt'), 'incremental\n');
+      writeFileSync(join(archCallDir, 'prompt.txt'), synthResults.prompt ?? '');
+      writeFileSync(join(archCallDir, 'llm-response.md'), synthResults.rawResponse ?? '');
+      log('synth-incr', synthResults); synthesisCost += synthResults.costUsd ?? 0;
+      iterRecord.synthesis = { mode: 'incremental', pagesProduced: synthResults.pages.length, deletions: synthResults.deletions.length, changedRepos: [...changedRepoNames], cost: synthesisCost };
     }
     iterRecord.synthesis = { mode: 'incremental', invalidated: archInvalidated, cost: synthesisCost, narrativeCost: synthNarrCost };
     iterRecord.cost.narrative += synthNarrCost;
@@ -251,38 +313,40 @@ for (let iter = 0; iter <= N_ITERS; iter++) {
   iterRecord.cost.synthesis = synthesisCost;
   prevSynthSnap = synthSnap;
 
-  const archDir = join(iterDir, 'arch');
-  mkdirSync(archDir, { recursive: true });
-  for (const [slug, body] of archPages) writeFileSync(join(archDir, slug.replace(/[/]/g, '_')), body);
+  // Snapshot project wiki AFTER this iteration
+  for (const [slug, body] of archBodies) writeFileSync(join(archAfterDir, safeFile(slug.endsWith('.md') ? slug : slug + '.md')), body);
 
-  // Step 3: full from-scratch synthesis for comparison (every iteration)
+  // Step 3: full from-scratch synthesis every iteration (ground truth for judge)
+  const reposFull = REPOS.map((r) => ({ name: r.name, pages: perRepoWikiPages[r.name] }));
+  const fullRes = await synthesizeFull({ repos: reposFull, claudeOpts });
   const fullArchPages = new Map();
-  let fullSynthCost = 0;
-  for (const archSlug of Object.keys(DEFAULT_ARCH_TAXONOMY)) {
-    const wikiExcerpts = wikiExcerptsFor(archSlug, archSourcemap, repoState);
-    const res = await generateArchPage({ archSlug, wikiExcerpts, claudeOpts });
-    fullArchPages.set(archSlug, res.content);
-    log('arch-full', res); fullSynthCost += res.costUsd ?? 0;
+  for (const p of fullRes.pages) {
+    fullArchPages.set(p.slug, p.body);
+    writeFileSync(join(archFullDir, safeFile(p.slug.endsWith('.md') ? p.slug : p.slug + '.md')), p.body);
   }
-  const fullDir = join(iterDir, 'arch-full');
-  mkdirSync(fullDir, { recursive: true });
-  for (const [slug, body] of fullArchPages) writeFileSync(join(fullDir, slug.replace(/[/]/g, '_')), body);
+  writeFileSync(join(archFullCallDir, 'prompt.txt'), fullRes.prompt ?? '');
+  writeFileSync(join(archFullCallDir, 'llm-response.md'), fullRes.rawResponse ?? '');
+  log('arch-full', fullRes); const fullSynthCost = fullRes.costUsd ?? 0;
   iterRecord.synthesis.fullCost = fullSynthCost;
+  iterRecord.synthesis.fullPagesProduced = fullRes.pages.length;
 
-  // Step 4: judge incr vs full arch pages
-  const judgeRes = [];
-  for (const archSlug of Object.keys(DEFAULT_ARCH_TAXONOMY)) {
-    if (!archPages.has(archSlug) || !fullArchPages.has(archSlug)) continue;
-    const v = await judge({ pageA: archPages.get(archSlug), pageB: fullArchPages.get(archSlug), context: `Both pages document arch slug "${archSlug}".`, claudeOpts });
-    judgeRes.push({ slug: archSlug, score: v.score, equivalent: v.equivalent });
-    log('judge', v);
-  }
+  // Step 4: judge incremental vs full pages — parallel, sample up to 5 shared slugs
+  const sharedSlugs = [...archBodies.keys()].filter((s) => fullArchPages.has(s));
+  const judgeSlugs = sharedSlugs.slice(0, 5);
+  const judgeOuts = await pMap(judgeSlugs, async (slug) => {
+    const v = await judge({ pageA: archBodies.get(slug), pageB: fullArchPages.get(slug), context: `Both pages document project wiki slug "${slug}".`, claudeOpts });
+    return { slug, score: v.score, equivalent: v.equivalent, _raw: v };
+  }, { concurrency: CONCURRENCY });
+  const judgeRes = judgeOuts.map(({ slug, score, equivalent, _raw }) => {
+    log('judge', _raw);
+    return { slug, score, equivalent };
+  });
   iterRecord.synthesis.judge = judgeRes;
   iterRecord.cumulativeTotalCost = totalCost;
 
   console.log(`[iter ${iter}] wiki=$${iterRecord.cost.wiki.toFixed(3)} narrative=$${iterRecord.cost.narrative.toFixed(3)} synth=$${synthesisCost.toFixed(3)} full-synth=$${fullSynthCost.toFixed(3)} cumul=$${totalCost.toFixed(2)}`);
-  console.log(`        arch invalidated: ${iterRecord.synthesis.invalidated?.join(', ') || '(full)'}`);
-  console.log(`        judge: ${judgeRes.map((j) => `${j.slug}=${j.score}`).join('  ')}`);
+  console.log(`        synth mode=${iterRecord.synthesis.mode} pages_produced=${iterRecord.synthesis.pagesProduced} deletions=${iterRecord.synthesis.deletions} full_pages=${iterRecord.synthesis.fullPagesProduced ?? '?'}`);
+  console.log(`        judge: ${judgeRes.map((j) => `${j.slug.replace(/.md$/, '')}=${j.score}`).join('  ')}`);
 
   writeFileSync(join(iterDir, 'report.json'), stableJson(iterRecord));
   iterReports.push(iterRecord);
@@ -304,12 +368,50 @@ const summary = {
 };
 writeFileSync(join(OUT_ROOT, 'summary.json'), stableJson(summary));
 
+const readme = `# Timeline bench output
+
+Each iteration directory contains:
+
+\`\`\`
+iter-N/
+  wiki-incremental/<repo>/        per-repo wiki layer (engine under test)
+    before/                       wiki pages BEFORE applying this iteration's patches
+                                  (empty in iter-0; for incremental iters: state inherited
+                                   from iter-(N-1)/.../after/)
+    patches/
+      <slug-without-md>/
+        action.txt                'baseline-generate' | 'patch' | 'new-page'
+        existing-body.md          (patches only) what LLM saw as old page
+        change-reasons.txt        (patches only) invalidator reasons
+        prompt.txt                full prompt sent to LLM
+        llm-response.md           raw LLM response (untouched)
+    after/                        wiki pages AFTER applying this iteration's patches
+    narrative.md                  (iter > 0) commit narrative for this repo
+
+  synthesis-incremental/          project-level (cross-repo) wiki — engine under test
+    before/                       arch pages BEFORE this iteration's synthesis patches
+    patches/<archSlug>/...        same format as wiki patches
+    after/                        arch pages AFTER patches
+    narrative.md                  (iter > 0) synth-level cross-repo narrative
+
+  synthesis-fullrebuild/          FULL from-scratch arch generation — ground truth for judge
+                                  produced every iteration to compare incremental drift
+
+  report.json                     per-iter cost, invalidations, judge scores
+\`\`\`
+
+\`summary.json\` aggregates cost ladder across iterations.
+`;
+writeFileSync(join(OUT_ROOT, 'README.md'), readme);
+
 console.log('\n=== TIMELINE SUMMARY ===');
 console.log(`iters: ${N_ITERS}  model: ${MODEL}  total spent: $${totalCost.toFixed(2)}`);
 console.log(`reports: ${OUT_ROOT}/iter-{0..${N_ITERS}}/report.json`);
 console.log(`summary: ${OUT_ROOT}/summary.json`);
 
 for (const r of REPOS) rmSync(repoState[r.name].tmp, { recursive: true, force: true });
+
+function safeFile(slug) { return slug.replace(/[/]/g, '_'); }
 
 function slugFor(sym) {
   const kindDir = { class: 'entities', interface: 'entities', type: 'types', function: 'logic', enum: 'enums', const: 'consts', Deployment: 'entities', Service: 'entities', ConfigMap: 'entities', Kustomization: 'entities' }[sym.kind] ?? 'misc';
@@ -330,8 +432,3 @@ function wikiExcerptsFor(archSlug, sourcemap, repoState) {
     .filter((x) => x.body);
 }
 
-async function pickShaByDate(git, date) {
-  const log = await git.log({ '--until': `${date}T23:59:59` });
-  if (!log.all.length) throw new Error(`No commits before ${date}`);
-  return log.all[0].hash;
-}

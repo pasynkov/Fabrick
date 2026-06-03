@@ -27,30 +27,37 @@ function pageSlugFor(s) {
 
 export function applyInvalidation({ sourcemap, invalidation, newSnapshot }) {
   const next = { pages: { ...sourcemap.pages } };
+  const symById = new Map(newSnapshot.symbols.map((s) => [s.id, s]));
+
   for (const slug of invalidation.pagesDeleted) delete next.pages[slug];
 
   for (const slug of invalidation.pagesInvalidated) {
     if (!next.pages[slug]) { next.pages[slug] = { symbols: [], files: [] }; continue; }
     const existing = next.pages[slug];
-    const symIds = new Set(newSnapshot.symbols.map((s) => s.id));
+    const liveSymbols = existing.symbols.filter((id) => symById.has(id));
     next.pages[slug] = {
-      symbols: existing.symbols.filter((id) => symIds.has(id)).sort(),
-      files: existing.files.slice().sort(),
+      symbols: liveSymbols.slice().sort(),
+      files: deriveFiles(liveSymbols, symById),
     };
   }
 
   for (const sym of invalidation.newSymbols) {
     const slug = pageSlugFor(sym);
-    if (!next.pages[slug]) next.pages[slug] = { symbols: [], files: [] };
-    if (!next.pages[slug].symbols.includes(sym.id)) {
-      next.pages[slug].symbols.push(sym.id);
-      next.pages[slug].symbols.sort();
-    }
-    if (!next.pages[slug].files.includes(sym.file)) {
-      next.pages[slug].files.push(sym.file);
-      next.pages[slug].files.sort();
-    }
+    const page = next.pages[slug] ?? { symbols: [], files: [] };
+    if (!page.symbols.includes(sym.id)) page.symbols.push(sym.id);
+    page.symbols.sort();
+    page.files = deriveFiles(page.symbols, symById);
+    next.pages[slug] = page;
   }
 
   return next;
+}
+
+function deriveFiles(symbolIds, symById) {
+  const files = new Set();
+  for (const id of symbolIds) {
+    const s = symById.get(id);
+    if (s) files.add(s.file);
+  }
+  return [...files].sort();
 }

@@ -16,11 +16,14 @@ let _client = null;
 function getClient() {
   if (_client) return _client;
   const key = process.env.ANTHROPIC_API_KEY ?? '';
-  if (key.startsWith('sk-ant-oat')) {
-    _client = new Anthropic({ apiKey: null, authToken: key });
-  } else {
-    _client = new Anthropic({ apiKey: key });
+  if (!key.startsWith('sk-ant-api03-')) {
+    throw new Error(
+      `SDK requires a sk-ant-api03-* key from console.anthropic.com. ` +
+      `OAuth subscription tokens (sk-ant-oat01-*) are not accepted on the direct Messages API ` +
+      `as of Feb 2026 — use the CLI transport for subscription auth.`,
+    );
   }
+  _client = new Anthropic({ apiKey: key });
   return _client;
 }
 

@@ -131,6 +131,7 @@ for (let step = 1; step < commits.length; step++) {
     const res = await patchPage({
       slug, existingPage: existingBody, changes: changeDescriptions,
       symbols, repoRoot: subPath, claudeOpts,
+      beforeSnapshotSymbols: before.symbols, afterSnapshotSymbols: after.symbols,
     });
     wrapAndStore(slug, res.content, smap, after, sha.slice(0, 7));
     log_call(`patch:${sha.slice(0, 7)}:${slug}`, res);

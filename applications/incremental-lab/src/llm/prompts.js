@@ -56,10 +56,11 @@ ${FORMAT_HINT}
 `;
 }
 
-export function patchPagePrompt({ slug, existingPage, changes, symbols, sources }) {
+export function patchPagePrompt({ slug, existingPage, changes, symbols, sources, referencesBlock = '' }) {
   const changeList = changes.map((c) => `  - ${c}`).join('\n');
   const symbolList = symbols.map((s) => `  - ${s.id} (${s.kind})`).join('\n');
   const sourceBlocks = sources.map((s) => `[file: ${s.file}]\n${s.content}`).join('\n\n');
+  const referencesSection = referencesBlock ? `\n\n${referencesBlock}` : '';
 
   return `You are a technical writer maintaining a wiki page. Update minimally — preserve structure and tone, only change what the code changes require.
 
@@ -74,7 +75,7 @@ CHANGES TO REFLECT:
 ${changeList}
 
 CURRENT SYMBOLS ON THIS PAGE:
-${symbolList}
+${symbolList}${referencesSection}
 
 CURRENT SOURCE CODE:
 ${sourceBlocks}

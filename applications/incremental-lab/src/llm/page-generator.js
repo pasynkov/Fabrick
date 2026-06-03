@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { callClaude } from './cli.js';
 import { generatePagePrompt, patchPagePrompt, patchPagePromptSlim } from './prompts.js';
-import { buildSlimChangeContext, currentSymbolSignatures } from './diff-context.js';
+import { buildSlimChangeContext, currentSymbolSignatures, buildReferencesBlock } from './diff-context.js';
 
 export async function generatePage({ slug, symbols, repoRoot, claudeOpts = {} }) {
   const sources = loadSources(symbols, repoRoot);
@@ -11,9 +11,12 @@ export async function generatePage({ slug, symbols, repoRoot, claudeOpts = {} })
   return { content: res.content.trim() + '\n', rawResponse: res.content, prompt, usage: res.usage, costUsd: res.costUsd, durationMs: res.durationMs };
 }
 
-export async function patchPage({ slug, existingPage, changes, symbols, repoRoot, claudeOpts = {} }) {
+export async function patchPage({ slug, existingPage, changes, symbols, repoRoot, beforeSnapshotSymbols = null, afterSnapshotSymbols = null, claudeOpts = {} }) {
   const sources = loadSources(symbols, repoRoot);
-  const prompt = patchPagePrompt({ slug, existingPage, changes, symbols, sources });
+  const referencesBlock = afterSnapshotSymbols
+    ? buildReferencesBlock({ pageSymbols: symbols, beforeSymbols: beforeSnapshotSymbols ?? [], afterSymbols: afterSnapshotSymbols })
+    : '';
+  const prompt = patchPagePrompt({ slug, existingPage, changes, symbols, sources, referencesBlock });
   const res = await callClaude(prompt, claudeOpts);
   return { content: res.content.trim() + '\n', rawResponse: res.content, prompt, usage: res.usage, costUsd: res.costUsd, durationMs: res.durationMs };
 }

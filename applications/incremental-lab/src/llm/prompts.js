@@ -80,10 +80,17 @@ CURRENT SOURCE CODE:
 ${sourceBlocks}
 
 INSTRUCTIONS:
-- Update the existing page in place. Preserve sections that are still accurate.
-- Edit only the parts affected by the changes.
-- If a documented symbol no longer exists, remove its mention.
-- If a new aspect of an existing symbol is now important, add a brief note.
+- The CURRENT SOURCE CODE is the source of truth. The EXISTING PAGE may be out of date.
+- Verify every concrete claim in the existing page against the current source:
+  * Lists of items (commands, providers, dependencies, endpoints) — recount from source.
+  * Counts ("three commands", "two services") — verify the number is still correct.
+  * Named entities (specific symbol names, file paths, env vars) — confirm they exist in source.
+  * Signatures (parameter names, types, return types) — match exact source signatures.
+- If existing page says "X" but source says "X, Y, Z" — rewrite to include Y and Z.
+- If existing page says "three" but source has five — change the number AND the list.
+- Do NOT preserve outdated facts just because they were already written.
+- For sections still accurate, keep wording close to existing to minimize churn.
+- If a documented symbol no longer exists in the source, remove its mention.
 - Do NOT write a "## Related" section — it is auto-generated from the code graph.
 
 ${FORMAT_HINT}

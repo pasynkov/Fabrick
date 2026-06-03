@@ -58,7 +58,13 @@ export async function callClaude(prompt, {
 
 function runProcess(cmd, args, { input, cwd, timeoutMs }) {
   return new Promise((resolve, reject) => {
-    const child = spawn(cmd, args, { cwd });
+    // CLI subscription path uses Claude Code keychain OAuth — env-var API keys
+    // (especially sk-ant-oat01-* OAuth tokens) confuse the auth layer.
+    // Strip the env var so CLI falls through to its stored auth.
+    const env = { ...process.env };
+    const k = env.ANTHROPIC_API_KEY;
+    if (!k || k.startsWith('sk-ant-oat')) delete env.ANTHROPIC_API_KEY;
+    const child = spawn(cmd, args, { cwd, env });
     let stdout = '';
     let stderr = '';
     const timer = setTimeout(() => {

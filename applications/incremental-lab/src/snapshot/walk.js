@@ -6,7 +6,7 @@ const DEFAULT_IGNORE = new Set([
   '.next', '.nuxt', '.svelte-kit', 'out', '.cache', '.turbo', '.lab',
 ]);
 
-const DEFAULT_EXTENSIONS = ['.ts', '.tsx'];
+const DEFAULT_EXTENSIONS = ['.ts', '.tsx', '.yaml', '.yml'];
 
 export function walkRepo(repoRoot, { extensions = DEFAULT_EXTENSIONS, ignore = DEFAULT_IGNORE } = {}) {
   const results = [];

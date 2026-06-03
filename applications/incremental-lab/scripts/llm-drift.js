@@ -15,6 +15,9 @@ import { structuralEquivalence } from '../src/validate/validate.js';
 import { generatePage, patchPage } from '../src/llm/page-generator.js';
 import { judge } from '../src/llm/judge.js';
 import { stableJson } from '../src/snapshot/store.js';
+import { computeRelated } from '../src/wiki/related.js';
+import { assemblePage } from '../src/wiki/page-assembly.js';
+import { buildIndex } from '../src/wiki/index-builder.js';
 
 const argv = process.argv.slice(2);
 const positional = argv.filter((a) => !a.startsWith('--'));
@@ -64,8 +67,26 @@ let snap = buildSnapshot(subPath);
 let smap = synthSourcemap(snap);
 console.log(`[baseline] files=${Object.keys(snap.files).length} symbols=${snap.symbols.length} pages=${Object.keys(smap.pages).length}`);
 
-const pages = new Map(); // slug → markdown content
-console.log(`[baseline-gen] generating ${Object.keys(smap.pages).length} pages...`);
+const pageBodies = new Map(); // slug → LLM body (no frontmatter/related)
+const pages = new Map();      // slug → fully assembled markdown
+
+const wrapAndStore = (slug, body, currentSmap, currentSnap, updated) => {
+  pageBodies.set(slug, body);
+  const related = computeRelated({ slug, sourcemap: currentSmap, snapshot: currentSnap });
+  const assembled = assemblePage({
+    slug, body, page: currentSmap.pages[slug],
+    sourcemap: currentSmap, snapshot: currentSnap,
+    relatedSlugs: related, updated,
+  });
+  pages.set(slug, assembled);
+};
+
+const regenIndex = (currentSmap, currentSnap, updated) => {
+  const index = buildIndex({ sourcemap: currentSmap, snapshot: currentSnap, pages, updated });
+  pages.set('index.md', index);
+};
+
+console.log(`[baseline-gen] generating ${Object.keys(smap.pages).length - 1} pages (index.md is mechanical)...`);
 let i = 0;
 for (const [slug, page] of Object.entries(smap.pages)) {
   i++;
@@ -75,12 +96,13 @@ for (const [slug, page] of Object.entries(smap.pages)) {
   if (symbols.length === 0) continue;
   process.stdout.write(`  [${i}/${Object.keys(smap.pages).length}] ${slug} ... `);
   const res = await generatePage({ slug, symbols, repoRoot: subPath });
-  pages.set(slug, res.content);
+  wrapAndStore(slug, res.content, smap, snap, commits[0].slice(0, 7));
   log_call(`gen:${slug}`, res);
   console.log(`$${(res.costUsd ?? 0).toFixed(4)}  (cumulative $${cumulativeCost.toFixed(2)})`);
 }
+regenIndex(smap, snap, commits[0].slice(0, 7));
 const baselineCost = cumulativeCost;
-console.log(`[baseline-gen done] ${pages.size} pages generated for $${baselineCost.toFixed(2)}`);
+console.log(`[baseline-gen done] ${pages.size - 1} pages generated for $${baselineCost.toFixed(2)} (+ mechanical index)`);
 
 const incrPatchCost = { value: 0 };
 for (let step = 1; step < commits.length; step++) {
@@ -93,7 +115,7 @@ for (let step = 1; step < commits.length; step++) {
   smap = applyInvalidation({ sourcemap: smap, invalidation: inv, newSnapshot: after });
   snap = after;
 
-  for (const slug of inv.pagesDeleted) pages.delete(slug);
+  for (const slug of inv.pagesDeleted) { pages.delete(slug); pageBodies.delete(slug); }
 
   for (const slug of inv.pagesInvalidated) {
     if (slug === 'index.md') continue;
@@ -101,13 +123,13 @@ for (let step = 1; step < commits.length; step++) {
     if (!page || page.symbols.length === 0) continue;
     const symbols = after.symbols.filter((s) => page.symbols.includes(s.id));
     if (symbols.length === 0) continue;
-    const existing = pages.get(slug) ?? '';
+    const existingBody = pageBodies.get(slug) ?? '';
     const changeDescriptions = inv.reasons[slug] ?? [];
     const res = await patchPage({
-      slug, existingPage: existing, changes: changeDescriptions,
+      slug, existingPage: existingBody, changes: changeDescriptions,
       symbols, repoRoot: subPath,
     });
-    pages.set(slug, res.content);
+    wrapAndStore(slug, res.content, smap, after, sha.slice(0, 7));
     log_call(`patch:${sha.slice(0, 7)}:${slug}`, res);
     incrPatchCost.value += res.costUsd ?? 0;
   }
@@ -118,29 +140,43 @@ for (let step = 1; step < commits.length; step++) {
     const symbols = after.symbols.filter((s) => s.file === sym.file && (s.name === sym.name || s.name.startsWith(sym.name + '.')));
     if (symbols.length === 0) continue;
     const res = await generatePage({ slug, symbols, repoRoot: subPath });
-    pages.set(slug, res.content);
+    wrapAndStore(slug, res.content, smap, after, sha.slice(0, 7));
     log_call(`new:${sha.slice(0, 7)}:${slug}`, res);
     incrPatchCost.value += res.costUsd ?? 0;
+  }
+
+  if (inv.pagesInvalidated.length || inv.pagesDeleted.length || inv.newSymbols.length) {
+    for (const [slug, body] of pageBodies) wrapAndStore(slug, body, smap, after, sha.slice(0, 7));
+    regenIndex(smap, after, sha.slice(0, 7));
   }
 
   console.log(`[step ${step}/${commits.length - 1}] ${sha.slice(0, 7)} touched=${inv.pagesInvalidated.length + inv.pagesDeleted.length + inv.newSymbols.length}  cumulative $${cumulativeCost.toFixed(2)}`);
 }
 
-console.log(`[full-rebuild] generating ${pages.size} pages from final state`);
+console.log(`[full-rebuild] generating ${Object.keys(smap.pages).length - 1} pages from final state`);
+const fullPageBodies = new Map();
 const fullPages = new Map();
-let fullStartCost = cumulativeCost;
+const fullStartCost = cumulativeCost;
 await git.checkout(commits.at(-1));
 const finalSnap = buildSnapshot(subPath);
 const fullSmap = synthSourcemap(finalSnap);
+const finalSha = commits.at(-1).slice(0, 7);
 for (const [slug, page] of Object.entries(fullSmap.pages)) {
   if (slug === 'index.md') continue;
   if (page.symbols.length === 0) continue;
   const symbols = finalSnap.symbols.filter((s) => page.symbols.includes(s.id));
   if (symbols.length === 0) continue;
   const res = await generatePage({ slug, symbols, repoRoot: subPath });
-  fullPages.set(slug, res.content);
+  fullPageBodies.set(slug, res.content);
+  const related = computeRelated({ slug, sourcemap: fullSmap, snapshot: finalSnap });
+  fullPages.set(slug, assemblePage({
+    slug, body: res.content, page: fullSmap.pages[slug],
+    sourcemap: fullSmap, snapshot: finalSnap,
+    relatedSlugs: related, updated: finalSha,
+  }));
   log_call(`full:${slug}`, res);
 }
+fullPages.set('index.md', buildIndex({ sourcemap: fullSmap, snapshot: finalSnap, pages: fullPages, updated: finalSha }));
 const fullRebuildCost = cumulativeCost - fullStartCost;
 
 const sharedSlugs = [...pages.keys()].filter((s) => fullPages.has(s));

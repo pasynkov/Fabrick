@@ -19,6 +19,7 @@ INSTRUCTIONS:
 - Write a 1-2 paragraph description of what this symbol is and what it does.
 - Add a "## Symbols" section listing each documented symbol with one-line description.
 - If the code has non-obvious behavior, add a "## Notes" section. Skip if not needed.
+- Do NOT write a "## Related" section — it is auto-generated from the code graph.
 - Keep it short and factual. No marketing language.
 
 ${FORMAT_HINT}
@@ -49,6 +50,7 @@ INSTRUCTIONS:
 - For SIGNATURE CHANGED: update parameter/return descriptions to match.
 - For BODY CHANGED: if you cannot tell what changed without seeing the body, keep the existing description.
 - Do not invent details you cannot infer from signatures.
+- Do NOT write a "## Related" section — it is auto-generated from the code graph.
 
 ${FORMAT_HINT}
 `;
@@ -82,6 +84,7 @@ INSTRUCTIONS:
 - Edit only the parts affected by the changes.
 - If a documented symbol no longer exists, remove its mention.
 - If a new aspect of an existing symbol is now important, add a brief note.
+- Do NOT write a "## Related" section — it is auto-generated from the code graph.
 
 ${FORMAT_HINT}
 `;

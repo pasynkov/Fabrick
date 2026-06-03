@@ -26,7 +26,10 @@ const N = Number(argv.find((a) => a.startsWith('--commits='))?.split('=')[1] ?? 
 const judgeSample = Number(argv.find((a) => a.startsWith('--judge-sample='))?.split('=')[1] ?? 3);
 const maxCost = Number(argv.find((a) => a.startsWith('--max-cost='))?.split('=')[1] ?? 5);
 const repoRoot = resolve(argv.find((a) => a.startsWith('--repo='))?.split('=')[1] ?? '../..');
+const model = argv.find((a) => a.startsWith('--model='))?.split('=')[1] ?? 'sonnet';
 const subdir = `applications/${app}`;
+const claudeOpts = { model };
+console.log(`[model] ${model}  (judge always sonnet for consistency)`);
 
 if (!existsSync(join(repoRoot, '.git'))) { console.error(`No .git at ${repoRoot}`); process.exit(1); }
 if (!existsSync(join(repoRoot, subdir))) { console.error(`No ${subdir} at ${repoRoot}`); process.exit(1); }
@@ -95,7 +98,7 @@ for (const [slug, page] of Object.entries(smap.pages)) {
   const symbols = snap.symbols.filter((s) => page.symbols.includes(s.id));
   if (symbols.length === 0) continue;
   process.stdout.write(`  [${i}/${Object.keys(smap.pages).length}] ${slug} ... `);
-  const res = await generatePage({ slug, symbols, repoRoot: subPath });
+  const res = await generatePage({ slug, symbols, repoRoot: subPath, claudeOpts });
   wrapAndStore(slug, res.content, smap, snap, commits[0].slice(0, 7));
   log_call(`gen:${slug}`, res);
   console.log(`$${(res.costUsd ?? 0).toFixed(4)}  (cumulative $${cumulativeCost.toFixed(2)})`);
@@ -127,7 +130,7 @@ for (let step = 1; step < commits.length; step++) {
     const changeDescriptions = inv.reasons[slug] ?? [];
     const res = await patchPage({
       slug, existingPage: existingBody, changes: changeDescriptions,
-      symbols, repoRoot: subPath,
+      symbols, repoRoot: subPath, claudeOpts,
     });
     wrapAndStore(slug, res.content, smap, after, sha.slice(0, 7));
     log_call(`patch:${sha.slice(0, 7)}:${slug}`, res);
@@ -139,7 +142,7 @@ for (let step = 1; step < commits.length; step++) {
     if (pages.has(slug)) continue;
     const symbols = after.symbols.filter((s) => s.file === sym.file && (s.name === sym.name || s.name.startsWith(sym.name + '.')));
     if (symbols.length === 0) continue;
-    const res = await generatePage({ slug, symbols, repoRoot: subPath });
+    const res = await generatePage({ slug, symbols, repoRoot: subPath, claudeOpts });
     wrapAndStore(slug, res.content, smap, after, sha.slice(0, 7));
     log_call(`new:${sha.slice(0, 7)}:${slug}`, res);
     incrPatchCost.value += res.costUsd ?? 0;
@@ -166,7 +169,7 @@ for (const [slug, page] of Object.entries(fullSmap.pages)) {
   if (page.symbols.length === 0) continue;
   const symbols = finalSnap.symbols.filter((s) => page.symbols.includes(s.id));
   if (symbols.length === 0) continue;
-  const res = await generatePage({ slug, symbols, repoRoot: subPath });
+  const res = await generatePage({ slug, symbols, repoRoot: subPath, claudeOpts });
   fullPageBodies.set(slug, res.content);
   const related = computeRelated({ slug, sourcemap: fullSmap, snapshot: finalSnap });
   fullPages.set(slug, assemblePage({
@@ -184,7 +187,7 @@ const judgeSlugs = sharedSlugs.slice(0, judgeSample);
 console.log(`[judge] sampling ${judgeSlugs.length} pages`);
 const verdicts = [];
 for (const slug of judgeSlugs) {
-  const v = await judge({ pageA: pages.get(slug), pageB: fullPages.get(slug), context: `Both pages document slug "${slug}".` });
+  const v = await judge({ pageA: pages.get(slug), pageB: fullPages.get(slug), context: `Both pages document slug "${slug}".`, claudeOpts: { model: 'sonnet' } });
   verdicts.push({ slug, score: v.score, equivalent: v.equivalent, differences: v.differences });
   log_call(`judge:${slug}`, v);
   console.log(`  ${slug}  score=${v.score} eq=${v.equivalent}`);

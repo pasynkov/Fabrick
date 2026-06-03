@@ -12,7 +12,11 @@ import { invalidate } from '../src/invalidate/invalidate.js';
 import { generatePage, patchPage } from '../src/llm/page-generator.js';
 import { judge } from '../src/llm/judge.js';
 
-const repoKey = (process.argv[2] ?? 'backend1').toUpperCase();
+const argv = process.argv.slice(2);
+const positional = argv.filter((a) => !a.startsWith('--'));
+const repoKey = (positional[0] ?? 'backend1').toUpperCase();
+const model = argv.find((a) => a.startsWith('--model='))?.split('=')[1] ?? 'sonnet';
+console.log(`[model] ${model}`);
 const repoPath = process.env[`NAMI_REPO_${repoKey}`] ?? process.env[`FABRICK_REPO_${repoKey}`];
 if (!repoPath || !existsSync(repoPath)) {
   console.error(`Repo path missing. Set NAMI_REPO_${repoKey} in .env.local.`);
@@ -43,7 +47,7 @@ const targetSymbols = before.symbols.filter(
 const slug = `entities/${target.name}.md`;
 
 console.log('[step 1] generate full baseline page (LLM call 1/3)');
-const baselinePage = await generatePage({ slug, symbols: targetSymbols, repoRoot: work });
+const baselinePage = await generatePage({ slug, symbols: targetSymbols, repoRoot: work, claudeOpts: { model } });
 writeFileSync(join(OUT, 'baseline.md'), baselinePage.content);
 logCall('baseline-gen', baselinePage);
 
@@ -74,13 +78,13 @@ const changeDescriptions = (inv.reasons[slug] ?? []).concat(
 console.log('[step 2] patch existing page (full-source) (LLM call 2/3)');
 const patched = await patchPage({
   slug, existingPage: baselinePage.content, changes: changeDescriptions,
-  symbols: newSymbols, repoRoot: work,
+  symbols: newSymbols, repoRoot: work, claudeOpts: { model },
 });
 writeFileSync(join(OUT, 'incremental.md'), patched.content);
 logCall('incr-patch', patched);
 
 console.log('[step 3] regenerate page from scratch (LLM call 3/3)');
-const fullRebuild = await generatePage({ slug, symbols: newSymbols, repoRoot: work });
+const fullRebuild = await generatePage({ slug, symbols: newSymbols, repoRoot: work, claudeOpts: { model } });
 writeFileSync(join(OUT, 'full-rebuild.md'), fullRebuild.content);
 logCall('full-rebuild', fullRebuild);
 
@@ -88,6 +92,7 @@ console.log('[step 4] judge equivalence incremental vs full (LLM call 4/4)');
 const verdict = await judge({
   pageA: patched.content, pageB: fullRebuild.content,
   context: `Both pages document the class \`${target.name}\` at ${target.file}.`,
+  claudeOpts: { model: 'sonnet' },
 });
 writeFileSync(join(OUT, 'verdict.json'), JSON.stringify(verdict, null, 2));
 console.log(`[verdict] equivalent=${verdict.equivalent} score=${verdict.score}`);

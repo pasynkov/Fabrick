@@ -19,16 +19,34 @@ import { buildIndex } from '../src/wiki/index-builder.js';
 
 const argv = process.argv.slice(2);
 const positional = argv.filter((a) => !a.startsWith('--'));
-const app = positional[0] ?? 'mcp';
+const label = positional[0] ?? 'mcp';
 const beforeSha = positional[1];
 const afterSha = positional[2];
-const repoRoot = resolve(argv.find((a) => a.startsWith('--repo='))?.split('=')[1] ?? '../..');
-const subdir = `applications/${app}`;
+const explicitRepo = argv.find((a) => a.startsWith('--repo='))?.split('=')[1];
+const explicitSubdir = argv.find((a) => a.startsWith('--subdir='))?.split('=')[1];
+
+let repoRoot;
+let subdir;
+const namiMatch = label.match(/^nami-(.+)$/);
+if (explicitRepo) {
+  repoRoot = resolve(explicitRepo);
+  subdir = explicitSubdir ?? '.';
+} else if (namiMatch) {
+  const envKey = `NAMI_REPO_${namiMatch[1].toUpperCase().replace(/[^A-Z0-9]/g, '_')}`;
+  const envPath = process.env[envKey];
+  if (!envPath) { console.error(`Set ${envKey} in .env.local`); process.exit(1); }
+  repoRoot = resolve(envPath);
+  subdir = explicitSubdir ?? '.';
+} else {
+  repoRoot = resolve('../..');
+  subdir = `applications/${label}`;
+}
 
 if (!existsSync(join(repoRoot, '.git'))) { console.error(`No .git at ${repoRoot}`); process.exit(1); }
 if (!existsSync(join(repoRoot, subdir))) { console.error(`No ${subdir} at ${repoRoot}`); process.exit(1); }
+console.log(`[source] repo=${repoRoot}  subdir=${subdir}`);
 
-const outRoot = join(process.cwd(), '.lab', 'demo', app);
+const outRoot = join(process.cwd(), '.lab', 'demo', label);
 rmSync(outRoot, { recursive: true, force: true });
 const fullDir = join(outRoot, '01-full-scan');
 const patchDir = join(outRoot, '02-patch');
@@ -204,7 +222,7 @@ afterPages.set('index.md', afterIndex);
 writeFileSync(join(afterDir, 'wiki', 'index.md'), afterIndex);
 console.log(`  pages after: ${afterPages.size}`);
 
-writeFileSync(join(outRoot, 'README.md'), `# Demo: ${app}  (${chosenBefore.slice(0, 7)} → ${chosenAfter.slice(0, 7)})
+writeFileSync(join(outRoot, 'README.md'), `# Demo: ${label}  (${chosenBefore.slice(0, 7)} → ${chosenAfter.slice(0, 7)})
 
 ## Layout
 

@@ -1,0 +1,9 @@
+{
+  "pages": {
+    "entities/existing.md": {
+      "symbols": ["src/a.ts::Existing::class"],
+      "files": ["src/a.ts"]
+    },
+    "index.md": { "symbols": [], "files": [] }
+  }
+}

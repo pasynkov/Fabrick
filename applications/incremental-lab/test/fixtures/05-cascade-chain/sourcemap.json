@@ -1,0 +1,8 @@
+{
+  "pages": {
+    "logic/a.md": { "symbols": ["src/a.ts::nodeA::function"], "files": ["src/a.ts"] },
+    "logic/b.md": { "symbols": ["src/b.ts::nodeB::function"], "files": ["src/b.ts"] },
+    "logic/c.md": { "symbols": ["src/c.ts::nodeC::function"], "files": ["src/c.ts"] },
+    "logic/d.md": { "symbols": ["src/d.ts::nodeD::function"], "files": ["src/d.ts"] }
+  }
+}

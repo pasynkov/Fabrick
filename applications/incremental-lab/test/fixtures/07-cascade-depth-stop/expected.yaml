@@ -1,0 +1,9 @@
+description: |
+  Type sig change Money. Money→Account→Portfolio→Report.
+  L2 stops at Portfolio. Report must NOT be in invalidated set.
+pagesDeleted: []
+pagesInvalidated:
+  - entities/account.md
+  - entities/money.md
+  - entities/portfolio.md
+newSymbols: []

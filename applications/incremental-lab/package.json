@@ -1,0 +1,22 @@
+{
+  "name": "incremental-lab",
+  "version": "0.1.0",
+  "description": "Sandbox for incremental symbol-graph rebuild engine (analyze + synthesis).",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "test": "node --test 'test/unit/*.test.js' 'test/*.test.js'",
+    "test:unit": "node --test 'test/unit/*.test.js'",
+    "test:fixtures": "node --test test/fixtures.test.js",
+    "nami:snapshot": "node scripts/nami-snapshot.js",
+    "nami:simulate": "node scripts/nami-simulate.js",
+    "nami:drift": "node scripts/nami-drift.js"
+  },
+  "dependencies": {
+    "tree-sitter": "^0.21.1",
+    "tree-sitter-typescript": "^0.23.2",
+    "js-yaml": "^4.1.0",
+    "simple-git": "^3.27.0",
+    "dotenv": "^16.4.5"
+  }
+}

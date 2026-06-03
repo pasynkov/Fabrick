@@ -1,0 +1,8 @@
+{
+  "pages": {
+    "entities/money.md":     { "symbols": ["src/types.ts::Money::interface"], "files": ["src/types.ts"] },
+    "entities/account.md":   { "symbols": ["src/account.ts::Account::class"], "files": ["src/account.ts"] },
+    "entities/portfolio.md": { "symbols": ["src/portfolio.ts::Portfolio::class"], "files": ["src/portfolio.ts"] },
+    "logic/report.md":       { "symbols": ["src/report.ts::Report::class"], "files": ["src/report.ts"] }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "pages": {
+    "logic/foo.md": {
+      "symbols": ["src/a.ts::foo::function"],
+      "files": ["src/a.ts"]
+    },
+    "logic/calls-foo.md": {
+      "symbols": ["src/b.ts::callsFoo::function"],
+      "files": ["src/b.ts"]
+    },
+    "index.md": { "symbols": [], "files": [] }
+  }
+}

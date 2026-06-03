@@ -1,0 +1,9 @@
+description: |
+  Sig change on nodeA. Chain: A→B→C→D. Policy=L2 → invalidate A,B,C; D escapes.
+  This guards against accidental "unlimited cascade" leaks for sig changes.
+pagesDeleted: []
+pagesInvalidated:
+  - logic/a.md
+  - logic/b.md
+  - logic/c.md
+newSymbols: []

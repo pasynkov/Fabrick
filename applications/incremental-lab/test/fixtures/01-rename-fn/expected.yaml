@@ -1,0 +1,8 @@
+description: Rename foo→bar; consumer callsFoo updates body to reference bar.
+pagesDeleted:
+  - logic/foo.md         # had only foo symbol, foo deleted → page dropped
+pagesInvalidated:
+  - index.md             # new symbol "bar" added → index touched
+  - logic/calls-foo.md   # cascade-delete from foo (callsFoo references foo)
+newSymbols:
+  - bar

@@ -1,0 +1,5 @@
+description: Delete file gone.ts. Page entities/gone.md must be dropped; keeper untouched.
+pagesDeleted:
+  - entities/gone.md
+pagesInvalidated: []
+newSymbols: []

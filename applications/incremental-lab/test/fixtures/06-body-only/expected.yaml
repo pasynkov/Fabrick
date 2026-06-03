@@ -1,0 +1,5 @@
+description: Body-only change to pick(). usePick must NOT cascade. Direct only.
+pagesDeleted: []
+pagesInvalidated:
+  - logic/pick.md
+newSymbols: []

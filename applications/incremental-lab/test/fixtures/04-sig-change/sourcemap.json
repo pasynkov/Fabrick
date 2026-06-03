@@ -1,0 +1,16 @@
+{
+  "pages": {
+    "logic/format.md": {
+      "symbols": ["src/a.ts::format::function"],
+      "files": ["src/a.ts"]
+    },
+    "logic/shout.md": {
+      "symbols": ["src/b.ts::shout::function"],
+      "files": ["src/b.ts"]
+    },
+    "logic/repeat.md": {
+      "symbols": ["src/c.ts::repeat::function"],
+      "files": ["src/c.ts"]
+    }
+  }
+}

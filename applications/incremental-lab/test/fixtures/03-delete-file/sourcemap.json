@@ -1,0 +1,12 @@
+{
+  "pages": {
+    "entities/keeper.md": {
+      "symbols": ["src/a.ts::Keeper::class"],
+      "files": ["src/a.ts"]
+    },
+    "entities/gone.md": {
+      "symbols": ["src/gone.ts::Gone::class"],
+      "files": ["src/gone.ts"]
+    }
+  }
+}

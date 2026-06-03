@@ -1,0 +1,6 @@
+{
+  "pages": {
+    "logic/pick.md":     { "symbols": ["src/a.ts::pick::function"], "files": ["src/a.ts"] },
+    "logic/use-pick.md": { "symbols": ["src/b.ts::usePick::function"], "files": ["src/b.ts"] }
+  }
+}

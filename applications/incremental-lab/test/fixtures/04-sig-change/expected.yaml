@@ -1,0 +1,11 @@
+description: |
+  format() signature changes (adds `locale` param). Cascade L2:
+    L0 format (direct invalid)
+    L1 shout  (calls format)
+    L2 repeat (calls shout)
+pagesDeleted: []
+pagesInvalidated:
+  - logic/format.md
+  - logic/repeat.md
+  - logic/shout.md
+newSymbols: []

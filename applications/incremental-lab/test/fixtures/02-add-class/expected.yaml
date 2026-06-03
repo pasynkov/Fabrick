@@ -1,0 +1,6 @@
+description: Add new exported class; existing pages untouched; index updated.
+pagesDeleted: []
+pagesInvalidated:
+  - index.md
+newSymbols:
+  - NewThing

@@ -1,10 +1,14 @@
 import { spawn } from 'node:child_process';
 
 const DEFAULT_MODEL = 'sonnet';
+const DEFAULT_SYSTEM = 'You are a precise technical writer. Follow instructions exactly. Return only what is asked, no preamble.';
+const DEFAULT_DISABLED_PLUGINS = ['caveman@caveman'];
 
 export async function callClaude(prompt, {
   model = DEFAULT_MODEL,
-  jsonSchema = null,
+  systemPrompt = DEFAULT_SYSTEM,
+  slim = true,
+  disabledPlugins = DEFAULT_DISABLED_PLUGINS,
   maxBudgetUsd = 1,
   timeoutMs = 120_000,
   cwd = process.cwd(),
@@ -16,7 +20,14 @@ export async function callClaude(prompt, {
     '--no-session-persistence',
     '--max-budget-usd', String(maxBudgetUsd),
   ];
-  if (jsonSchema) args.push('--json-schema', JSON.stringify(jsonSchema));
+
+  if (slim) {
+    if (systemPrompt) args.push('--system-prompt', systemPrompt);
+    args.push('--tools', '');
+    args.push('--disable-slash-commands');
+    const enabledPlugins = Object.fromEntries(disabledPlugins.map((p) => [p, false]));
+    args.push('--settings', JSON.stringify({ enabledPlugins }));
+  }
 
   const t0 = Date.now();
   const { stdout, stderr, code } = await runProcess('claude', args, { input: prompt, cwd, timeoutMs });

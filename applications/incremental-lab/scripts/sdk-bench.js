@@ -30,18 +30,46 @@ const variants = Array.from({ length: N }, (_, i) => {
 const { systemStatic, systemDynamic, userTemplate } = splitForCache(basePrompt);
 console.log(`[split] systemStatic ${(systemStatic.length / 1024).toFixed(1)} KB, systemDynamic ${(systemDynamic.length / 1024).toFixed(1)} KB, user ${(userTemplate.length / 1024).toFixed(1)} KB`);
 
-console.log('\n=== CLI sequential ===');
+console.log('\n=== CLI sequential (default — Claude Code session) ===');
 const cliResults = [];
 const t0cli = Date.now();
 for (let i = 0; i < N; i++) {
   const t = Date.now();
-  const r = await runCli(variants[i], model);
+  const r = await runCli(variants[i], model, /* bare */ false);
   cliResults.push({ ...r, wallMs: Date.now() - t });
   console.log(`  call ${i + 1}/${N}  $${r.costUsd.toFixed(4)}  ${Date.now() - t}ms`);
 }
 const cliCost = cliResults.reduce((s, r) => s + r.costUsd, 0);
 const cliWall = Date.now() - t0cli;
 console.log(`  TOTAL: $${cliCost.toFixed(4)}  ${cliWall}ms`);
+
+console.log('\n=== CLI sequential (--bare, default tools, custom system-prompt) ===');
+const cliBareResults = [];
+const t0bare = Date.now();
+for (let i = 0; i < N; i++) {
+  const t = Date.now();
+  const r = await runCli(variants[i], model, { bare: true });
+  cliBareResults.push(r);
+  const u = r.usage ?? {};
+  console.log(`  call ${i + 1}/${N}  $${r.costUsd.toFixed(4)}  in=${u.input_tokens ?? '?'} cw=${u.cache_creation_input_tokens ?? 0} cr=${u.cache_read_input_tokens ?? 0} out=${u.output_tokens ?? '?'}  ${Date.now() - t}ms`);
+}
+const cliBareCost = cliBareResults.reduce((s, r) => s + r.costUsd, 0);
+const cliBareWall = Date.now() - t0bare;
+console.log(`  TOTAL: $${cliBareCost.toFixed(4)}  ${cliBareWall}ms`);
+
+console.log('\n=== CLI sequential (--bare --tools "" — NO tools loaded) ===');
+const cliMinResults = [];
+const t0min = Date.now();
+for (let i = 0; i < N; i++) {
+  const t = Date.now();
+  const r = await runCli(variants[i], model, { bare: true, noTools: true });
+  cliMinResults.push(r);
+  const u = r.usage ?? {};
+  console.log(`  call ${i + 1}/${N}  $${r.costUsd.toFixed(4)}  in=${u.input_tokens ?? '?'} cw=${u.cache_creation_input_tokens ?? 0} cr=${u.cache_read_input_tokens ?? 0} out=${u.output_tokens ?? '?'}  ${Date.now() - t}ms`);
+}
+const cliMinCost = cliMinResults.reduce((s, r) => s + r.costUsd, 0);
+const cliMinWall = Date.now() - t0min;
+console.log(`  TOTAL: $${cliMinCost.toFixed(4)}  ${cliMinWall}ms`);
 
 console.log('\n=== SDK without cache ===');
 const sdkNoCacheResults = [];
@@ -79,8 +107,10 @@ console.log(`  TOTAL: $${sdkCacheCost.toFixed(4)}  ${sdkCacheWall}ms`);
 
 console.log('\n=== COMPARISON ===');
 const rows = [
-  ['CLI sequential',       cliCost,        cliWall],
-  ['SDK no cache',         sdkNoCacheCost, sdkNoCacheWall],
+  ['CLI default',           cliCost,        cliWall],
+  ['CLI --bare',            cliBareCost,    cliBareWall],
+  ['CLI --bare --tools ""', cliMinCost,     cliMinWall],
+  ['SDK no cache',          sdkNoCacheCost, sdkNoCacheWall],
   ['SDK + ephemeral cache', sdkCacheCost,   sdkCacheWall],
 ];
 const baseline = rows[0][1];
@@ -89,19 +119,27 @@ for (const [name, cost, wall] of rows) {
   console.log(`  ${name.padEnd(24)} $${cost.toFixed(4)}  ${(wall / 1000).toFixed(1)}s   x${ratio.toFixed(2)} vs CLI`);
 }
 
-function runCli(prompt, model) {
-  return new Promise((resolve, reject) => {
-    const child = spawn('claude', ['-p', '--output-format', 'json', '--model', model, '--no-session-persistence']);
+function runCli(prompt, model, opts = {}) {
+  const bare = opts.bare ?? false;
+  const noTools = opts.noTools ?? false;
+  const args = ['-p', '--output-format', 'json', '--model', model, '--no-session-persistence'];
+  if (bare) {
+    args.push('--bare', '--system-prompt', 'You are a precise technical writer. Follow instructions exactly. Return only what is asked, no preamble.');
+    if (noTools) args.push('--tools', '');
+  }
+  return new Promise((resolve) => {
+    const child = spawn('claude', args, { env: { ...process.env } });
     let stdout = '';
+    let stderr = '';
     child.stdout.on('data', (d) => { stdout += d.toString(); });
+    child.stderr.on('data', (d) => { stderr += d.toString(); });
     child.on('close', (code) => {
-      if (code !== 0) return reject(new Error(`exit ${code}`));
       try {
         const parsed = JSON.parse(stdout);
         resolve({ costUsd: parsed.total_cost_usd ?? 0, usage: parsed.usage });
-      } catch (e) { reject(e); }
+      } catch (e) { resolve({ costUsd: 0, usage: {}, error: `exit=${code} stderr=${stderr.slice(0, 200)}` }); }
     });
-    child.on('error', reject);
+    child.on('error', () => resolve({ costUsd: 0, usage: {}, error: 'spawn-failed' }));
     child.stdin.write(prompt);
     child.stdin.end();
   });

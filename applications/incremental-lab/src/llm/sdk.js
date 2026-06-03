@@ -14,7 +14,13 @@ const PRICING = {
 
 let _client = null;
 function getClient() {
-  if (!_client) _client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  if (_client) return _client;
+  const key = process.env.ANTHROPIC_API_KEY ?? '';
+  if (key.startsWith('sk-ant-oat')) {
+    _client = new Anthropic({ apiKey: null, authToken: key });
+  } else {
+    _client = new Anthropic({ apiKey: key });
+  }
   return _client;
 }
 

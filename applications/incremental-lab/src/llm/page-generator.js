@@ -8,14 +8,14 @@ export async function generatePage({ slug, symbols, repoRoot, claudeOpts = {} })
   const sources = loadSources(symbols, repoRoot);
   const prompt = generatePagePrompt({ slug, symbols, sources });
   const res = await callClaude(prompt, claudeOpts);
-  return { content: res.content.trim() + '\n', usage: res.usage, costUsd: res.costUsd, durationMs: res.durationMs };
+  return { content: res.content.trim() + '\n', rawResponse: res.content, prompt, usage: res.usage, costUsd: res.costUsd, durationMs: res.durationMs };
 }
 
 export async function patchPage({ slug, existingPage, changes, symbols, repoRoot, claudeOpts = {} }) {
   const sources = loadSources(symbols, repoRoot);
   const prompt = patchPagePrompt({ slug, existingPage, changes, symbols, sources });
   const res = await callClaude(prompt, claudeOpts);
-  return { content: res.content.trim() + '\n', usage: res.usage, costUsd: res.costUsd, durationMs: res.durationMs };
+  return { content: res.content.trim() + '\n', rawResponse: res.content, prompt, usage: res.usage, costUsd: res.costUsd, durationMs: res.durationMs };
 }
 
 export async function patchPageSlim({ slug, existingPage, diff, symbols, claudeOpts = {} }) {

@@ -88,16 +88,17 @@ function walkDeclarations(root, source, file, fileImports, out) {
 
 function visitTopLevel(node, source, file, fileImports, out) {
   if (node.type === 'export_statement') {
+    const decorators = node.namedChildren.filter((n) => n.type === 'decorator');
     const inner = node.namedChildren.find((n) => DECLARATION_NODES.has(n.type));
-    if (inner) emitDecl(inner, source, file, fileImports, out, true);
+    if (inner) emitDecl(inner, source, file, fileImports, out, true, decorators);
     return;
   }
   if (DECLARATION_NODES.has(node.type)) {
-    emitDecl(node, source, file, fileImports, out, false);
+    emitDecl(node, source, file, fileImports, out, false, []);
   }
 }
 
-function emitDecl(node, source, file, fileImports, out, exported) {
+function emitDecl(node, source, file, fileImports, out, exported, externalDecorators = []) {
   if (node.type === 'lexical_declaration') {
     for (const decl of node.namedChildren) {
       if (decl.type !== 'variable_declarator') continue;
@@ -119,6 +120,8 @@ function emitDecl(node, source, file, fileImports, out, exported) {
   const nameNode = node.childForFieldName('name');
   if (!nameNode) return;
   const kind = KIND_MAP[node.type];
+  const internalDecorators = node.namedChildren.filter((n) => n.type === 'decorator');
+  const decorators = [...externalDecorators, ...internalDecorators];
   const symbol = buildSymbol({
     file,
     kind,
@@ -127,6 +130,7 @@ function emitDecl(node, source, file, fileImports, out, exported) {
     node,
     source,
     fileImports,
+    decorators,
   });
   out.push(symbol);
 
@@ -156,7 +160,7 @@ function collectMembers(classNode, source, file, fileImports, parentName, out) {
 
 const STRUCTURAL_KINDS = new Set(['interface', 'type', 'enum']);
 
-function buildSymbol({ file, kind, name, exported, node, source, fileImports }) {
+function buildSymbol({ file, kind, name, exported, node, source, fileImports, decorators = [] }) {
   let signatureSrc;
   let bodyText;
   if (STRUCTURAL_KINDS.has(kind)) {
@@ -167,7 +171,11 @@ function buildSymbol({ file, kind, name, exported, node, source, fileImports }) 
     signatureSrc = split.signature;
     bodyText = split.bodyText;
   }
-  const references = collectReferences(node, source, name);
+  const decoratorText = decorators.map((d) => source.slice(d.startIndex, d.endIndex)).join('\n');
+  const bodyWithDecorators = decoratorText ? `${decoratorText}\n${bodyText}` : bodyText;
+  const refsSet = new Set();
+  collectIdentifiers(node, refsSet, name);
+  for (const dec of decorators) collectIdentifiers(dec, refsSet, name);
   return {
     id: `${file}::${name}::${kind}`,
     file,
@@ -175,9 +183,9 @@ function buildSymbol({ file, kind, name, exported, node, source, fileImports }) 
     name,
     exported,
     signature: normalizeWhitespace(signatureSrc),
-    bodyHash: hash(normalizeBody(bodyText)),
+    bodyHash: hash(normalizeBody(bodyWithDecorators)),
     imports: fileImports,
-    references,
+    references: [...refsSet].sort(),
     location: { row: node.startPosition.row + 1, col: node.startPosition.column },
   };
 }
@@ -195,13 +203,17 @@ function splitSignatureAndBody(node, source) {
 
 function collectReferences(node, source, ownName) {
   const refs = new Set();
+  collectIdentifiers(node, refs, ownName);
+  return [...refs].sort();
+}
+
+function collectIdentifiers(node, refs, ownName) {
   walk(node, (n) => {
     if (n.type === 'identifier' || n.type === 'type_identifier') {
       const text = n.text;
       if (text && text !== ownName && !isLocalDecl(n)) refs.add(text);
     }
   });
-  return [...refs].sort();
 }
 
 function isLocalDecl(node) {

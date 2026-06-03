@@ -21,15 +21,34 @@ import { buildIndex } from '../src/wiki/index-builder.js';
 
 const argv = process.argv.slice(2);
 const positional = argv.filter((a) => !a.startsWith('--'));
-const app = positional[0] ?? 'mcp';
+const label = positional[0] ?? 'mcp';
 const N = Number(argv.find((a) => a.startsWith('--commits='))?.split('=')[1] ?? 10);
 const judgeSample = Number(argv.find((a) => a.startsWith('--judge-sample='))?.split('=')[1] ?? 3);
 const maxCost = Number(argv.find((a) => a.startsWith('--max-cost='))?.split('=')[1] ?? 5);
-const repoRoot = resolve(argv.find((a) => a.startsWith('--repo='))?.split('=')[1] ?? '../..');
+const explicitRepo = argv.find((a) => a.startsWith('--repo='))?.split('=')[1];
+const explicitSubdir = argv.find((a) => a.startsWith('--subdir='))?.split('=')[1];
 const model = argv.find((a) => a.startsWith('--model='))?.split('=')[1] ?? 'sonnet';
-const subdir = `applications/${app}`;
 const claudeOpts = { model };
+
+let repoRoot;
+let subdir;
+const namiMatch = label.match(/^nami-(.+)$/);
+if (explicitRepo) {
+  repoRoot = resolve(explicitRepo);
+  subdir = explicitSubdir ?? '.';
+} else if (namiMatch) {
+  const envKey = `NAMI_REPO_${namiMatch[1].toUpperCase().replace(/[^A-Z0-9]/g, '_')}`;
+  const envPath = process.env[envKey];
+  if (!envPath) { console.error(`Set ${envKey} in .env.local`); process.exit(1); }
+  repoRoot = resolve(envPath);
+  subdir = explicitSubdir ?? '.';
+} else {
+  repoRoot = resolve('../..');
+  subdir = `applications/${label}`;
+}
+const app = label;
 console.log(`[model] ${model}  (judge always sonnet for consistency)`);
+console.log(`[source] repo=${repoRoot} subdir=${subdir}`);
 
 if (!existsSync(join(repoRoot, '.git'))) { console.error(`No .git at ${repoRoot}`); process.exit(1); }
 if (!existsSync(join(repoRoot, subdir))) { console.error(`No ${subdir} at ${repoRoot}`); process.exit(1); }

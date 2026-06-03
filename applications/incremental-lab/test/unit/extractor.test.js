@@ -96,6 +96,18 @@ test('stable id format', () => {
   ]);
 });
 
+test('decorator content captured in bodyHash and references', () => {
+  const a = extractor.extract('m.ts', `@Module({ imports: [Foo, Bar] }) export class M {}`)[0];
+  const b = extractor.extract('m.ts', `@Module({ imports: [Foo, Bar, Baz] }) export class M {}`)[0];
+  assert.notEqual(a.bodyHash, b.bodyHash, 'decorator change must change bodyHash');
+  assert.ok(b.references.includes('Baz'), 'decorator identifiers must appear in references');
+});
+
+test('decorator on non-exported class is also captured', () => {
+  const s = extractor.extract('m.ts', `@Inject('X') class M {}`)[0];
+  assert.ok(s.references.includes('Inject'));
+});
+
 test('multiple top-level declarations', () => {
   const code = `
 export const A = 1;

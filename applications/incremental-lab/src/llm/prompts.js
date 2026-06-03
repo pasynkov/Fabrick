@@ -98,6 +98,69 @@ ${FORMAT_HINT}
 `;
 }
 
+export function patchPagePromptNarrative({ slug, existingPage, commitNarrative, pageFocus, currentSignatures, referencesBlock = '' }) {
+  return `You are updating a wiki page in response to a code commit. A narrator has already summarized what the commit did — use that summary as the ground truth and apply the relevant parts to this page.
+
+PAGE SLUG: ${slug}
+
+EXISTING PAGE CONTENT:
+---
+${existingPage}
+---
+
+COMMIT NARRATIVE (authoritative — describes what the commit actually did):
+---
+${commitNarrative}
+---
+
+CHANGES RELEVANT TO THIS PAGE (from invalidator):
+${pageFocus || '(none — page may be affected via cascade only)'}
+
+CURRENT SIGNATURES OF SYMBOLS ON THIS PAGE:
+${currentSignatures}${referencesBlock ? `\n\n${referencesBlock}` : ''}
+
+INSTRUCTIONS:
+- The COMMIT NARRATIVE is the source of truth. Update the page to reflect the parts of the narrative that apply to this page's symbols.
+- Do not invent details not present in the narrative or signatures.
+- For sections still accurate, keep wording close to existing to minimize churn.
+- Verify symbol names and signatures against the data above; rewrite parts of the existing page that disagree with the current signatures.
+- If the commit narrative does not affect this page directly (cascade only), make minimal cosmetic updates and refresh wording that references changed symbols.
+- Do NOT write a "## Related" section — it is auto-generated.
+
+${FORMAT_HINT}
+`;
+}
+
+export function validatorPrompt({ narrative, pages }) {
+  const pageBlocks = pages.map(({ slug, body }) =>
+    `--- PAGE: ${slug} ---\n${body}`).join('\n\n');
+
+  return `You are validating that wiki patches correctly reflect a code commit. You receive (1) a commit narrative describing what changed, and (2) the wiki pages updated for that commit. Verify each concrete claim in the narrative landed in at least one updated page.
+
+COMMIT NARRATIVE:
+---
+${narrative}
+---
+
+UPDATED PAGES:
+${pageBlocks}
+
+INSTRUCTIONS:
+- Read each concrete claim in the narrative (specific symbol added, behavior changed, dependency introduced, env var renamed, etc.).
+- For each claim: state whether it is reflected in one of the updated pages (and which one), OR list it as missing.
+- Skip vague/general claims that have no testable presence.
+- A claim about a symbol on page X must appear on page X.
+
+Output ONLY a single JSON object. No prose before or after, no markdown fences:
+{
+  "landed":  [ "claim → evidence in slug" ],
+  "missing": [ "claim with no evidence" ],
+  "score":   0..1   (fraction of testable claims that landed)
+}
+Do not use any tools.
+`;
+}
+
 export const JUDGE_SCHEMA = {
   type: 'object',
   required: ['equivalent', 'score', 'differences'],

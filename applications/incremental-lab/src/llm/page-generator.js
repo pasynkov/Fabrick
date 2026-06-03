@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { callClaude } from './cli.js';
-import { generatePagePrompt, patchPagePrompt, patchPagePromptSlim } from './prompts.js';
+import { generatePagePrompt, patchPagePrompt, patchPagePromptSlim, patchPagePromptNarrative } from './prompts.js';
 import { buildSlimChangeContext, currentSymbolSignatures, buildReferencesBlock } from './diff-context.js';
 
 export async function generatePage({ slug, symbols, repoRoot, claudeOpts = {} }) {
@@ -19,6 +19,18 @@ export async function patchPage({ slug, existingPage, changes, symbols, repoRoot
   const prompt = patchPagePrompt({ slug, existingPage, changes, symbols, sources, referencesBlock });
   const res = await callClaude(prompt, claudeOpts);
   return { content: res.content.trim() + '\n', rawResponse: res.content, prompt, usage: res.usage, costUsd: res.costUsd, durationMs: res.durationMs };
+}
+
+export async function patchPageWithNarrative({ slug, existingPage, commitNarrative, diff, symbols, beforeSnapshotSymbols = null, afterSnapshotSymbols = null, claudeOpts = {} }) {
+  const pageSymbolIds = new Set(symbols.map((s) => s.id));
+  const pageFocus = buildSlimChangeContext({ pageSymbolIds, diff });
+  const currentSignatures = currentSymbolSignatures({ symbols });
+  const referencesBlock = afterSnapshotSymbols
+    ? buildReferencesBlock({ pageSymbols: symbols, beforeSymbols: beforeSnapshotSymbols ?? [], afterSymbols: afterSnapshotSymbols })
+    : '';
+  const prompt = patchPagePromptNarrative({ slug, existingPage, commitNarrative, pageFocus, currentSignatures, referencesBlock });
+  const res = await callClaude(prompt, claudeOpts);
+  return { content: res.content.trim() + '\n', rawResponse: res.content, prompt, usage: res.usage, costUsd: res.costUsd, durationMs: res.durationMs, promptBytes: prompt.length };
 }
 
 export async function patchPageSlim({ slug, existingPage, diff, symbols, claudeOpts = {} }) {

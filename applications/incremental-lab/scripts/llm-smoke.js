@@ -66,11 +66,12 @@ console.log(`[invalidate] invalidated=${inv.pagesInvalidated.join(', ')}`);
 const newSymbols = after.symbols.filter(
   (s) => s.file === target.file && (s.name === target.name || s.name.startsWith(target.name + '.')),
 );
+
 const changeDescriptions = (inv.reasons[slug] ?? []).concat(
   diff.symbols.added.filter((s) => s.file === target.file).map((s) => `added:${s.name} (${s.kind})`),
 );
 
-console.log('[step 2] patch existing page incrementally (LLM call 2/3)');
+console.log('[step 2] patch existing page (full-source) (LLM call 2/3)');
 const patched = await patchPage({
   slug, existingPage: baselinePage.content, changes: changeDescriptions,
   symbols: newSymbols, repoRoot: work,

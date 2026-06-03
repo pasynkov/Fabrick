@@ -25,6 +25,35 @@ ${FORMAT_HINT}
 `;
 }
 
+export function patchPagePromptSlim({ slug, existingPage, changeContext, currentSignatures }) {
+  return `You are a technical writer maintaining a wiki page. Update minimally — preserve structure and tone, only edit what the code changes require.
+
+PAGE SLUG: ${slug}
+
+EXISTING PAGE CONTENT:
+---
+${existingPage}
+---
+
+WHAT CHANGED IN THE CODE:
+${changeContext || '(no symbol-level changes detected on this page; consumer cascade only)'}
+
+CURRENT SYMBOLS ON THIS PAGE (with their signatures):
+${currentSignatures}
+
+INSTRUCTIONS:
+- Update the existing page in place. Preserve sections that are still accurate.
+- Edit only the parts affected by the changes listed above.
+- For ADDED symbols: add a brief documentation entry consistent with the existing format.
+- For REMOVED symbols: remove their mentions.
+- For SIGNATURE CHANGED: update parameter/return descriptions to match.
+- For BODY CHANGED: if you cannot tell what changed without seeing the body, keep the existing description.
+- Do not invent details you cannot infer from signatures.
+
+${FORMAT_HINT}
+`;
+}
+
 export function patchPagePrompt({ slug, existingPage, changes, symbols, sources }) {
   const changeList = changes.map((c) => `  - ${c}`).join('\n');
   const symbolList = symbols.map((s) => `  - ${s.id} (${s.kind})`).join('\n');

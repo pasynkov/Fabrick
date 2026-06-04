@@ -1,34 +1,49 @@
 import { callClaude } from '../llm/cli.js';
 import {
-  SYNTHESIS_PROMPT,
-  buildSynthesisFullInput,
-  buildSynthesisIncrementalInput,
-  parseSynthesisOutput,
+  generateArchPagePrompt,
+  patchArchPagePrompt,
+  mcpDescriptionPrompt,
+  mcpInstructionsPrompt,
 } from '../llm/synthesis-prompts.js';
 
 /**
- * Full synthesis: produce every project-level wiki page from scratch.
- * Single LLM call. Returns parsed pages.
+ * Per-page generator: write ONE project wiki page from scratch.
  */
-const SYNTHESIS_TIMEOUT_MS = 900_000;  // 15 min — single-call processes all wikis
-
-export async function synthesizeFull({ repos, claudeOpts = {} }) {
-  const userInput = buildSynthesisFullInput({ repos });
-  const prompt = `${SYNTHESIS_PROMPT}\n\n--- INPUT ---\n${userInput}`;
-  const res = await callClaude(prompt, { timeoutMs: SYNTHESIS_TIMEOUT_MS, ...claudeOpts });
-  const parsed = parseSynthesisOutput(res.content);
-  return { ...parsed, prompt, rawResponse: res.content, usage: res.usage, costUsd: res.costUsd, durationMs: res.durationMs };
+export async function generateArchPage({ page, wikiExcerpts, claudeOpts = {} }) {
+  const prompt = generateArchPagePrompt({
+    archSlug: page.archSlug,
+    title: page.title,
+    description: page.description,
+    wikiExcerpts,
+  });
+  const res = await callClaude(prompt, claudeOpts);
+  return { content: res.content.trim() + '\n', rawResponse: res.content, prompt, usage: res.usage, costUsd: res.costUsd, durationMs: res.durationMs };
 }
 
 /**
- * Incremental synthesis: update only pages affected by changes in changedRepos.
- * Existing pages are passed for context; unchanged repos provide index only.
- * Model returns ONLY changed pages + DELETE markers.
+ * Per-page patcher: update ONE project wiki page given existing body + wiki delta.
  */
-export async function synthesizeIncremental({ changedRepos, unchangedRepos, existingPages, claudeOpts = {} }) {
-  const userInput = buildSynthesisIncrementalInput({ changedRepos, unchangedRepos, existingPages });
-  const prompt = `${SYNTHESIS_PROMPT}\n\n--- INPUT ---\n${userInput}`;
-  const res = await callClaude(prompt, { timeoutMs: SYNTHESIS_TIMEOUT_MS, ...claudeOpts });
-  const parsed = parseSynthesisOutput(res.content);
-  return { ...parsed, prompt, rawResponse: res.content, usage: res.usage, costUsd: res.costUsd, durationMs: res.durationMs };
+export async function patchArchPage({ page, existingPage, wikiExcerpts, wikiPatchSummary, claudeOpts = {} }) {
+  const prompt = patchArchPagePrompt({
+    archSlug: page.archSlug,
+    title: page.title,
+    description: page.description,
+    existingPage,
+    wikiExcerpts,
+    wikiPatchSummary,
+  });
+  const res = await callClaude(prompt, claudeOpts);
+  return { content: res.content.trim() + '\n', rawResponse: res.content, prompt, usage: res.usage, costUsd: res.costUsd, durationMs: res.durationMs };
+}
+
+export async function generateMcpDescription({ taxonomy, repos, claudeOpts = {} }) {
+  const prompt = mcpDescriptionPrompt({ taxonomy, repos });
+  const res = await callClaude(prompt, claudeOpts);
+  return { content: res.content.trim() + '\n', rawResponse: res.content, prompt, usage: res.usage, costUsd: res.costUsd };
+}
+
+export async function generateMcpInstructions({ taxonomy, repos, claudeOpts = {} }) {
+  const prompt = mcpInstructionsPrompt({ taxonomy, repos });
+  const res = await callClaude(prompt, claudeOpts);
+  return { content: res.content.trim() + '\n', rawResponse: res.content, prompt, usage: res.usage, costUsd: res.costUsd };
 }

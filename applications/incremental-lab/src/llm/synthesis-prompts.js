@@ -1,176 +1,187 @@
-const FORMAT_HINT = `Return ONLY the markdown content. No fences, no preamble. Do not use any tools.`;
+const FORMAT_HINT = `Return ONLY the markdown content. No code fences, no preamble, no explanation. Do not use any tools.`;
+
+const TAXONOMY_HINT = `Project wiki taxonomy (concept-centric, merge same entities across repos):
+- entities/  domain models, data structures, DB schemas, k8s resources
+- logic/     business flows, algorithms, processes
+- contracts/ API endpoints, request/response schemas, shared interfaces
+- transport/ messaging topics/events, queues, gRPC
+- config/    environment variables grouped by concern
+- overview   system-level overview (single page: slug "overview")`;
 
 /**
- * Production synthesis prompt, taken from
- * applications/backend/api/src/migrations/1748200100000-SeedPromptRevisions.ts
- * (Anthropic / Fabrick canonical synthesis policy).
- *
- * Input format expected from the caller (single user message):
- *   === REPO: <name> ===   { full content of all wiki pages in repo, each preceded by its slug }
- *   === REPO-INDEX: <name> ===   { index.md content only, for repos with no changes }
- *   === EXISTING: <slug> ===   { existing project wiki page, full markdown body }
- *
- * Output format produced by the model:
- *   === PAGE: <slug> ===
- *   ---
- *   slug: ...
- *   category: ...
- *   sources: [...repos...]
- *   ---
- *   <markdown content>
- *
- *   === DELETE: <slug> ===     (incremental mode only)
+ * Phase 1: discover stable project wiki taxonomy.
+ * One LLM call. Reads per-repo wiki indexes/summaries. Outputs a fixed list of
+ * project-level slugs that the system will maintain across iterations.
  */
-export const SYNTHESIS_PROMPT = `You are a software architect synthesizing a project-level wiki from repository wikis.
+export function discoverTaxonomyPrompt({ perRepoIndex }) {
+  const repoBlocks = Object.entries(perRepoIndex).map(([repo, items]) => {
+    const lines = items.map(({ slug, desc }) => `    ${slug}  —  ${desc}`).join('\n');
+    return `--- repo: ${repo} (${items.length} pages) ---\n${lines}`;
+  }).join('\n\n');
 
-## Your task
+  return `You are an architect designing the STABLE TAXONOMY for a project-level wiki that synthesizes per-repo wikis from multiple repositories.
 
-Merge wiki pages from one or more repositories into a unified, concept-centric project wiki. Organize knowledge by concept, not by repository.
+PER-REPO WIKI INDEXES (slug — one-line description):
+${repoBlocks}
 
-## Input format
+${TAXONOMY_HINT}
 
-Repository wikis are provided in this format:
+INSTRUCTIONS:
+- Propose 8–20 stable project pages. Each must aggregate ≥1 wiki page (preferably across repos).
+- Prefer CONCEPT-CENTRIC slugs that merge a topic across repos (e.g. "entities/instrument" pulling from backend1 model + kustomize seed migration).
+- Use slug format <category>/<name>.md (or "overview.md" without category). Use lowercase kebab-case for names.
+- Always include "overview.md" as the system-wide summary.
+- Do NOT include "index.md", "mcp-description.md", "mcp-instructions.md" — those are produced by separate mechanical/LLM steps.
+- Every project page must be BACKED BY one or more wiki pages. List them as { repo, slug } references.
 
-=== REPO: {repo-name} ===
-{all wiki pages from that repo, each with frontmatter and content}
-
-=== REPO-INDEX: {repo-name} ===
-{index.md content only — for unchanged repos in incremental mode}
-
-=== EXISTING: {slug} ===
-{existing project wiki page — for incremental mode}
-
-## Instructions
-
-- Merge same entities that appear in multiple repos into unified pages
-- Discover cross-repo flows (e.g. frontend calls backend endpoint)
-- Create system-level overview and integration maps
-- Track which repos contributed to each page in sources[] (use repo slugs, not file paths)
-- Always output an index page listing all pages with 1-line summaries, grouped by category
-- Always output an mcp-description page (see below)
-- Add Related Pages section at the bottom of each page (except index and mcp-description)
-
-## Taxonomy (starter categories — add custom ones if warranted)
-
-- entities/ — domain models, data structures, database schemas
-- logic/ — business flows, algorithms, processes
-- contracts/ — API endpoints, request/response schemas, shared interfaces
-- transport/ — messaging topics/events, gRPC services, WebSocket channels
-- config/ — environment variables grouped by concern
-- overview — system-level summary and architecture description
-
-## mcp-description page
-
-Generate a page with slug "mcp-description" containing ~200 words describing what knowledge is available. Format as a tool description (2nd person: "you can find...", "ask about..."). Include:
-- List of all repos/apps with 1-line purpose each
-- Knowledge categories available (entities, endpoints, flows, transport, config)
-- Notable specifics (e.g. "15 REST endpoints", "3 NATS topics")
-
-## mcp-instructions page
-
-Generate a page with slug "mcp-instructions" containing ~80 words of plain text (no markdown headers). This text is used as server-level instructions for the AI agent. It must:
-- State when to call \`fabrick_search\`: when working in one layer and needing context from another
-- List the actual layers/apps present in the project (e.g. "frontend", "backend", "infra") so the agent can match its current context
-- Give 2-3 concrete cross-layer trigger examples based only on layers that exist
-- Explicitly state NOT to call the tool for questions answerable from local file context
-- Do NOT say "always use this tool"
-
-## Output format
-
-Output ONLY page sections — no explanation, no JSON, no code blocks wrapping the whole response.
-
-Each page:
-
-=== PAGE: {slug} ===
----
-slug: {slug}
-category: {category}
-title: {title}
-sources: [{repo-slug1}, {repo-slug2}]
-related: [{slug1}, {slug2}]
----
-
-{markdown content}
-
-## Related Pages
-- [{Title}]({slug}) — {relationship description}
-
-IMPORTANT: All internal links (index page entries, Related Pages) MUST use the slug as the path — no \`.md\` extension. Example: \`(apps/harvester-conductor)\` not \`(apps/harvester-conductor.md)\`.
-
-To delete a page (incremental mode only):
-
-=== DELETE: {slug} ===
-
-## Incremental mode instructions
-
-When existing project pages are provided:
-- Update ONLY pages sourced from changed repos
-- Create new pages if new concepts appeared
-- Mark pages for deletion with === DELETE: slug === if source content was removed
-- Always output updated index and mcp-description pages
-- DO NOT output unchanged pages (they will be preserved as-is)
+Output ONLY a single JSON object. No markdown fences, no prose. Shape:
+{
+  "pages": [
+    {
+      "archSlug": "overview.md",
+      "category": "overview",
+      "title": "System Overview",
+      "description": "End-to-end summary of all services and infra",
+      "wikiRefs": [
+        { "repo": "backend1", "slug": "index.md" },
+        { "repo": "kustomize", "slug": "index.md" }
+      ]
+    },
+    {
+      "archSlug": "entities/instrument.md",
+      "category": "entities",
+      "title": "Instrument",
+      "description": "Financial instrument entity across registry + persistence layers",
+      "wikiRefs": [
+        { "repo": "backend1", "slug": "entities/Instrument.md" }
+      ]
+    }
+  ]
+}
 `;
-
-/**
- * Build the user input block for synthesis (full mode).
- *
- * @param {Object[]} repos          [{ name, pages: { slug: body } }]
- */
-export function buildSynthesisFullInput({ repos }) {
-  const blocks = repos.map(({ name, pages }) => {
-    const ordered = Object.entries(pages).sort(([a], [b]) => (a < b ? -1 : 1));
-    const inner = ordered.map(([slug, body]) => `[${slug}]\n${body}`).join('\n\n');
-    return `=== REPO: ${name} ===\n${inner}`;
-  });
-  return blocks.join('\n\n');
 }
 
 /**
- * Build the user input block for synthesis (incremental mode).
- *
- * @param {Object} args
- * @param {Object[]} args.changedRepos      [{ name, pages }] — full content of changed-repo wikis
- * @param {Object[]} args.unchangedRepos    [{ name, indexBody }] — index.md only
- * @param {Object[]} args.existingPages     [{ slug, body }] — current project wiki pages
+ * Per-page generation: write ONE project wiki page.
  */
-export function buildSynthesisIncrementalInput({ changedRepos, unchangedRepos, existingPages }) {
-  const out = [];
-  for (const { name, pages } of changedRepos) {
-    const ordered = Object.entries(pages).sort(([a], [b]) => (a < b ? -1 : 1));
-    out.push(`=== REPO: ${name} ===\n${ordered.map(([slug, body]) => `[${slug}]\n${body}`).join('\n\n')}`);
-  }
-  for (const { name, indexBody } of unchangedRepos) {
-    out.push(`=== REPO-INDEX: ${name} ===\n${indexBody}`);
-  }
-  for (const { slug, body } of existingPages) {
-    out.push(`=== EXISTING: ${slug} ===\n${body}`);
-  }
-  return out.join('\n\n');
+export function generateArchPagePrompt({ archSlug, title, description, wikiExcerpts }) {
+  const blocks = wikiExcerpts.map(({ repo, slug, body }) =>
+    `--- WIKI: ${repo}/${slug} ---\n${body}`,
+  ).join('\n\n');
+
+  return `You are a software architect writing ONE project-level wiki page by merging the relevant per-repo wiki pages.
+
+ARCH PAGE SLUG: ${archSlug}
+TITLE: ${title}
+INTENT: ${description}
+
+WIKI PAGES (input from repos):
+${blocks}
+
+${TAXONOMY_HINT}
+
+INSTRUCTIONS:
+- Write the page about "${title}" only. Focus narrowly on this concept.
+- Synthesize across repos: cite cross-repo links (e.g. "backend1/AssetsService → kustomize/Deployment assets-registry").
+- Every fact must trace to one of the wiki pages above. Do not invent.
+- Sections: # Title, 1–2 paragraph overview, ## Components (bullet list with exact names), ## Cross-repo links (if any), ## Notes (only if needed).
+- Concise, factual, no marketing.
+- Do NOT write a "## Related" section — it is auto-generated.
+
+${FORMAT_HINT}
+`;
 }
 
 /**
- * Parse the model's output into pages and deletions.
- * Format:
- *   === PAGE: <slug> ===
- *   <body until next === or EOF>
- *   === DELETE: <slug> ===
+ * Per-page patch: update one project wiki page given existing body + wiki delta.
  */
-export function parseSynthesisOutput(raw) {
-  const pages = [];
-  const deletions = [];
-  if (!raw) return { pages, deletions };
-  const re = /===\s*(PAGE|DELETE):\s*([^\s=]+)\s*===\s*\n?/g;
-  const tokens = [];
-  let m;
-  while ((m = re.exec(raw)) !== null) {
-    tokens.push({ kind: m[1], slug: m[2], start: m.index, contentStart: re.lastIndex });
-  }
-  for (let i = 0; i < tokens.length; i++) {
-    const t = tokens[i];
-    const next = tokens[i + 1];
-    const body = raw.slice(t.contentStart, next ? next.start : raw.length).trim();
-    if (t.kind === 'PAGE') pages.push({ slug: t.slug, body });
-    else deletions.push(t.slug);
-  }
-  return { pages, deletions };
+export function patchArchPagePrompt({ archSlug, title, description, existingPage, wikiExcerpts, wikiPatchSummary }) {
+  const blocks = wikiExcerpts.map(({ repo, slug, body }) =>
+    `--- WIKI: ${repo}/${slug} ---\n${body}`,
+  ).join('\n\n');
+
+  return `You are updating ONE project wiki page in response to changes in the per-repo wikis it sources from.
+
+ARCH PAGE SLUG: ${archSlug}
+TITLE: ${title}
+INTENT: ${description}
+
+EXISTING PROJECT PAGE:
+---
+${existingPage}
+---
+
+WHAT CHANGED IN THE SOURCE WIKIS (narrator hint, verify against current bodies below):
+${wikiPatchSummary}
+
+CURRENT SOURCE WIKI PAGES (source of truth):
+${blocks}
+
+${TAXONOMY_HINT}
+
+INSTRUCTIONS:
+- Stay strictly on the topic of "${title}". Do not pull in content that belongs on another arch page.
+- The CURRENT SOURCE WIKI PAGES are the source of truth. The EXISTING PAGE may be stale.
+- Verify every concrete claim in the existing page against the wikis:
+  * Lists of items (services, deployments, endpoints, env vars) — recount from wikis.
+  * Counts ("three services", "five deployments") — confirm or update.
+  * Named entities (specific service names, deployment names, NATS subjects) — confirm they still exist.
+  * Cross-repo links — both ends must be present in wikis.
+- If existing says "X" but wikis say "X, Y, Z" — rewrite to include Y and Z.
+- DO NOT REMOVE existing factual details that are still accurate. Add new, preserve old.
+- If a documented item is no longer in any wiki, remove its mention.
+- For sections still accurate, keep wording close to existing to minimize churn.
+- Do NOT write a "## Related" section — it is auto-generated.
+
+${FORMAT_HINT}
+`;
+}
+
+/**
+ * Separate step: mcp-description page (tool description for AI agents).
+ * Produced once at iter 0, regenerated when taxonomy structurally changes.
+ */
+export function mcpDescriptionPrompt({ taxonomy, repos }) {
+  const cats = {};
+  for (const p of taxonomy.pages) (cats[p.category] ??= []).push(p.title);
+  const catLines = Object.entries(cats).map(([c, titles]) => `  ${c}: ${titles.length} pages (${titles.slice(0, 5).join(', ')}${titles.length > 5 ? ', …' : ''})`).join('\n');
+  const repoLines = repos.map((r) => `  ${r}`).join('\n');
+
+  return `Write a ~200 word tool description for an AI agent that has access to this project wiki via a search tool. Use 2nd person ("you can find...", "ask about...").
+
+REPOS IN THIS PROJECT:
+${repoLines}
+
+PROJECT WIKI TAXONOMY:
+${catLines}
+
+INSTRUCTIONS:
+- ~200 words. No headers, no markdown fences.
+- List repos with 1-line purpose each.
+- List knowledge categories available (entities, logic, contracts, transport, config).
+- Include notable specifics (counts of entities, logic flows, etc.).
+- Format as a tool description an agent would read once.
+
+${FORMAT_HINT}
+`;
+}
+
+/**
+ * Separate step: mcp-instructions page (operational guidance for AI agents).
+ */
+export function mcpInstructionsPrompt({ taxonomy, repos }) {
+  return `Write ~80 words of plain text (no markdown headers, no fences) that serve as server-level instructions for an AI agent on when to call the project-wiki search tool \`fabrick_search\`.
+
+REPOS IN THIS PROJECT: ${repos.join(', ')}
+
+REQUIREMENTS:
+- State when to call fabrick_search: when working in one layer and needing context from another.
+- List the actual layers/apps present (from the repos above) so the agent can match its current context.
+- Give 2-3 concrete cross-layer trigger examples grounded in the actual repos.
+- Explicitly state NOT to call the tool for questions answerable from local file context.
+- Do NOT say "always use this tool".
+- Plain text only, no markdown headers.
+
+${FORMAT_HINT}
+`;
 }

@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { callClaude } from './cli.js';
-import { generatePagePrompt, patchPagePrompt, patchPagePromptSlim, patchPagePromptNarrative } from './prompts.js';
+import { generatePagePrompt, patchPagePrompt, patchPagePromptSlim, patchPagePromptNarrative, patchPageFromEssencePrompt } from './prompts.js';
 import { buildSlimChangeContext, currentSymbolSignatures, buildReferencesBlock } from './diff-context.js';
 
 export async function generatePage({ slug, symbols, repoRoot, claudeOpts = {} }) {
@@ -31,6 +31,20 @@ export async function patchPageWithNarrative({ slug, existingPage, commitNarrati
   const prompt = patchPagePromptNarrative({ slug, existingPage, commitNarrative, pageFocus, currentSignatures, referencesBlock });
   const res = await callClaude(prompt, claudeOpts);
   return { content: res.content.trim() + '\n', rawResponse: res.content, prompt, usage: res.usage, costUsd: res.costUsd, durationMs: res.durationMs, promptBytes: prompt.length };
+}
+
+/**
+ * Essence-driven patcher: apply a filtered list of feature items to one page.
+ * No raw source files — features already encode what changed.
+ */
+export async function patchPageFromEssence({ slug, existingPage, features, symbols, claudeOpts = {} }) {
+  const currentSignatures = currentSymbolSignatures({ symbols });
+  const built = patchPageFromEssencePrompt({ slug, existingPage, features, currentSignatures });
+  // built = { system, user } so the system block (instructions + taxonomy +
+  // format) can be cached by Anthropic across the parallel subagent calls.
+  const res = await callClaude(built, claudeOpts);
+  const promptBytes = (built.system?.length ?? 0) + (built.user?.length ?? 0);
+  return { content: res.content.trim() + '\n', rawResponse: res.content, prompt: `--- system ---\n${built.system}\n\n--- user ---\n${built.user}`, usage: res.usage, costUsd: res.costUsd, durationMs: res.durationMs, promptBytes };
 }
 
 export async function patchPageSlim({ slug, existingPage, diff, symbols, claudeOpts = {} }) {

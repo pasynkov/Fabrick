@@ -2,6 +2,10 @@ import { AGGRESSIVE_POLICY, buildConsumerIndex, cascadeFrom } from '../cascade/c
 
 const TOP_LEVEL_KINDS = new Set(['class', 'interface', 'type', 'function', 'enum', 'const']);
 
+// Kinds whose body-only change is implementation noise, not interface shift.
+// We track them for invalidation only on sig change / add / delete.
+const IMPLEMENTATION_KINDS = new Set(['method']);
+
 export function invalidate({ diff, sourcemap, currentSymbols }, policy = AGGRESSIVE_POLICY) {
   const symbolToPages = reverseIndex(sourcemap);
   const consumerIdx = buildConsumerIndex(currentSymbols);
@@ -24,6 +28,10 @@ export function invalidate({ diff, sourcemap, currentSymbols }, policy = AGGRESS
   };
 
   for (const { after } of diff.symbols.bodyChanged) {
+    // Method body changes are implementation noise — skip. We document
+    // service interfaces (decorators, public method signatures), not
+    // method internals.
+    if (IMPLEMENTATION_KINDS.has(after.kind)) continue;
     addPagesFor(after.id, `body:${after.name}`);
   }
 

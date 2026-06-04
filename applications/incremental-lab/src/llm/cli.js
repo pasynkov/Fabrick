@@ -4,15 +4,31 @@ const DEFAULT_MODEL = 'sonnet';
 const DEFAULT_SYSTEM = 'You are a precise technical writer. Follow instructions exactly. Return only what is asked, no preamble.';
 const DEFAULT_DISABLED_PLUGINS = ['caveman@caveman'];
 
+/**
+ * Call Claude. `prompt` can be either a string (whole user message) or an
+ * object `{ system, user }` to leverage server-side prefix caching:
+ * pass static instructions/taxonomy/format as `system`, page-specific
+ * dynamic content as `user`. Anthropic auto-caches the system block when
+ * it is reused across calls.
+ */
 export async function callClaude(prompt, {
   model = DEFAULT_MODEL,
-  systemPrompt = DEFAULT_SYSTEM,
+  systemPrompt: explicitSystem,
   slim = true,
   disabledPlugins = DEFAULT_DISABLED_PLUGINS,
   maxBudgetUsd = 1,
   timeoutMs = 300_000,
   cwd = process.cwd(),
 } = {}) {
+  let systemPrompt = explicitSystem ?? DEFAULT_SYSTEM;
+  let userPrompt;
+  if (prompt && typeof prompt === 'object' && (prompt.system || prompt.user)) {
+    if (prompt.system) systemPrompt = prompt.system;
+    userPrompt = prompt.user ?? '';
+  } else {
+    userPrompt = prompt;
+  }
+
   const args = [
     '-p',
     '--output-format', 'json',
@@ -30,7 +46,7 @@ export async function callClaude(prompt, {
   }
 
   const t0 = Date.now();
-  const { stdout, stderr, code } = await runProcess('claude', args, { input: prompt, cwd, timeoutMs });
+  const { stdout, stderr, code } = await runProcess('claude', args, { input: userPrompt, cwd, timeoutMs });
   const wallMs = Date.now() - t0;
 
   if (code !== 0) {

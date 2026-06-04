@@ -37,6 +37,64 @@ ${FORMAT_HINT}
 `;
 }
 
+/**
+ * Essence-driven patcher: existing page + a curated list of feature items
+ * relevant to THIS page (filtered by the coordinator). No raw source files —
+ * essence items already extracted the relevant facts.
+ *
+ * Returns { system, user } so the static instructions/taxonomy/format can
+ * land in the system block (auto-cached by Anthropic across subagent calls)
+ * while only the per-page dynamic content lives in the user block.
+ */
+export function patchPageFromEssencePrompt({ slug, existingPage, features, currentSignatures }) {
+  const featureBlock = features.map((f, i) =>
+    `  [${i + 1}] (${f.kind}) ${f.subject}\n      ${f.details}`
+  ).join('\n\n');
+
+  const system = `You are a service-architecture documentarian. You update one page of a project wiki using a curated list of features extracted from the latest commit.
+
+SCOPE — what to document:
+- Incoming/outgoing requests (HTTP routes, NATS subjects, gRPC, queues)
+- Service shape (framework, deployment kind, scaling characteristics)
+- Business behavior (returns what from where, what data transformation happens, side effects)
+- Cross-service dependencies (which services / databases / queues it touches)
+
+OUT OF SCOPE — do NOT document:
+- Method implementation details, control flow, helper logic
+- Private helpers, internal data structures
+- Method bodies (only their public signature matters when relevant)
+
+${TAXONOMY_HINT}
+
+INSTRUCTIONS:
+- Apply each feature in FEATURES TO APPLY to the existing page. Features ARE the source of truth.
+- For added-feature / modified-behavior: update the relevant section, focused on interface or business outcome.
+- For deletion: remove mentions of the deleted symbol.
+- For signature-change: update parameter/return descriptions to match.
+- For config-change: update env vars / config sections.
+- DO NOT REMOVE existing factual details that are still accurate. Add new, preserve old.
+- For sections still accurate, keep wording close to existing to minimize churn.
+- Do NOT write a "## Related" section — it is auto-generated.
+
+${FORMAT_HINT}`;
+
+  const user = `PAGE SLUG: ${slug}
+
+EXISTING PAGE CONTENT:
+---
+${existingPage}
+---
+
+FEATURES TO APPLY (already filtered for this page):
+${featureBlock || '(none relevant — no-op expected)'}
+
+CURRENT SIGNATURES OF SYMBOLS ON THIS PAGE:
+${currentSignatures}
+`;
+
+  return { system, user };
+}
+
 export function patchPagePromptSlim({ slug, existingPage, changeContext, currentSignatures }) {
   return `You are a technical writer maintaining a wiki page. Update minimally — preserve structure and tone, only edit what the code changes require.
 

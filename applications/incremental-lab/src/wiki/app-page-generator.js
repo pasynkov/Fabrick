@@ -34,11 +34,11 @@ export async function generateAppScope({ scopePath, scopeName, scopeKind, repoNa
 
 /**
  * Single-call patcher for ONE app scope: regenerates all 4 pages using
- * existing bodies + essence features.
+ * existing bodies + essence features. No source code in prompt — essence
+ * is the authoritative diff signal.
  */
-export async function patchAppScope({ scopePath, scopeName, scopeKind, repoName, sourceFiles, existingPages, features, claudeOpts = {} }) {
-  const sources = loadScopeSources(scopePath, sourceFiles);
-  const built = patchAppScopePrompt({ scopeName, scopeKind, repoName, existingPages, features, sources });
+export async function patchAppScope({ scopeName, scopeKind, repoName, existingPages, features, claudeOpts = {} }) {
+  const built = patchAppScopePrompt({ scopeName, scopeKind, repoName, existingPages, features });
   const res = await callClaude(built, claudeOpts);
   const pages = parseAppPagesOutput(res.content);
   return {

@@ -50,9 +50,10 @@ ${sourceBlocks}
 
 /**
  * Single-call patcher for the same 4 pages, given existing bodies + an essence
- * summary of what changed in the scope.
+ * summary of what changed in the scope. Source code is NOT re-included —
+ * the essence extractor already distilled the relevant facts from source.
  */
-export function patchAppScopePrompt({ scopeName, scopeKind, repoName, existingPages, features, sources }) {
+export function patchAppScopePrompt({ scopeName, scopeKind, repoName, existingPages, features }) {
   const existingBlock = APP_PAGES.map((p) =>
     `--- existing ${p.slug} ---\n${existingPages[p.slug] ?? '(empty)'}`
   ).join('\n\n');
@@ -61,8 +62,6 @@ export function patchAppScopePrompt({ scopeName, scopeKind, repoName, existingPa
     `  [${i + 1}] (${f.kind}) ${f.subject}\n      ${f.details}`
   ).join('\n\n');
 
-  const sourceBlocks = sources.map((s) => `[file: ${s.file}]\n${s.content}`).join('\n\n');
-
   const system = `You update one microservice scope's 4-page wiki in response to a commit. Produce EXACTLY the 4 fixed pages — no others, in the same order.
 
 PAGES TO MAINTAIN (all four, in this order):
@@ -70,11 +69,11 @@ PAGES TO MAINTAIN (all four, in this order):
 ${PAGES_INSTRUCTIONS}
 
 GLOBAL RULES:
-- The CURRENT SOURCE CODE is the source of truth. Existing pages may be stale.
-- Verify every concrete claim against the source. Update counts, lists, names.
-- DO NOT REMOVE existing factual details that are still accurate. Add new, preserve old.
-- For sections still accurate, keep wording close to existing to minimize churn.
-- Use exact identifiers from source (NATS subject strings, env var names, route paths).
+- The ESSENCE FEATURES are an authoritative summary of what changed in this commit.
+- Apply ONLY changes described by features. Treat features as the diff truth.
+- DO NOT REMOVE existing factual details that are unaffected by features. Add new, preserve old.
+- For sections unaffected by any feature, copy the existing body verbatim.
+- Use exact identifiers from features (NATS subject strings, env var names, route paths).
 - Skip method internals; document only external/interface-level concerns.
 - Do NOT write a "## Related" section — it is auto-generated.
 
@@ -86,14 +85,11 @@ ${FORMAT_HINT}`;
 
   const user = `SCOPE: ${scopeName} (kind: ${scopeKind}) in repo "${repoName}"
 
-EXISTING WIKI PAGES (may be stale):
+EXISTING WIKI PAGES:
 ${existingBlock}
 
-WHAT CHANGED (essence features):
-${featureBlock || '(no essence features; rely on source code diff)'}
-
-CURRENT SOURCE CODE:
-${sourceBlocks}
+WHAT CHANGED (essence features — authoritative diff summary):
+${featureBlock || '(no features — copy existing pages verbatim)'}
 `;
 
   return { system, user };

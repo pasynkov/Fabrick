@@ -18,8 +18,8 @@ function extractJson(text) {
  * Output:
  *   { features: [{ id, kind, subject, details, affectedPages: [slug, ...] }] }
  */
-export async function extractEssence({ diff, sourcemap, repoName, scopeName = repoName, scopeKind = 'root', claudeOpts = {} }) {
-  const prompt = essenceExtractorPrompt({ diff, sourcemap, repoName, scopeName, scopeKind });
+export async function extractEssence({ diff, sourcemap, repoName, scopeName = repoName, scopeKind = 'root', changedFileContents = {}, unifiedDiff = '', claudeOpts = {} }) {
+  const prompt = essenceExtractorPrompt({ diff, sourcemap, repoName, scopeName, scopeKind, changedFileContents, unifiedDiff });
   const res = await callClaude(prompt, claudeOpts);
   const json = extractJson(res.content);
   if (!json || !Array.isArray(json.features)) {

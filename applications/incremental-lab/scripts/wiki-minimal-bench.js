@@ -35,7 +35,7 @@ import { config as loadEnv } from 'dotenv';
 loadEnv({ path: '.env.local' });
 loadEnv({ path: '.env' });
 
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { simpleGit } from 'simple-git';
@@ -91,7 +91,7 @@ for (const r of REPOS) {
   console.log(`[${r.name}] app scopes: ${scopes.length}`);
 
   repoState[r.name] = {
-    tmp, git: simpleGit(tmp), sourceShas, dates: r.dates, scopes,
+    tmp, git: simpleGit(tmp), srcGit, sourceShas, dates: r.dates, scopes,
     state: Object.fromEntries(scopes.map((s) => [s.root, {
       scope: s, snap: null, pages: {},
     }])),
@@ -122,6 +122,37 @@ for (let iter = 0; iter <= N_ITERS; iter++) {
       const state = repoData.state[scope.root];
       const scopePath = join(repoData.tmp, scope.root);
       const scopeOutDir = join(repoOutDir, scope.root.replace(/\//g, '__'));
+
+      // Decide mode FIRST, before creating any directories.
+      let mode = 'no-op';
+      let snap = null;
+      let diff = null;
+
+      if (iter === 0) {
+        snap = buildSnapshot(scopePath);
+        state.snap = snap;
+        const fileList = Object.keys(snap.files).sort();
+        mode = fileList.length === 0 ? 'empty-scope' : 'baseline-full';
+      } else {
+        const before = state.snap;
+        snap = buildSnapshot(scopePath);
+        diff = diffSnapshots(before, snap);
+        state.snap = snap;
+        const affected = affectedAppPages(diff);
+        mode = affected.length === 0 ? 'no-op' : 'patch';
+      }
+
+      // Skip ALL artifacts for no-op / empty-scope. State carries through.
+      if (mode === 'no-op' || mode === 'empty-scope') {
+        iterRecord.repos[r.name].scopes[scope.root] = {
+          kind: scope.kind, name: scope.name, mode,
+          cost: { compute: 0, apply: 0, fullrebuild: 0, judge: 0 },
+          avgJudgeScore: null,
+          verdicts: [],
+        };
+        return;
+      }
+
       const beforeDir = join(scopeOutDir, 'before');
       const patchDir = join(scopeOutDir, 'patch');
       const afterDir = join(scopeOutDir, 'after');
@@ -135,74 +166,55 @@ for (let iter = 0; iter <= N_ITERS; iter++) {
       let applyCost = 0;
       let fullrebuildCost = 0;
       let judgeCost = 0;
-      let mode = 'no-op';
 
-      if (iter === 0) {
-        const snap = buildSnapshot(scopePath);
-        state.snap = snap;
+      if (mode === 'baseline-full') {
         const fileList = Object.keys(snap.files).sort();
-        if (fileList.length === 0) {
-          mode = 'empty-scope';
-        } else {
-          mode = 'baseline-full';
-          const res = await generateAppScope({
-            scopePath, scopeName: scope.name, scopeKind: scope.kind, repoName: r.name,
-            sourceFiles: fileList, claudeOpts,
-          });
-          accrue(res); applyCost = res.costUsd ?? 0;
-          state.pages = res.pages;
-          writeFileSync(join(patchDir, 'patch.prompt.txt'), res.prompt);
-          writeFileSync(join(patchDir, 'patch.response.md'), res.rawResponse);
-          writeFileSync(join(patchDir, 'mode.txt'), 'baseline-full\n');
-        }
+        const res = await generateAppScope({
+          scopePath, scopeName: scope.name, scopeKind: scope.kind, repoName: r.name,
+          sourceFiles: fileList, claudeOpts,
+        });
+        accrue(res); applyCost = res.costUsd ?? 0;
+        state.pages = res.pages;
+        writeFileSync(join(patchDir, 'patch.prompt.txt'), res.prompt);
+        writeFileSync(join(patchDir, 'patch.response.md'), res.rawResponse);
+        writeFileSync(join(patchDir, 'mode.txt'), 'baseline-full\n');
       } else {
-        const before = state.snap;
-        const after = buildSnapshot(scopePath);
-        const diff = diffSnapshots(before, after);
-        state.snap = after;
-        const affected = affectedAppPages(diff);
-        if (affected.length === 0) {
-          mode = 'no-op';
-          writeFileSync(join(patchDir, 'mode.txt'), 'no-op\n');
-        } else {
-          mode = 'patch';
-          const sourcemap = synthSourcemap(after);
-          const ess = await extractEssence({
-            diff, sourcemap, repoName: r.name, scopeName: scope.name, scopeKind: scope.kind, claudeOpts,
-          });
-          accrue(ess); computeCost = ess.costUsd ?? 0;
-          writeFileSync(join(patchDir, 'essence.json'), stableJson({ features: ess.features }));
-          writeFileSync(join(patchDir, 'essence.prompt.txt'), ess.prompt);
-          writeFileSync(join(patchDir, 'essence.response.md'), ess.rawResponse);
-          writeFileSync(join(patchDir, 'features.json'), stableJson(ess.features));
+        // mode === 'patch'
+        const sourcemap = synthSourcemap(snap);
+        const changedFileContents = loadChangedFileContents(scopePath, diff);
+        const beforeSha = repoData.sourceShas[repoData.dates[iter - 1]];
+        const unifiedDiff = await computeUnifiedDiff(repoData.srcGit, beforeSha, sha, scope.root);
+        const ess = await extractEssence({
+          diff, sourcemap, repoName: r.name, scopeName: scope.name, scopeKind: scope.kind,
+          changedFileContents, unifiedDiff, claudeOpts,
+        });
+        accrue(ess); computeCost = ess.costUsd ?? 0;
+        writeFileSync(join(patchDir, 'essence.json'), stableJson({ features: ess.features }));
+        writeFileSync(join(patchDir, 'essence.prompt.txt'), ess.prompt);
+        writeFileSync(join(patchDir, 'essence.response.md'), ess.rawResponse);
+        writeFileSync(join(patchDir, 'features.json'), stableJson(ess.features));
 
-          const fileList = Object.keys(after.files).sort();
-          const res = await patchAppScope({
-            scopePath, scopeName: scope.name, scopeKind: scope.kind, repoName: r.name,
-            sourceFiles: fileList,
-            existingPages: state.pages,
-            features: ess.features,
-            claudeOpts,
-          });
-          accrue(res); applyCost = res.costUsd ?? 0;
-          for (const slug of APP_PAGE_SLUGS) if (res.pages[slug]) state.pages[slug] = res.pages[slug];
-          writeFileSync(join(patchDir, 'patch.prompt.txt'), res.prompt);
-          writeFileSync(join(patchDir, 'patch.response.md'), res.rawResponse);
-          writeFileSync(join(patchDir, 'mode.txt'), 'patch\n');
-        }
+        const res = await patchAppScope({
+          scopeName: scope.name, scopeKind: scope.kind, repoName: r.name,
+          existingPages: state.pages,
+          features: ess.features,
+          claudeOpts,
+        });
+        accrue(res); applyCost = res.costUsd ?? 0;
+        for (const slug of APP_PAGE_SLUGS) if (res.pages[slug]) state.pages[slug] = res.pages[slug];
+        writeFileSync(join(patchDir, 'patch.prompt.txt'), res.prompt);
+        writeFileSync(join(patchDir, 'patch.response.md'), res.rawResponse);
+        writeFileSync(join(patchDir, 'mode.txt'), 'patch\n');
       }
 
       for (const slug of APP_PAGE_SLUGS) writeFileSync(join(afterDir, slug), state.pages[slug] ?? '(empty)\n');
 
-      // Full from-scratch ground truth
+      // Full from-scratch ground truth (only for actual changes).
       const fullPages = {};
       if (mode === 'baseline-full') {
         for (const slug of APP_PAGE_SLUGS) fullPages[slug] = state.pages[slug];
         writeFileSync(join(fullDir, 'NOTE.md'), 'iter-0: full == incremental (same gen pass)\n');
-      } else if (mode === 'empty-scope') {
-        // nothing
       } else {
-        const snap = state.snap;
         const fileList = Object.keys(snap.files).sort();
         if (fileList.length > 0) {
           const res = await generateAppScope({
@@ -218,7 +230,7 @@ for (let iter = 0; iter <= N_ITERS; iter++) {
       for (const slug of APP_PAGE_SLUGS) writeFileSync(join(fullDir, slug), fullPages[slug] ?? '(empty)\n');
 
       const verdicts = [];
-      if (mode !== 'empty-scope' && Object.keys(fullPages).length > 0) {
+      if (Object.keys(fullPages).length > 0) {
         const candidates = APP_PAGE_SLUGS.filter((slug) => state.pages[slug] && fullPages[slug]);
         const sample = candidates.slice(0, JUDGE_PAGES_PER_SCOPE);
         for (const slug of sample) {
@@ -303,6 +315,33 @@ console.log(`iters: ${N_ITERS}  model: ${MODEL}  total spent: $${totalCost.toFix
 console.log(`split:  compute=$${iterReports.reduce((s, r) => s + r.cost.compute, 0).toFixed(2)}  apply=$${iterReports.reduce((s, r) => s + r.cost.apply, 0).toFixed(2)}  fullrebuild=$${iterReports.reduce((s, r) => s + r.cost.fullrebuild, 0).toFixed(2)}  judge=$${iterReports.reduce((s, r) => s + r.cost.judge, 0).toFixed(2)}`);
 
 for (const r of REPOS) rmSync(repoState[r.name].tmp, { recursive: true, force: true });
+
+const UNIFIED_DIFF_CAP = 50000;
+async function computeUnifiedDiff(git, beforeSha, afterSha, scopeRoot) {
+  try {
+    const out = await git.diff([`${beforeSha}..${afterSha}`, '--unified=2', '--', scopeRoot]);
+    if (out.length > UNIFIED_DIFF_CAP) return out.slice(0, UNIFIED_DIFF_CAP) + '\n... (truncated)';
+    return out;
+  } catch { return ''; }
+}
+
+function loadChangedFileContents(scopePath, diff) {
+  const CHANGED_FILE_MAX_BYTES = 8000;
+  const CHANGED_FILE_TOTAL_CAP = 40000;
+  const out = {};
+  const files = [...(diff.files?.changed ?? []), ...(diff.files?.added ?? [])];
+  let total = 0;
+  for (const rel of files) {
+    let content;
+    try { content = readFileSync(join(scopePath, rel), 'utf8'); }
+    catch { continue; }
+    if (content.length > CHANGED_FILE_MAX_BYTES) content = content.slice(0, CHANGED_FILE_MAX_BYTES) + '\n...';
+    if (total + content.length > CHANGED_FILE_TOTAL_CAP) break;
+    out[rel] = content;
+    total += content.length;
+  }
+  return out;
+}
 
 function firstSentenceFromMd(body) {
   if (!body) return '';

@@ -26,7 +26,7 @@ export function scopeHint(kind) {
  * Output: structured features that describe SERVICE-LEVEL changes
  * (new endpoints, env vars, deployment-affecting shifts), not method internals.
  */
-export function essenceExtractorPrompt({ diff, sourcemap, repoName, scopeName, scopeKind }) {
+export function essenceExtractorPrompt({ diff, sourcemap, repoName, scopeName, scopeKind, changedFileContents = {}, unifiedDiff = '' }) {
   const lines = [];
   lines.push(`You are analyzing a code commit on scope "${scopeName}" (kind: ${scopeKind}) in repo "${repoName}".`);
   lines.push('');
@@ -62,6 +62,20 @@ export function essenceExtractorPrompt({ diff, sourcemap, repoName, scopeName, s
     for (const f of diff.files.added) lines.push(`  +${f}`);
     for (const f of diff.files.deleted) lines.push(`  -${f}`);
   }
+  if (unifiedDiff) {
+    lines.push('', 'UNIFIED DIFF (authoritative — every change is here, including YAML manifest field updates the symbol diff cannot express):');
+    lines.push('```diff');
+    lines.push(unifiedDiff);
+    lines.push('```');
+  }
+  const changedFileEntries = Object.entries(changedFileContents);
+  if (changedFileEntries.length) {
+    lines.push('', 'CURRENT CONTENT OF CHANGED FILES (for context — derive features from the diff above):');
+    for (const [file, content] of changedFileEntries) {
+      lines.push('', `[file: ${file}]`);
+      lines.push(content);
+    }
+  }
   lines.push('', 'WIKI PAGES IN THIS SCOPE:');
   for (const [slug, page] of Object.entries(sourcemap.pages ?? {})) {
     if (slug === 'index.md') continue;
@@ -76,6 +90,7 @@ export function essenceExtractorPrompt({ diff, sourcemap, repoName, scopeName, s
   lines.push('- Small mechanical-looking diffs CAN be architecturally important — call them out (e.g. "concurrency 4 → 8").');
   lines.push('- Skip pure renames, formatting, and method-body-only refactors.');
   lines.push('- If the commit only touches method bodies with no interface effect, return an empty features array.');
+  lines.push('- When a UNIFIED DIFF is given: enumerate EVERY semantically meaningful change. Treat each field flip (image tag, probe timing, env var value, replica count, strategy type) as its own feature unless directly part of a larger atomic change. Do NOT summarize away config edits.');
   lines.push('');
   lines.push('Output ONLY JSON with this shape:');
   lines.push('{');

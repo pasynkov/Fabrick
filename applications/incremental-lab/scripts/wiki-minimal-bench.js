@@ -1,18 +1,35 @@
 #!/usr/bin/env node
-// Minimal-taxonomy wiki bench: 4 fixed pages per app scope (service,
-// contracts, config, integrations). Single LLM call per scope generates /
-// updates all 4 pages at once. Libs are SKIPPED (internal plumbing).
+// Minimal-taxonomy wiki bench with full artifact visibility + drift judge.
 //
-// Per iter:
-//   for each app scope:
-//     1. tree-sitter snapshot
-//     2. if any change since previous iter:
-//        - baseline iter 0: generateAppScope (1 LLM call → 4 pages)
-//        - incremental: patchAppScope (1 LLM call → 4 pages updated)
-//     3. save pages
+// Per iter, per app scope:
+//   - tree-sitter snapshot
+//   - if iter 0:    baseline-full (1 LLM call → 4 pages)
+//   - if change:    essence call + patch call (regenerate all 4 pages)
+//   - always:       fresh from-scratch baseline as ground truth (1 LLM call)
+//   - judge:        sample 1 page per scope, incr vs fullrebuild
 //
-// Goal: drop per-iter cost to $0.05-0.30 by replacing N per-page calls with
-// 1 per-scope call AND skipping libs entirely.
+// Artifacts per iter:
+//   iter-N/
+//     <repo>/index.md                    repo-level hierarchical TOC
+//     <repo>/<scope>/
+//       before/<slug>                    page state before this iter's patches
+//       patch/
+//         mode.txt                       baseline-full | patch | no-op
+//         essence.json                   (patch only)
+//         essence.prompt.txt
+//         essence.response.md
+//         patch.prompt.txt               single bulk-update prompt
+//         patch.response.md              raw LLM response
+//         features.json                  per-feature items
+//       after/<slug>                     page state after this iter
+//       fullrebuild/<slug>               ground truth (fresh full gen)
+//       fullrebuild/prompt.txt
+//       fullrebuild/response.md
+//       judge/sample.json                judge verdicts vs ground truth
+//       index.md                         scope-level page list
+//   report.json
+//
+// summary.json: cost split (compute / apply / fullrebuild / judge), drift trend.
 
 import { config as loadEnv } from 'dotenv';
 loadEnv({ path: '.env.local' });
@@ -26,17 +43,20 @@ import { detectScopes } from '../src/scope/monorepo.js';
 import { buildSnapshot } from '../src/snapshot/snapshot.js';
 import { diffSnapshots } from '../src/diff/diff.js';
 import { generateAppScope, patchAppScope } from '../src/wiki/app-page-generator.js';
-import { APP_PAGE_SLUGS, affectedAppPages } from '../src/wiki/app-taxonomy.js';
+import { APP_PAGE_SLUGS, APP_PAGES, affectedAppPages } from '../src/wiki/app-taxonomy.js';
 import { extractEssence } from '../src/wiki/essence.js';
 import { synthSourcemap } from '../src/bench/synth-sourcemap.js';
+import { buildRepoIndex, buildScopeIndex } from '../src/wiki/monorepo-index.js';
 import { stableJson } from '../src/snapshot/store.js';
+import { judge } from '../src/llm/judge.js';
 import { pMap } from '../src/util/concurrent.js';
 
 const argv = process.argv.slice(2);
 const N_ITERS = Number(argv.find((a) => a.startsWith('--iters='))?.split('=')[1] ?? 5);
-const MAX_COST = Number(argv.find((a) => a.startsWith('--max-cost='))?.split('=')[1] ?? 10);
+const MAX_COST = Number(argv.find((a) => a.startsWith('--max-cost='))?.split('=')[1] ?? 15);
 const MODEL = argv.find((a) => a.startsWith('--model='))?.split('=')[1] ?? 'sonnet';
 const CONCURRENCY = Number(argv.find((a) => a.startsWith('--concurrency='))?.split('=')[1] ?? 4);
+const JUDGE_PAGES_PER_SCOPE = Number(argv.find((a) => a.startsWith('--judge-per-scope='))?.split('=')[1] ?? 1);
 
 const REPOS = [
   { name: 'backend1', path: process.env.NAMI_REPO_BACKEND1, dates: ['2025-09-09','2025-09-15','2025-09-22','2025-09-28','2025-10-08','2025-10-13'] },
@@ -67,16 +87,13 @@ for (const r of REPOS) {
     sourceShas[date] = raw.trim();
   }
   await simpleGit(tmp).checkout(sourceShas[r.dates[r.dates.length - 1]]);
-  // SKIP libs — only deployable apps
-  const allScopes = detectScopes(tmp);
-  const scopes = allScopes.filter((s) => s.kind === 'app');
-  console.log(`[${r.name}] scopes (apps only): ${scopes.length}`);
-  for (const s of scopes) console.log(`           ${s.name}  (${s.root})`);
+  const scopes = detectScopes(tmp).filter((s) => s.kind === 'app');
+  console.log(`[${r.name}] app scopes: ${scopes.length}`);
 
   repoState[r.name] = {
     tmp, git: simpleGit(tmp), sourceShas, dates: r.dates, scopes,
     state: Object.fromEntries(scopes.map((s) => [s.root, {
-      scope: s, snap: null, pages: {},  // pages: { slug: body }
+      scope: s, snap: null, pages: {},
     }])),
   };
 }
@@ -87,7 +104,10 @@ for (let iter = 0; iter <= N_ITERS; iter++) {
   console.log(`\n=== ITERATION ${iter} ===`);
   const iterDir = join(OUT_ROOT, `iter-${iter}`);
   mkdirSync(iterDir, { recursive: true });
-  const iterRecord = { iter, repos: {}, cost: { baseline: 0, essence: 0, patch: 0 } };
+  const iterRecord = {
+    iter, repos: {},
+    cost: { compute: 0, apply: 0, fullrebuild: 0, judge: 0 },
+  };
 
   for (const r of REPOS) {
     const repoData = repoState[r.name];
@@ -95,52 +115,67 @@ for (let iter = 0; iter <= N_ITERS; iter++) {
     console.log(`[${r.name}] checkout ${sha.slice(0,7)}`);
     await repoData.git.checkout(sha);
     iterRecord.repos[r.name] = { sha, scopes: {} };
+    const repoOutDir = join(iterDir, r.name);
+    mkdirSync(repoOutDir, { recursive: true });
 
     await pMap(repoData.scopes, async (scope) => {
       const state = repoData.state[scope.root];
       const scopePath = join(repoData.tmp, scope.root);
-      const scopeOutDir = join(iterDir, r.name, scope.root.replace(/\//g, '__'));
-      mkdirSync(scopeOutDir, { recursive: true });
+      const scopeOutDir = join(repoOutDir, scope.root.replace(/\//g, '__'));
+      const beforeDir = join(scopeOutDir, 'before');
+      const patchDir = join(scopeOutDir, 'patch');
+      const afterDir = join(scopeOutDir, 'after');
+      const fullDir = join(scopeOutDir, 'fullrebuild');
+      const judgeDir = join(scopeOutDir, 'judge');
+      for (const d of [beforeDir, patchDir, afterDir, fullDir, judgeDir]) mkdirSync(d, { recursive: true });
 
-      let scopeCost = 0;
-      let essenceCost = 0;
-      let patchCost = 0;
+      for (const slug of APP_PAGE_SLUGS) writeFileSync(join(beforeDir, slug), state.pages[slug] ?? '(empty)\n');
+
+      let computeCost = 0;
+      let applyCost = 0;
+      let fullrebuildCost = 0;
+      let judgeCost = 0;
       let mode = 'no-op';
 
       if (iter === 0) {
         const snap = buildSnapshot(scopePath);
         state.snap = snap;
         const fileList = Object.keys(snap.files).sort();
-        if (fileList.length === 0) { mode = 'empty-scope'; iterRecord.repos[r.name].scopes[scope.root] = { mode, cost: 0 }; return; }
-
-        mode = 'baseline-full';
-        const res = await generateAppScope({
-          scopePath, scopeName: scope.name, scopeKind: scope.kind, repoName: r.name,
-          sourceFiles: fileList, claudeOpts,
-        });
-        accrue(res); scopeCost = res.costUsd ?? 0;
-        state.pages = res.pages;
-        for (const slug of APP_PAGE_SLUGS) writeFileSync(join(scopeOutDir, slug), `# ${slug}\n\n${state.pages[slug] ?? '(empty)'}\n`);
-        writeFileSync(join(scopeOutDir, 'llm-response.md'), res.rawResponse);
+        if (fileList.length === 0) {
+          mode = 'empty-scope';
+        } else {
+          mode = 'baseline-full';
+          const res = await generateAppScope({
+            scopePath, scopeName: scope.name, scopeKind: scope.kind, repoName: r.name,
+            sourceFiles: fileList, claudeOpts,
+          });
+          accrue(res); applyCost = res.costUsd ?? 0;
+          state.pages = res.pages;
+          writeFileSync(join(patchDir, 'patch.prompt.txt'), res.prompt);
+          writeFileSync(join(patchDir, 'patch.response.md'), res.rawResponse);
+          writeFileSync(join(patchDir, 'mode.txt'), 'baseline-full\n');
+        }
       } else {
         const before = state.snap;
         const after = buildSnapshot(scopePath);
         const diff = diffSnapshots(before, after);
         state.snap = after;
-
         const affected = affectedAppPages(diff);
         if (affected.length === 0) {
           mode = 'no-op';
+          writeFileSync(join(patchDir, 'mode.txt'), 'no-op\n');
         } else {
-          // Phase 1: essence (small LLM call to summarize)
+          mode = 'patch';
           const sourcemap = synthSourcemap(after);
           const ess = await extractEssence({
             diff, sourcemap, repoName: r.name, scopeName: scope.name, scopeKind: scope.kind, claudeOpts,
           });
-          accrue(ess); essenceCost = ess.costUsd ?? 0;
+          accrue(ess); computeCost = ess.costUsd ?? 0;
+          writeFileSync(join(patchDir, 'essence.json'), stableJson({ features: ess.features }));
+          writeFileSync(join(patchDir, 'essence.prompt.txt'), ess.prompt);
+          writeFileSync(join(patchDir, 'essence.response.md'), ess.rawResponse);
+          writeFileSync(join(patchDir, 'features.json'), stableJson(ess.features));
 
-          // Phase 2: single-call patch regenerating all 4 pages
-          mode = 'patch';
           const fileList = Object.keys(after.files).sort();
           const res = await patchAppScope({
             scopePath, scopeName: scope.name, scopeKind: scope.kind, repoName: r.name,
@@ -149,46 +184,135 @@ for (let iter = 0; iter <= N_ITERS; iter++) {
             features: ess.features,
             claudeOpts,
           });
-          accrue(res); patchCost = res.costUsd ?? 0;
-          // Merge — keep existing where model omitted
-          for (const slug of APP_PAGE_SLUGS) {
-            if (res.pages[slug]) state.pages[slug] = res.pages[slug];
-          }
-          for (const slug of APP_PAGE_SLUGS) writeFileSync(join(scopeOutDir, slug), `# ${slug}\n\n${state.pages[slug] ?? '(empty)'}\n`);
-          writeFileSync(join(scopeOutDir, 'essence.json'), stableJson({ features: ess.features }));
-          writeFileSync(join(scopeOutDir, 'llm-response.md'), res.rawResponse);
+          accrue(res); applyCost = res.costUsd ?? 0;
+          for (const slug of APP_PAGE_SLUGS) if (res.pages[slug]) state.pages[slug] = res.pages[slug];
+          writeFileSync(join(patchDir, 'patch.prompt.txt'), res.prompt);
+          writeFileSync(join(patchDir, 'patch.response.md'), res.rawResponse);
+          writeFileSync(join(patchDir, 'mode.txt'), 'patch\n');
         }
       }
 
+      for (const slug of APP_PAGE_SLUGS) writeFileSync(join(afterDir, slug), state.pages[slug] ?? '(empty)\n');
+
+      // Full from-scratch ground truth
+      const fullPages = {};
+      if (mode === 'baseline-full') {
+        for (const slug of APP_PAGE_SLUGS) fullPages[slug] = state.pages[slug];
+        writeFileSync(join(fullDir, 'NOTE.md'), 'iter-0: full == incremental (same gen pass)\n');
+      } else if (mode === 'empty-scope') {
+        // nothing
+      } else {
+        const snap = state.snap;
+        const fileList = Object.keys(snap.files).sort();
+        if (fileList.length > 0) {
+          const res = await generateAppScope({
+            scopePath, scopeName: scope.name, scopeKind: scope.kind, repoName: r.name,
+            sourceFiles: fileList, claudeOpts,
+          });
+          accrue(res); fullrebuildCost = res.costUsd ?? 0;
+          for (const slug of APP_PAGE_SLUGS) fullPages[slug] = res.pages[slug];
+          writeFileSync(join(fullDir, 'prompt.txt'), res.prompt);
+          writeFileSync(join(fullDir, 'response.md'), res.rawResponse);
+        }
+      }
+      for (const slug of APP_PAGE_SLUGS) writeFileSync(join(fullDir, slug), fullPages[slug] ?? '(empty)\n');
+
+      const verdicts = [];
+      if (mode !== 'empty-scope' && Object.keys(fullPages).length > 0) {
+        const candidates = APP_PAGE_SLUGS.filter((slug) => state.pages[slug] && fullPages[slug]);
+        const sample = candidates.slice(0, JUDGE_PAGES_PER_SCOPE);
+        for (const slug of sample) {
+          const v = await judge({
+            pageA: state.pages[slug], pageB: fullPages[slug],
+            context: `Both pages document slug "${slug}" for scope "${scope.name}" in repo "${r.name}".`,
+            claudeOpts,
+          });
+          verdicts.push({ slug, score: v.score, equivalent: v.equivalent, differences: v.differences ?? [] });
+          accrue(v); judgeCost += v.costUsd ?? 0;
+        }
+        writeFileSync(join(judgeDir, 'sample.json'), stableJson({ verdicts }));
+      }
+
+      writeFileSync(join(scopeOutDir, 'index.md'),
+        buildScopeIndex({ scope, pages: state.pages, sha }));
+
+      const avgScore = verdicts.length ? verdicts.reduce((s, v) => s + v.score, 0) / verdicts.length : null;
       iterRecord.repos[r.name].scopes[scope.root] = {
         kind: scope.kind, name: scope.name, mode,
-        cost: { baseline: iter === 0 ? scopeCost : 0, essence: essenceCost, patch: patchCost },
+        cost: { compute: computeCost, apply: applyCost, fullrebuild: fullrebuildCost, judge: judgeCost },
+        avgJudgeScore: avgScore,
+        verdicts,
       };
-      iterRecord.cost.baseline += iter === 0 ? scopeCost : 0;
-      iterRecord.cost.essence += essenceCost;
-      iterRecord.cost.patch += patchCost;
+      iterRecord.cost.compute += computeCost;
+      iterRecord.cost.apply += applyCost;
+      iterRecord.cost.fullrebuild += fullrebuildCost;
+      iterRecord.cost.judge += judgeCost;
     }, { concurrency: CONCURRENCY });
 
+    const perScopeDescriptions = {};
+    for (const [scopeRoot] of Object.entries(iterRecord.repos[r.name].scopes)) {
+      const state = repoData.state[scopeRoot];
+      const serviceBody = state.pages?.['service.md'] ?? '';
+      perScopeDescriptions[scopeRoot] = firstSentenceFromMd(serviceBody);
+    }
+    writeFileSync(join(repoOutDir, 'index.md'),
+      buildRepoIndex({ repoName: r.name, scopes: repoData.scopes, sha, perScopeDescriptions }));
+
     const summary = Object.values(iterRecord.repos[r.name].scopes)
-      .filter((s) => s.mode !== 'no-op')
-      .map((s) => `${s.name}(${s.mode}/$${(s.cost.baseline + s.cost.essence + s.cost.patch).toFixed(2)})`).join(' ');
-    console.log(`        ${r.name}: ${summary || '(no changes)'}`);
+      .filter((s) => s.mode !== 'no-op' && s.mode !== 'empty-scope')
+      .map((s) => `${s.name}(${s.mode}/$${(s.cost.compute + s.cost.apply).toFixed(2)}/judge=${s.avgJudgeScore?.toFixed(2) ?? 'n/a'})`).join(' ');
+    console.log(`        ${r.name}: ${summary || '(no scope changes)'}`);
   }
 
   iterRecord.cumulativeTotalCost = totalCost;
   writeFileSync(join(iterDir, 'report.json'), stableJson(iterRecord));
   iterReports.push(iterRecord);
 
-  console.log(`[iter ${iter}] baseline=$${iterRecord.cost.baseline.toFixed(2)} essence=$${iterRecord.cost.essence.toFixed(2)} patch=$${iterRecord.cost.patch.toFixed(2)}  cumul=$${totalCost.toFixed(2)}`);
+  const allVerdicts = [];
+  for (const repoInfo of Object.values(iterRecord.repos)) {
+    for (const sc of Object.values(repoInfo.scopes)) {
+      for (const v of sc.verdicts ?? []) allVerdicts.push(v.score);
+    }
+  }
+  const iterAvg = allVerdicts.length ? (allVerdicts.reduce((s, v) => s + v, 0) / allVerdicts.length).toFixed(2) : 'n/a';
+  console.log(`[iter ${iter}] compute=$${iterRecord.cost.compute.toFixed(2)} apply=$${iterRecord.cost.apply.toFixed(2)} fullrebuild=$${iterRecord.cost.fullrebuild.toFixed(2)} judge=$${iterRecord.cost.judge.toFixed(2)}  cumul=$${totalCost.toFixed(2)}  avgJudge=${iterAvg}`);
 }
 
 const summary = {
   model: MODEL, iters: N_ITERS, cumulativeCost: totalCost,
-  perIter: iterReports.map((r) => ({ iter: r.iter, cost: r.cost, cumulativeTotalCost: r.cumulativeTotalCost })),
+  perIter: iterReports.map((r) => {
+    const verdicts = [];
+    for (const repoInfo of Object.values(r.repos)) {
+      for (const sc of Object.values(repoInfo.scopes)) {
+        for (const v of sc.verdicts ?? []) verdicts.push(v.score);
+      }
+    }
+    return {
+      iter: r.iter,
+      cost: r.cost,
+      cumulativeTotalCost: r.cumulativeTotalCost,
+      avgJudgeScore: verdicts.length ? verdicts.reduce((s, v) => s + v, 0) / verdicts.length : null,
+      verdictCount: verdicts.length,
+    };
+  }),
 };
 writeFileSync(join(OUT_ROOT, 'summary.json'), stableJson(summary));
 
 console.log('\n=== WIKI MINIMAL BENCH SUMMARY ===');
-console.log(`iters: ${N_ITERS}  model: ${MODEL}  total: $${totalCost.toFixed(2)}`);
+console.log(`iters: ${N_ITERS}  model: ${MODEL}  total spent: $${totalCost.toFixed(2)}`);
+console.log(`split:  compute=$${iterReports.reduce((s, r) => s + r.cost.compute, 0).toFixed(2)}  apply=$${iterReports.reduce((s, r) => s + r.cost.apply, 0).toFixed(2)}  fullrebuild=$${iterReports.reduce((s, r) => s + r.cost.fullrebuild, 0).toFixed(2)}  judge=$${iterReports.reduce((s, r) => s + r.cost.judge, 0).toFixed(2)}`);
 
 for (const r of REPOS) rmSync(repoState[r.name].tmp, { recursive: true, force: true });
+
+function firstSentenceFromMd(body) {
+  if (!body) return '';
+  const lines = body.split('\n');
+  for (const line of lines) {
+    const t = line.trim();
+    if (!t || t.startsWith('#') || t.startsWith('-') || t.startsWith('*') || t.startsWith('**')) continue;
+    const m = t.match(/^[^.!?]{20,160}[.!?]/);
+    if (m) return m[0];
+    return t.length > 140 ? t.slice(0, 137) + '...' : t;
+  }
+  return '';
+}

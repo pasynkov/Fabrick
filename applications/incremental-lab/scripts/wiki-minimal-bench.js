@@ -42,10 +42,9 @@ import { simpleGit } from 'simple-git';
 import { detectScopes } from '../src/scope/monorepo.js';
 import { buildSnapshot } from '../src/snapshot/snapshot.js';
 import { diffSnapshots } from '../src/diff/diff.js';
-import { generateAppScope, patchAppScope } from '../src/wiki/app-page-generator.js';
+import { generateAppScope } from '../src/wiki/app-page-generator.js';
+import { computePatch, applyPatch } from '../src/wiki/patch.js';
 import { APP_PAGE_SLUGS, APP_PAGES, affectedAppPages } from '../src/wiki/app-taxonomy.js';
-import { extractEssence } from '../src/wiki/essence.js';
-import { synthSourcemap } from '../src/bench/synth-sourcemap.js';
 import { buildRepoIndex, buildScopeIndex } from '../src/wiki/monorepo-index.js';
 import { stableJson } from '../src/snapshot/store.js';
 import { judge } from '../src/llm/judge.js';
@@ -68,7 +67,7 @@ const OUT_ROOT = join(process.cwd(), '.lab', 'wiki-minimal');
 rmSync(OUT_ROOT, { recursive: true, force: true });
 mkdirSync(OUT_ROOT, { recursive: true });
 
-const claudeOpts = { model: MODEL };
+const claudeOpts = { model: MODEL, timeoutMs: 600_000 };
 let totalCost = 0;
 const accrue = (res) => {
   totalCost += res.costUsd ?? 0;
@@ -179,32 +178,37 @@ for (let iter = 0; iter <= N_ITERS; iter++) {
         writeFileSync(join(patchDir, 'patch.response.md'), res.rawResponse);
         writeFileSync(join(patchDir, 'mode.txt'), 'baseline-full\n');
       } else {
-        // mode === 'patch'
-        const sourcemap = synthSourcemap(snap);
+        // mode === 'patch'  → compute (dev) + apply (sdk)
         const changedFileContents = loadChangedFileContents(scopePath, diff);
         const beforeSha = repoData.sourceShas[repoData.dates[iter - 1]];
         const unifiedDiff = await computeUnifiedDiff(repoData.srcGit, beforeSha, sha, scope.root);
-        const ess = await extractEssence({
-          diff, sourcemap, repoName: r.name, scopeName: scope.name, scopeKind: scope.kind,
-          changedFileContents, unifiedDiff, claudeOpts,
-        });
-        accrue(ess); computeCost = ess.costUsd ?? 0;
-        writeFileSync(join(patchDir, 'essence.json'), stableJson({ features: ess.features }));
-        writeFileSync(join(patchDir, 'essence.prompt.txt'), ess.prompt);
-        writeFileSync(join(patchDir, 'essence.response.md'), ess.rawResponse);
-        writeFileSync(join(patchDir, 'features.json'), stableJson(ess.features));
 
-        const res = await patchAppScope({
+        const comp = await computePatch({
           scopeName: scope.name, scopeKind: scope.kind, repoName: r.name,
           existingPages: state.pages,
-          features: ess.features,
+          unifiedDiff, changedFileContents,
           claudeOpts,
         });
-        accrue(res); applyCost = res.costUsd ?? 0;
-        for (const slug of APP_PAGE_SLUGS) if (res.pages[slug]) state.pages[slug] = res.pages[slug];
-        writeFileSync(join(patchDir, 'patch.prompt.txt'), res.prompt);
-        writeFileSync(join(patchDir, 'patch.response.md'), res.rawResponse);
-        writeFileSync(join(patchDir, 'mode.txt'), 'patch\n');
+        accrue(comp); computeCost = comp.costUsd ?? 0;
+        writeFileSync(join(patchDir, 'compute.prompt.txt'), comp.prompt);
+        writeFileSync(join(patchDir, 'compute.response.md'), comp.rawResponse);
+        writeFileSync(join(patchDir, 'patch.md'), comp.patch);
+
+        if (comp.allNoOp) {
+          writeFileSync(join(patchDir, 'mode.txt'), 'patch-noop\n');
+        } else {
+          const ap = await applyPatch({
+            scopeName: scope.name, scopeKind: scope.kind, repoName: r.name,
+            existingPages: state.pages,
+            patchBySlug: comp.patchBySlug,
+            claudeOpts,
+          });
+          accrue(ap); applyCost = ap.costUsd ?? 0;
+          for (const slug of APP_PAGE_SLUGS) if (ap.pages[slug]) state.pages[slug] = ap.pages[slug];
+          writeFileSync(join(patchDir, 'apply.prompt.txt'), ap.prompt);
+          writeFileSync(join(patchDir, 'apply.response.md'), ap.rawResponse);
+          writeFileSync(join(patchDir, 'mode.txt'), 'patch\n');
+        }
       }
 
       for (const slug of APP_PAGE_SLUGS) writeFileSync(join(afterDir, slug), state.pages[slug] ?? '(empty)\n');
@@ -316,13 +320,16 @@ console.log(`split:  compute=$${iterReports.reduce((s, r) => s + r.cost.compute,
 
 for (const r of REPOS) rmSync(repoState[r.name].tmp, { recursive: true, force: true });
 
-const UNIFIED_DIFF_CAP = 50000;
 async function computeUnifiedDiff(git, beforeSha, afterSha, scopeRoot) {
+  const UNIFIED_DIFF_CAP = 50000;
   try {
     const out = await git.diff([`${beforeSha}..${afterSha}`, '--unified=2', '--', scopeRoot]);
     if (out.length > UNIFIED_DIFF_CAP) return out.slice(0, UNIFIED_DIFF_CAP) + '\n... (truncated)';
     return out;
-  } catch { return ''; }
+  } catch (e) {
+    console.error(`[diff fail] ${scopeRoot}: ${e.message}`);
+    return '';
+  }
 }
 
 function loadChangedFileContents(scopePath, diff) {

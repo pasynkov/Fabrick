@@ -68,18 +68,20 @@ function walk(dir, depth = 0) {
     if (!phase) continue;
 
     // Collect prompt + response pairs
-    if (e.name === 'patch.prompt.txt' || e.name === 'prompt.txt' || e.name === 'essence.prompt.txt') {
+    const PROMPT_RESPONSE_MAP = {
+      'compute.prompt.txt': { resp: 'compute.response.md', bucket: 'compute' },
+      'apply.prompt.txt':   { resp: 'apply.response.md',   bucket: 'apply' },
+      'essence.prompt.txt': { resp: 'essence.response.md', bucket: 'compute' },
+      'patch.prompt.txt':   { resp: 'patch.response.md',   bucket: 'apply' },
+      'prompt.txt':         { resp: 'response.md',         bucket: phase },
+    };
+    const map = PROMPT_RESPONSE_MAP[e.name];
+    if (map) {
       const promptText = readFileSync(p, 'utf8');
-      const responseName = e.name === 'essence.prompt.txt'
-        ? 'essence.response.md'
-        : (e.name === 'patch.prompt.txt' ? 'patch.response.md' : 'response.md');
-      const responsePath = join(dir, responseName);
       let response = '';
-      try { response = readFileSync(responsePath, 'utf8'); }
-      catch {}
-
+      try { response = readFileSync(join(dir, map.resp), 'utf8'); } catch {}
       const { system, user } = splitSystemUser(promptText);
-      const bucket = e.name === 'essence.prompt.txt' ? 'compute' : phase;
+      const bucket = map.bucket;
       stats[bucket].calls += 1;
       stats[bucket].system += tok(system);
       stats[bucket].user += tok(user);

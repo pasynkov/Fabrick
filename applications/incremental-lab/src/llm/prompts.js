@@ -186,36 +186,43 @@ export const JUDGE_SCHEMA = {
 };
 
 export function judgePrompt({ pageA, pageB, context = '' }) {
-  return `You are evaluating semantic equivalence of two wiki pages that describe the same code symbol. The PURPOSE is not exact text match — it is whether a reader would gain the same understanding from both.
+  return `You are evaluating whether PAGE A (the candidate) is informationally equivalent to or better than PAGE B (the reference) for documenting the same concept.
 
-${context ? `CONTEXT:\n${context}\n\n` : ''}PAGE A:
+${context ? `CONTEXT:\n${context}\n\n` : ''}PAGE A (candidate):
 ---
 ${pageA}
 ---
 
-PAGE B:
+PAGE B (reference):
 ---
 ${pageB}
 ---
 
 Evaluate:
-- Do they describe the same symbol(s) with the same key facts?
-- Same level of detail? Same accuracy?
-- Any factual disagreement (one claims X, other claims not-X)?
+- Coverage: every concrete fact in PAGE B should appear in PAGE A. A missing fact in A counts as information loss.
+- Superset OK: extra concrete facts in PAGE A that are NOT in PAGE B are FINE and do NOT lower the score, as long as they are plausibly grounded.
+- Contradictions: if PAGE A states X and PAGE B states not-X (and both refer to the same item), that IS a real disagreement and lowers the score.
+- Wording differences are irrelevant.
 
-Score:
-- 1.0 = semantically equivalent (small wording differences are fine)
-- 0.7-0.9 = mostly equivalent, minor information loss in one
-- 0.3-0.6 = significant difference (different focus, missing key facts)
-- 0.0-0.2 = describing different things or major factual conflict
+Score 0..1:
+- 1.00  PAGE A covers everything PAGE B covers (extra detail in A is fine).
+- 0.85  A covers PAGE B's key facts with at most 1 minor omission, no contradictions.
+- 0.70  A loses several non-trivial details OR has 1 minor contradiction.
+- 0.40  A loses many key facts OR has a significant contradiction.
+- 0.10  A and B describe different things or major factual conflict.
 
-equivalent = true only if score >= 0.8.
+equivalent = true only if score >= 0.80 AND no contradictions.
+
+The "differences" array MUST mark each entry with a prefix:
+  "(LOSS-IN-A) <detail>"  — fact present in B but missing in A
+  "(EXTRA-IN-A) <detail>" — fact present in A but missing in B (informational only — does not lower score)
+  "(CONTRADICT) <detail>" — A and B disagree on a fact
 
 Output ONLY a single JSON object on its own. No prose before or after, no markdown fences. Shape:
 {
   "equivalent": boolean,
   "score": number 0..1,
-  "differences": [array of short strings]
+  "differences": [array of short prefixed strings]
 }
 Do not use any tools.
 `;

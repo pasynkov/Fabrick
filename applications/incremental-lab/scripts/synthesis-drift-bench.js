@@ -36,10 +36,14 @@ import { config as loadEnv } from 'dotenv';
 loadEnv({ path: '.env.local' });
 loadEnv({ path: '.env' });
 
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { discoverTaxonomy, affectedArchSlugs, pruneTaxonomy } from '../src/synthesis/taxonomy.js';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { simpleGit } from 'simple-git';
+import { discoverTaxonomy, flattenArchSources, affectedArchSlugsByFiles, pruneTaxonomy } from '../src/synthesis/taxonomy.js';
 import { generateArchPage, patchArchPage, generateMcpDescription, generateMcpInstructions } from '../src/synthesis/page-generator.js';
+import { buildSnapshot } from '../src/snapshot/snapshot.js';
+import { synthSourcemap } from '../src/bench/synth-sourcemap.js';
 import { judge } from '../src/llm/judge.js';
 import { stableJson } from '../src/snapshot/store.js';
 import { pMap } from '../src/util/concurrent.js';
@@ -52,11 +56,54 @@ const MODEL = argv.find((a) => a.startsWith('--model='))?.split('=')[1] ?? 'sonn
 const CONCURRENCY = Number(argv.find((a) => a.startsWith('--concurrency='))?.split('=')[1] ?? 4);
 const JUDGE_SAMPLE = Number(argv.find((a) => a.startsWith('--judge-sample='))?.split('=')[1] ?? 5);
 
-const REPOS = ['backend1', 'kustomize'];
+const REPOS = [
+  { name: 'backend1', path: process.env.NAMI_REPO_BACKEND1, dates: ['2025-09-09','2025-09-15','2025-09-22','2025-09-28','2025-10-08','2025-10-13'] },
+  { name: 'kustomize', path: process.env.NAMI_REPO_KUSTOMIZE, dates: ['2025-09-09','2025-09-15','2025-09-22','2025-09-28','2025-10-08','2025-10-13'] },
+];
+const REPO_NAMES = REPOS.map((r) => r.name);
 
 if (!existsSync(WIKI_ROOT)) {
   console.error(`Wiki snapshot root missing: ${WIKI_ROOT}. Run wiki-drift-bench.js first.`);
   process.exit(1);
+}
+for (const r of REPOS) {
+  if (!r.path || !existsSync(r.path)) { console.error(`repo missing: ${r.name} ${r.path}`); process.exit(1); }
+}
+
+// Clone repos + resolve SHAs per iter so we can compute file-level diffs
+const repoState = {};
+for (const r of REPOS) {
+  const tmp = mkdtempSync(join(tmpdir(), `sd-${r.name}-`));
+  console.log(`[clone] ${r.name} → ${tmp}`);
+  await simpleGit(r.path).clone(r.path, tmp, ['--no-local']).catch(async () => simpleGit(r.path).clone(r.path, tmp));
+  const srcGit = simpleGit(r.path);
+  const sourceShas = {};
+  for (const date of r.dates) {
+    const raw = await srcGit.raw(['log', '--until', `${date}T23:59:59`, '--pretty=%H', '-1']);
+    sourceShas[date] = raw.trim();
+  }
+  repoState[r.name] = { tmp, git: simpleGit(tmp), sourceShas, dates: r.dates };
+}
+
+async function buildWikiSourcemapAt(repoName, iter) {
+  const r = REPOS.find((x) => x.name === repoName);
+  const state = repoState[repoName];
+  const sha = state.sourceShas[state.dates[iter]];
+  await state.git.checkout(sha);
+  const snap = buildSnapshot(state.tmp);
+  return { snap, sourcemap: synthSourcemap(snap) };
+}
+
+function fileDiff(beforeFiles, afterFiles) {
+  const before = beforeFiles ?? {};
+  const after = afterFiles ?? {};
+  const added = [], changed = [], deleted = [];
+  for (const f of Object.keys(after)) {
+    if (!(f in before)) added.push(f);
+    else if (before[f].hash !== after[f].hash) changed.push(f);
+  }
+  for (const f of Object.keys(before)) if (!(f in after)) deleted.push(f);
+  return { added: added.sort(), changed: changed.sort(), deleted: deleted.sort() };
 }
 
 const OUT_ROOT = join(process.cwd(), '.lab', 'synthesis-drift');
@@ -95,21 +142,29 @@ for (let iter = 0; iter <= N_ITERS; iter++) {
 
   // Load wiki for this iteration
   const perRepoWiki = {};
-  for (const repo of REPOS) {
+  for (const repo of REPO_NAMES) {
     const dir = join(WIKI_ROOT, `iter-${iter}`, repo, 'wiki-incremental', 'after');
     if (!existsSync(dir)) { console.error(`Missing wiki snapshot: ${dir}`); process.exit(1); }
     perRepoWiki[repo] = loadWikiDir(dir);
   }
-  console.log(`[iter ${iter}] loaded: ${REPOS.map((r) => `${r}=${Object.keys(perRepoWiki[r]).length}`).join(' ')}`);
+  // Also build per-repo wiki sourcemap (for file mapping) and snapshot (for file hashes)
+  const perRepoWikiSourcemaps = {};
+  const perRepoFiles = {};
+  for (const repo of REPO_NAMES) {
+    const { snap, sourcemap } = await buildWikiSourcemapAt(repo, iter);
+    perRepoWikiSourcemaps[repo] = sourcemap;
+    perRepoFiles[repo] = snap.files;
+  }
+  console.log(`[iter ${iter}] loaded wiki: ${REPO_NAMES.map((r) => `${r}=${Object.keys(perRepoWiki[r]).length}`).join(' ')}  files: ${REPO_NAMES.map((r) => `${r}=${Object.keys(perRepoFiles[r]).length}`).join(' ')}`);
 
   let incrCost = 0;
   let mcpCost = 0;
 
   if (iter === 0) {
-    // Phase 1: discover taxonomy (one LLM call)
+    // Phase 1: discover taxonomy (one LLM call) and flatten sources from wiki sourcemaps
     console.log(`[iter ${iter}] discovering taxonomy...`);
     const disc = await discoverTaxonomy({ perRepoPageBodies: perRepoWiki, claudeOpts });
-    taxonomy = disc.taxonomy;
+    taxonomy = flattenArchSources({ taxonomy: disc.taxonomy, perRepoWikiSourcemaps });
     writeFileSync(join(incrDir, 'taxonomy.json'), stableJson(taxonomy));
     const taxoCallDir = join(incrDir, 'taxonomy-call');
     mkdirSync(taxoCallDir, { recursive: true });
@@ -137,8 +192,8 @@ for (let iter = 0; iter <= N_ITERS; iter++) {
 
     // Phase 3: mcp pages (separate)
     const [descRes, instrRes] = await Promise.all([
-      generateMcpDescription({ taxonomy, repos: REPOS, claudeOpts }),
-      generateMcpInstructions({ taxonomy, repos: REPOS, claudeOpts }),
+      generateMcpDescription({ taxonomy, repos: REPO_NAMES, claudeOpts }),
+      generateMcpInstructions({ taxonomy, repos: REPO_NAMES, claudeOpts }),
     ]);
     archBodies.set('mcp-description.md', descRes.content);
     archBodies.set('mcp-instructions.md', instrRes.content);
@@ -148,32 +203,36 @@ for (let iter = 0; iter <= N_ITERS; iter++) {
     writeFileSync(join(mcpDir, 'mcp-instructions.response.md'), instrRes.rawResponse);
     accrue(descRes); accrue(instrRes); mcpCost += (descRes.costUsd ?? 0) + (instrRes.costUsd ?? 0);
   } else {
-    // Compute wiki patch
-    const prevWiki = loadAllIter(WIKI_ROOT, iter - 1);
-    const wikiPatchByRepo = {};
-    for (const repo of REPOS) wikiPatchByRepo[repo] = buildWikiPatch(prevWiki[repo] ?? {}, perRepoWiki[repo]);
-    const patchSummary = REPOS.map((r) => {
-      const p = wikiPatchByRepo[r];
-      return `${r}: +${p.added.length}/~${p.changed.length}/-${p.deleted.length}`;
+    // File-level patch: compute file diff per repo between iter and iter-1
+    const prevFiles = {};
+    for (const repo of REPO_NAMES) {
+      const { snap } = await buildWikiSourcemapAt(repo, iter - 1);
+      prevFiles[repo] = snap.files;
+    }
+    const fileDiffByRepo = {};
+    for (const repo of REPO_NAMES) fileDiffByRepo[repo] = fileDiff(prevFiles[repo], perRepoFiles[repo]);
+    const patchSummary = REPO_NAMES.map((r) => {
+      const d = fileDiffByRepo[r];
+      return `${r}: +${d.added.length}/~${d.changed.length}/-${d.deleted.length} files`;
     }).join('  ');
-    console.log(`[iter ${iter}] patch: ${patchSummary}`);
-    writeFileSync(join(incrDir, 'wiki-patch.json'), stableJson(wikiPatchByRepo));
+    console.log(`[iter ${iter}] file diff: ${patchSummary}`);
+    writeFileSync(join(incrDir, 'file-diff.json'), stableJson(fileDiffByRepo));
 
-    if (Object.values(wikiPatchByRepo).every((p) => !p.added.length && !p.changed.length && !p.deleted.length)) {
-      console.log(`[iter ${iter}] no wiki changes — synthesis no-op`);
+    // Re-flatten taxonomy with current wiki sourcemaps (sources may have shifted)
+    taxonomy = flattenArchSources({ taxonomy, perRepoWikiSourcemaps });
+
+    if (Object.values(fileDiffByRepo).every((d) => !d.added.length && !d.changed.length && !d.deleted.length)) {
+      console.log(`[iter ${iter}] no file changes — synthesis no-op`);
     } else {
-      // Prune deleted wiki refs from taxonomy
-      const pruned = pruneTaxonomy({ taxonomy, wikiPatchByRepo });
-      taxonomy = pruned.taxonomy;
-
-      // Find affected arch pages
-      const affected = affectedArchSlugs({ taxonomy, wikiPatchByRepo });
-      console.log(`[iter ${iter}] affected arch pages: ${affected.length}/${taxonomy.pages.length}`);
+      // File-level invalidation: arch pages whose source files intersect with diff
+      const { affected, reasons: fileReasons } = affectedArchSlugsByFiles({ taxonomy, fileDiffByRepo });
+      console.log(`[iter ${iter}] affected arch pages (file-level): ${affected.length}/${taxonomy.pages.length}`);
+      writeFileSync(join(incrDir, 'invalidation-reasons.json'), stableJson(fileReasons));
 
       const jobs = affected.map((page) => ({
         page,
         wikiExcerpts: wikiExcerptsFor(page, perRepoWiki),
-        wikiPatchSummary: buildWikiPatchSummaryForPage(page, wikiPatchByRepo),
+        wikiPatchSummary: buildFileLevelSummary(page, fileReasons[page.archSlug] ?? []),
       }));
       const results = await pMap(jobs, async (j) => {
         const existing = archBodies.get(j.page.archSlug) ?? '';
@@ -319,23 +378,11 @@ function loadWikiDir(dir) {
 
 function loadAllIter(root, iter) {
   const out = {};
-  for (const repo of REPOS) {
+  for (const repo of REPO_NAMES) {
     const dir = join(root, `iter-${iter}`, repo, 'wiki-incremental', 'after');
     out[repo] = existsSync(dir) ? loadWikiDir(dir) : {};
   }
   return out;
-}
-
-function buildWikiPatch(before, after) {
-  const beforeSlugs = new Set(Object.keys(before));
-  const afterSlugs = new Set(Object.keys(after));
-  const added = [], changed = [], deleted = [];
-  for (const slug of afterSlugs) {
-    if (!beforeSlugs.has(slug)) added.push({ slug });
-    else if (before[slug] !== after[slug]) changed.push({ slug });
-  }
-  for (const slug of beforeSlugs) if (!afterSlugs.has(slug)) deleted.push(slug);
-  return { added, changed, deleted };
 }
 
 function wikiExcerptsFor(page, perRepoWiki) {
@@ -345,7 +392,12 @@ function wikiExcerptsFor(page, perRepoWiki) {
   })).filter((x) => x.body);
 }
 
-function buildWikiPatchSummaryForPage(page, wikiPatchByRepo) {
+function buildFileLevelSummary(page, hitRepos) {
+  if (!hitRepos.length) return '(no direct file changes; cascade only)';
+  return hitRepos.map(({ repo, files }) => `  ${repo}: ${files.slice(0, 10).join(', ')}${files.length > 10 ? ` (+${files.length - 10} more)` : ''}`).join('\n');
+}
+
+function buildWikiPatchSummaryForPage_OLD(page, wikiPatchByRepo) {
   const refKey = (r, s) => `${r}::${s}`;
   const myRefs = new Set((page.wikiRefs ?? []).map((r) => refKey(r.repo, r.slug)));
   const lines = [];

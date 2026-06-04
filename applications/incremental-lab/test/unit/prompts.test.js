@@ -35,8 +35,8 @@ test('patchPagePrompt includes existing page and changes', () => {
 
 test('judgePrompt requests JSON output', () => {
   const p = judgePrompt({ pageA: 'A content', pageB: 'B content' });
-  assert.match(p, /PAGE A:/);
-  assert.match(p, /PAGE B:/);
+  assert.match(p, /PAGE A/);
+  assert.match(p, /PAGE B/);
   assert.match(p, /A content/);
   assert.match(p, /B content/);
   assert.match(p, /Output ONLY a single JSON object/);

@@ -101,6 +101,56 @@ export function affectedArchSlugs({ taxonomy, wikiPatchByRepo }) {
 }
 
 /**
+ * Flatten taxonomy: for each arch page, compute the union of source files
+ * derived from its wiki refs across ALL contributing repos.
+ *
+ * Result: page.sources = { repo1: [file, ...], repo2: [file, ...] }
+ */
+export function flattenArchSources({ taxonomy, perRepoWikiSourcemaps }) {
+  const out = { pages: [] };
+  for (const page of taxonomy.pages) {
+    const sourcesByRepo = {};
+    for (const ref of page.wikiRefs ?? []) {
+      const repoSmap = perRepoWikiSourcemaps[ref.repo];
+      if (!repoSmap) continue;
+      const wikiPage = repoSmap.pages?.[ref.slug];
+      if (!wikiPage?.files) continue;
+      (sourcesByRepo[ref.repo] ??= new Set());
+      for (const file of wikiPage.files) sourcesByRepo[ref.repo].add(file);
+    }
+    const sources = {};
+    for (const [repo, set] of Object.entries(sourcesByRepo)) sources[repo] = [...set].sort();
+    out.pages.push({ ...page, sources });
+  }
+  return out;
+}
+
+/**
+ * File-level invalidation across multiple repos. An arch page is affected if
+ * any source file from ANY of its contributing repos appears in that repo's
+ * file diff. Bypasses wiki body diff entirely.
+ */
+export function affectedArchSlugsByFiles({ taxonomy, fileDiffByRepo }) {
+  const affected = [];
+  const reasons = {};
+  for (const page of taxonomy.pages) {
+    const hitRepos = [];
+    for (const [repo, diff] of Object.entries(fileDiffByRepo)) {
+      const pageFiles = new Set(page.sources?.[repo] ?? []);
+      if (!pageFiles.size) continue;
+      const changed = (diff.added ?? []).concat(diff.changed ?? []).concat(diff.deleted ?? []);
+      const intersect = changed.filter((f) => pageFiles.has(f));
+      if (intersect.length) hitRepos.push({ repo, files: intersect });
+    }
+    if (hitRepos.length) {
+      affected.push(page);
+      reasons[page.archSlug] = hitRepos;
+    }
+  }
+  return { affected, reasons };
+}
+
+/**
  * Update taxonomy.wikiRefs: drop deleted refs. Returns updated taxonomy + bookkeeping.
  */
 export function pruneTaxonomy({ taxonomy, wikiPatchByRepo }) {

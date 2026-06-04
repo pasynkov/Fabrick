@@ -128,10 +128,26 @@ INSTRUCTIONS:
   * Named entities (specific service names, deployment names, NATS subjects) — confirm they still exist.
   * Cross-repo links — both ends must be present in wikis.
 - If existing says "X" but wikis say "X, Y, Z" — rewrite to include Y and Z.
-- DO NOT REMOVE existing factual details that are still accurate. Add new, preserve old.
-- If a documented item is no longer in any wiki, remove its mention.
-- For sections still accurate, keep wording close to existing to minimize churn.
-- Do NOT write a "## Related" section — it is auto-generated.
+
+PRESERVE OPERATIONAL DETAILS — these MUST stay verbatim unless the source explicitly removed them:
+- Environment variable names (KAFKA_*, NATS_*, GCP_*, POSTGRES_*, REAPER_*, *_CONFIG, etc.)
+- Container image references and imagePullPolicy
+- Resource limits and replicas (memory, cpu, replicas: N)
+- Probe configurations (endpoints, initialDelay, periodSeconds, failureThreshold)
+- Rollout strategies (Recreate, RollingUpdate, etc.)
+- Bucket / queue / subject / topic names (trades_jsonl, gcp project ids, NATS subject strings)
+- ConfigMap / Secret names referenced via envFrom or volumes
+- Asymmetric tuning notes (e.g. "NATS batch 10000 vs Kafka 7000")
+- Migration / file-path references the existing page already calls out
+
+If existing page has a "## Notes" section, the new page MUST keep at least
+the same set of bullet points. Adding new notes is fine. Removing a note
+requires explicit proof from the source wikis that the noted detail no
+longer exists. If unsure, KEEP the note.
+
+If a documented item is no longer in any wiki, remove its mention.
+For sections still accurate, keep wording close to existing to minimize churn.
+Do NOT write a "## Related" section — it is auto-generated.
 
 ${FORMAT_HINT}
 `;

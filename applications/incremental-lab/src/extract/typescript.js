@@ -141,10 +141,18 @@ function emitDecl(node, source, file, fileImports, out, exported, externalDecora
 function collectMembers(classNode, source, file, fileImports, parentName, out) {
   const body = classNode.childForFieldName('body');
   if (!body) return;
+  let pendingDecorators = [];
   for (const member of body.namedChildren) {
-    if (!METHOD_NODES.has(member.type)) continue;
+    if (member.type === 'decorator') {
+      pendingDecorators.push(member);
+      continue;
+    }
+    if (!METHOD_NODES.has(member.type)) {
+      pendingDecorators = [];
+      continue;
+    }
     const nameNode = member.childForFieldName('name');
-    if (!nameNode) continue;
+    if (!nameNode) { pendingDecorators = []; continue; }
     out.push(buildSymbol({
       file,
       kind: KIND_MAP[member.type],
@@ -153,7 +161,9 @@ function collectMembers(classNode, source, file, fileImports, parentName, out) {
       node: member,
       source,
       fileImports,
+      decorators: pendingDecorators,
     }));
+    pendingDecorators = [];
   }
 }
 
@@ -172,6 +182,7 @@ function buildSymbol({ file, kind, name, exported, node, source, fileImports, de
   }
   const decoratorText = decorators.map((d) => source.slice(d.startIndex, d.endIndex)).join('\n');
   const bodyWithDecorators = decoratorText ? `${decoratorText}\n${bodyText}` : bodyText;
+  const signatureWithDecorators = decoratorText ? `${decoratorText}\n${signatureSrc}` : signatureSrc;
   const refsSet = new Set();
   collectIdentifiers(node, refsSet, name);
   for (const dec of decorators) collectIdentifiers(dec, refsSet, name);
@@ -181,7 +192,7 @@ function buildSymbol({ file, kind, name, exported, node, source, fileImports, de
     kind,
     name,
     exported,
-    signature: normalizeWhitespace(signatureSrc),
+    signature: normalizeWhitespace(signatureWithDecorators),
     bodyHash: hash(normalizeBody(bodyWithDecorators)),
     imports: fileImports,
     references: [...refsSet].sort(),

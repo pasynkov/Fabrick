@@ -1,0 +1,92 @@
+#!/usr/bin/env node
+// Bootstrap project-specific routing rules from a tree-sitter snapshot.
+//
+// Usage:
+//   node scripts/bootstrap-rules.js <repo-path> [--model=sonnet]
+//
+// Reads <repo>/.fabrick/investigate/{summary.json, sample-symbols.json}
+// (run scripts/investigate-snapshot.js first).
+//
+// Writes <repo>/.fabrick/routing-rules.json + raw LLM trace.
+
+import { config as loadEnv } from 'dotenv';
+loadEnv({ path: '.env.local' });
+loadEnv({ path: '.env' });
+
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { basename, join } from 'node:path';
+import { callClaude } from '../src/llm/cli.js';
+import { bootstrapRoutingRulesPrompt } from '../src/llm/bootstrap-prompts.js';
+import { stableJson } from '../src/snapshot/store.js';
+
+const argv = process.argv.slice(2);
+const repoPath = argv.find((a) => !a.startsWith('--'));
+const MODEL = argv.find((a) => a.startsWith('--model='))?.split('=')[1] ?? 'sonnet';
+
+if (!repoPath || !existsSync(repoPath)) {
+  console.error('usage: node bootstrap-rules.js <repo-path> [--model=sonnet]');
+  process.exit(1);
+}
+
+const invDir = join(repoPath, '.fabrick', 'investigate');
+const summaryPath = join(invDir, 'summary.json');
+const samplePath = join(invDir, 'sample-symbols.json');
+if (!existsSync(summaryPath) || !existsSync(samplePath)) {
+  console.error(`missing snapshot artifacts. run: node scripts/investigate-snapshot.js ${repoPath}`);
+  process.exit(1);
+}
+
+const summary = JSON.parse(readFileSync(summaryPath, 'utf8'));
+const sampleSymbols = JSON.parse(readFileSync(samplePath, 'utf8'));
+const repoName = basename(repoPath);
+
+const built = bootstrapRoutingRulesPrompt({ repoName, summary, sampleSymbols });
+
+const traceDir = join(repoPath, '.fabrick');
+mkdirSync(traceDir, { recursive: true });
+writeFileSync(join(traceDir, 'bootstrap.prompt.txt'), `--- system ---\n${built.system}\n\n--- user ---\n${built.user}`);
+
+console.log(`[bootstrap] ${repoName} via ${MODEL}`);
+const t0 = Date.now();
+const res = await callClaude(built, { model: MODEL, timeoutMs: 600_000 });
+const ms = Date.now() - t0;
+console.log(`[done] ${ms}ms, cost: $${(res.costUsd ?? 0).toFixed(4)}`);
+
+writeFileSync(join(traceDir, 'bootstrap.response.md'), res.content);
+
+let rules;
+try {
+  const text = res.content;
+  const start = text.indexOf('{');
+  if (start < 0) throw new Error('no JSON object found in response');
+  let body = text.slice(start);
+  // Strip code fences if model wrapped output despite instruction.
+  body = body.replace(/```[a-z]*\s*/gi, '').replace(/```/g, '').trim();
+  try {
+    rules = JSON.parse(body);
+  } catch {
+    // Tolerate truncated tail: try closing the object.
+    const lastBrace = body.lastIndexOf('}');
+    const truncated = lastBrace > 0 ? body.slice(0, lastBrace + 1) : body + '}';
+    rules = JSON.parse(truncated);
+  }
+} catch (e) {
+  console.error('failed to parse rules JSON:', e.message);
+  console.error('raw response saved to .fabrick/bootstrap.response.md');
+  process.exit(1);
+}
+
+const rulesPath = join(traceDir, 'routing-rules.json');
+writeFileSync(rulesPath, stableJson(rules));
+console.log(`[wrote] ${rulesPath}`);
+
+console.log('\n=== SUMMARY ===');
+console.log(`frameworks:    ${(rules.frameworks ?? []).join(', ') || '(none)'}`);
+console.log(`internalLibs:  ${(rules.internalLibs ?? []).length}`);
+console.log(`decorators:`);
+for (const [cat, list] of Object.entries(rules.decorators ?? {})) {
+  console.log(`  ${cat.padEnd(10)} ${list.length}: ${list.slice(0, 8).join(', ')}${list.length > 8 ? ', …' : ''}`);
+}
+console.log(`integrations:  ${Object.keys(rules.imports?.integrations ?? {}).length} packages`);
+console.log(`file patterns: ${Object.keys(rules.filePatterns ?? {}).length}`);
+if (rules.notes) console.log(`notes: ${rules.notes}`);

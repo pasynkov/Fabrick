@@ -8,9 +8,10 @@ if (!cmd || cmd === '-h' || cmd === '--help') {
   console.error(`usage: fabrick <command> <repo> [options]
 
 commands:
-  bootstrap <repo>     detect language/framework, derive routing rules
-  fullscan  <repo>     generate initial wiki for every app scope
-  patch     <repo>     incremental wiki update for new commits
+  bootstrap  <repo>                    detect language/framework, derive routing rules
+  fullscan   <repo>                    generate initial wiki for every app scope
+  patch      <repo>                    incremental wiki update for new commits
+  synthesize <out-dir> --repos=r1,r2   cross-repo synthesis on top of wikis
 
 run 'fabrick <command>' with no args for command-specific help.
 `);
@@ -18,9 +19,10 @@ run 'fabrick <command>' with no args for command-specific help.
 }
 
 const handlers = {
-  bootstrap: () => import('../src/cli/bootstrap.js'),
-  fullscan:  () => import('../src/cli/fullscan.js'),
-  patch:     () => import('../src/cli/patch.js'),
+  bootstrap:  () => import('../src/cli/bootstrap.js'),
+  fullscan:   () => import('../src/cli/fullscan.js'),
+  patch:      () => import('../src/cli/patch.js'),
+  synthesize: () => import('../src/cli/synthesize.js'),
 };
 
 const loader = handlers[cmd];

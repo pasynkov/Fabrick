@@ -38,9 +38,11 @@ if (!existsSync(summaryPath) || !existsSync(samplePath)) {
 
 const summary = JSON.parse(readFileSync(summaryPath, 'utf8'));
 const sampleSymbols = JSON.parse(readFileSync(samplePath, 'utf8'));
+const rootFilesPath = join(invDir, 'root-files.json');
+const rootFiles = existsSync(rootFilesPath) ? JSON.parse(readFileSync(rootFilesPath, 'utf8')) : {};
 const repoName = basename(repoPath);
 
-const built = bootstrapRoutingRulesPrompt({ repoName, summary, sampleSymbols });
+const built = bootstrapRoutingRulesPrompt({ repoName, summary, sampleSymbols, rootFiles });
 
 const traceDir = join(repoPath, '.fabrick');
 mkdirSync(traceDir, { recursive: true });
@@ -81,6 +83,12 @@ writeFileSync(rulesPath, stableJson(rules));
 console.log(`[wrote] ${rulesPath}`);
 
 console.log('\n=== SUMMARY ===');
+if (rules.project) {
+  console.log(`project:       ${rules.project.kind ?? '?'} | ${rules.project.language ?? '?'} | ${rules.project.framework ?? '?'}`);
+  if (rules.project.apps?.length) console.log(`apps:          ${rules.project.apps.length} (${rules.project.apps.slice(0, 4).map((a) => a.name).join(', ')}${rules.project.apps.length > 4 ? ', …' : ''})`);
+  if (rules.project.runCommands?.length) console.log(`run:           ${rules.project.runCommands.slice(0, 3).join(' | ')}`);
+  if (rules.project.summary) console.log(`summary:       ${rules.project.summary}`);
+}
 console.log(`frameworks:    ${(rules.frameworks ?? []).join(', ') || '(none)'}`);
 console.log(`internalLibs:  ${(rules.internalLibs ?? []).length}`);
 console.log(`decorators:`);

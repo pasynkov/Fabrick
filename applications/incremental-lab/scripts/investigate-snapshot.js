@@ -14,7 +14,7 @@
 //   skipped.txt             files that failed to parse
 //   sample-symbols.json     20 random symbols, full shape
 
-import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { buildSnapshot } from '../src/snapshot/snapshot.js';
 import { stableJson } from '../src/snapshot/store.js';
@@ -29,6 +29,84 @@ const outDir = join(repoPath, '.fabrick', 'investigate');
 rmSync(outDir, { recursive: true, force: true });
 mkdirSync(outDir, { recursive: true });
 
+// Capture top-level project metadata: directories + key root files (project
+// manifests, READMEs, build configs, Dockerfiles). Used by the bootstrap LLM
+// to identify language, framework, monorepo layout, run commands.
+const ROOT_FILE_MAX_BYTES = 8000;
+const ROOT_FILE_TOTAL_CAP = 60000;
+const ROOT_FILE_PATTERNS = [
+  /^README(\..+)?$/i,
+  /^CHANGELOG(\..+)?$/i,
+  /^LICENSE(\..+)?$/i,
+  /^package\.json$/,
+  /^pnpm-workspace\.yaml$/,
+  /^lerna\.json$/,
+  /^turbo\.json$/,
+  /^nx\.json$/,
+  /^nest-cli\.json$/,
+  /^tsconfig.*\.json$/,
+  /^jsconfig\.json$/,
+  /^pyproject\.toml$/,
+  /^setup\.py$/,
+  /^setup\.cfg$/,
+  /^requirements.*\.txt$/i,
+  /^Pipfile$/,
+  /^go\.mod$/,
+  /^go\.sum$/,
+  /^Cargo\.toml$/,
+  /^pom\.xml$/,
+  /^build\.gradle(\.kts)?$/,
+  /^settings\.gradle(\.kts)?$/,
+  /^composer\.json$/,
+  /^Gemfile$/,
+  /^Makefile$/,
+  /^Justfile$/,
+  /^Dockerfile(\..+)?$/,
+  /^docker-compose.*\.ya?ml$/,
+  /^kustomization\.ya?ml$/,
+  /^skaffold\.ya?ml$/,
+  /^helmfile.*$/,
+  /^webpack\.config\..+$/,
+  /^vite\.config\..+$/,
+  /^rollup\.config\..+$/,
+  /^\.nvmrc$/,
+  /^\.python-version$/,
+  /^\.ruby-version$/,
+  /^\.tool-versions$/,
+  /^build\.sh$/,
+];
+const ROOT_FILE_SKIP = /^(\.env|.*-lock\.(json|yaml|yml)|.*\.lock|.*\.pem|.*\.key|\.DS_Store|node_modules)$/;
+
+function readRootFiles(root) {
+  const entries = readdirSync(root, { withFileTypes: true });
+  const files = {};
+  const dirs = [];
+  let total = 0;
+  for (const e of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+    if (e.isDirectory()) {
+      if (!e.name.startsWith('.') && e.name !== 'node_modules' && e.name !== 'dist' && e.name !== 'build') {
+        dirs.push(e.name);
+      }
+      continue;
+    }
+    if (!e.isFile()) continue;
+    if (ROOT_FILE_SKIP.test(e.name)) continue;
+    if (!ROOT_FILE_PATTERNS.some((re) => re.test(e.name))) continue;
+    const abs = join(root, e.name);
+    let st;
+    try { st = statSync(abs); } catch { continue; }
+    if (st.size > ROOT_FILE_MAX_BYTES * 4) continue;
+    let content;
+    try { content = readFileSync(abs, 'utf8'); } catch { continue; }
+    if (content.length > ROOT_FILE_MAX_BYTES) content = content.slice(0, ROOT_FILE_MAX_BYTES) + '\n... (truncated)';
+    if (total + content.length > ROOT_FILE_TOTAL_CAP) break;
+    files[e.name] = content;
+    total += content.length;
+  }
+  return { rootFiles: files, topLevelDirs: dirs };
+}
+
+const { rootFiles, topLevelDirs } = readRootFiles(repoPath);
 console.log(`[scan] ${repoPath}`);
 const t0 = Date.now();
 const snap = buildSnapshot(repoPath);
@@ -117,7 +195,11 @@ writeFileSync(join(outDir, 'summary.json'), stableJson({
   topImports: Object.entries(importFreq).sort((a, b) => b[1] - a[1]).slice(0, 30),
   topFiles: Object.entries(byFile).sort((a, b) => b[1] - a[1]).slice(0, 30),
   decoratorMatrix: decoratorMatrixCompact,
+  topLevelDirs,
+  rootFileNames: Object.keys(rootFiles),
 }));
+
+writeFileSync(join(outDir, 'root-files.json'), stableJson(rootFiles));
 
 const byKindDir = join(outDir, 'by-kind');
 mkdirSync(byKindDir, { recursive: true });

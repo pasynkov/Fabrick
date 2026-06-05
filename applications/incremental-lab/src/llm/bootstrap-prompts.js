@@ -18,10 +18,14 @@ const SLUG_DEFINITIONS = `
                   This is NOT the same as project-internal shared libraries — those should be ignored.
 `.trim();
 
-export function bootstrapRoutingRulesPrompt({ repoName, summary, sampleSymbols }) {
+export function bootstrapRoutingRulesPrompt({ repoName, summary, sampleSymbols, rootFiles = {} }) {
   const sampleBlock = sampleSymbols.slice(0, 20).map((s) =>
     `[${s.kind}] ${s.name}\n  file: ${s.file}\n  signature: ${trim(s.signature ?? '', 240)}\n  imports: ${(s.imports ?? []).slice(0, 8).join(', ')}`
   ).join('\n\n');
+
+  const rootFilesBlock = Object.entries(rootFiles)
+    .map(([name, content]) => `=== ${name} ===\n${content}`)
+    .join('\n\n');
 
   const system = `You are bootstrapping documentation-routing rules for a code repository. The downstream pipeline maintains a 4-page wiki per microservice; your job is to teach that pipeline which signals in the codebase route to which page.
 
@@ -29,7 +33,8 @@ WIKI PAGES (fixed slugs; routing must target these):
 ${SLUG_DEFINITIONS}
 
 INPUT YOU WILL RECEIVE:
-- summary.json — counts and top-N tables (decorators/annotations, imports, file paths, symbol kinds)
+- summary.json — counts and top-N tables (decorators/annotations, imports, file paths, symbol kinds), plus decoratorMatrix, topLevelDirs, rootFileNames
+- root files — verbatim contents of project-manifest / README / Dockerfile / build configs at the repo root
 - 20 sample symbols — full shape (signature with decorators, imports, file)
 
 INFER, FROM THE INPUT ONLY:
@@ -63,6 +68,17 @@ OUTPUT SHAPE (fill from the input):
 
 {
   "repoName": "<from input>",
+  "project": {
+    "language":   "<primary language(s), e.g. TypeScript, Python, Go>",
+    "framework":  "<primary application framework, e.g. NestJS, FastAPI, Spring Boot>",
+    "kind":       "<one of: service | monorepo | library | gitops | infrastructure | unknown>",
+    "runCommands": ["<short command, e.g. npm run start:vision-connector>", ...],
+    "buildCommands": ["<build entry from manifest, e.g. npm run build>", ...],
+    "apps": [                              // populate ONLY if monorepo
+      { "name": "<app name>", "root": "<path>", "entry": "<entry file or null>" }
+    ],
+    "summary":    "<1-3 sentence project description suitable for README header>"
+  },
   "frameworks": ["<frameworks inferred from imports/decorators, may be empty>"],
   "internalLibs": ["<import path prefix>", ...],
   "decorators": {
@@ -89,6 +105,9 @@ ${FORMAT_HINT}`;
 
 SNAPSHOT SUMMARY:
 ${JSON.stringify(summary, null, 2)}
+
+ROOT FILES (verbatim, truncated to 8KB each):
+${rootFilesBlock || '(no root files captured)'}
 
 SAMPLE SYMBOLS (20 random, full shape):
 ${sampleBlock}

@@ -4,6 +4,9 @@
   "description": "Sandbox for incremental symbol-graph rebuild engine (analyze + synthesis).",
   "type": "module",
   "private": true,
+  "bin": {
+    "fabrick": "bin/fabrick.js"
+  },
   "scripts": {
     "test": "node --test 'test/unit/*.test.js' 'test/*.test.js'",
     "test:unit": "node --test 'test/unit/*.test.js'",

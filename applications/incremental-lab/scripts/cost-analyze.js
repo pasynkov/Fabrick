@@ -30,7 +30,15 @@ const CHARS_PER_TOKEN = 4;
 const tok = (s) => Math.ceil((s?.length ?? 0) / CHARS_PER_TOKEN);
 
 const MODEL = argv.find((a) => a.startsWith('--model='))?.split('=')[1] ?? 'sonnet';
+const APPLY_MODEL = argv.find((a) => a.startsWith('--apply-model='))?.split('=')[1] ?? 'haiku';
 const p = PRICING[MODEL];
+
+const PHASE_PRICING = {
+  compute: PRICING[MODEL],
+  apply: PRICING[APPLY_MODEL],
+  fullrebuild: PRICING[MODEL],
+  judge: PRICING[MODEL],
+};
 
 const stats = {
   compute:    { calls: 0, system: 0, user: 0, output: 0 },
@@ -92,39 +100,42 @@ function walk(dir, depth = 0) {
 
 walk(ROOT);
 
-function sdkCost(bucket, opts = { cacheSystem: true }) {
+function sdkCost(bucket, phase, opts = { cacheSystem: true }) {
+  const pp = PHASE_PRICING[phase] ?? p;
   const inputUser = bucket.user;
   const inputSystem = bucket.system;
   const output = bucket.output;
   if (opts.cacheSystem && bucket.calls > 0 && inputSystem > 0) {
-    // First call writes system to cache, rest read
     const perCallSystem = inputSystem / bucket.calls;
-    const cwrite = perCallSystem * p.cwrite5m / 1_000_000;
-    const cread = perCallSystem * (bucket.calls - 1) * p.cread / 1_000_000;
-    const usrCost = inputUser * p.input / 1_000_000;
-    const outCost = output * p.output / 1_000_000;
+    const cwrite = perCallSystem * pp.cwrite5m / 1_000_000;
+    const cread = perCallSystem * (bucket.calls - 1) * pp.cread / 1_000_000;
+    const usrCost = inputUser * pp.input / 1_000_000;
+    const outCost = output * pp.output / 1_000_000;
     return cwrite + cread + usrCost + outCost;
   }
-  return ((inputUser + inputSystem) * p.input + output * p.output) / 1_000_000;
+  return ((inputUser + inputSystem) * pp.input + output * pp.output) / 1_000_000;
 }
 
-console.log(`=== SDK-EQUIVALENT COST ANALYSIS (${MODEL}) ===`);
+console.log(`=== SDK-EQUIVALENT COST ANALYSIS ===`);
 console.log(`source: ${ROOT}`);
-console.log(`pricing: input=$${p.input}/M, output=$${p.output}/M, cache_write=$${p.cwrite5m}/M, cache_read=$${p.cread}/M`);
+console.log(`pricing per phase:`);
+for (const [phase, pp] of Object.entries(PHASE_PRICING)) {
+  console.log(`  ${phase.padEnd(12)} in=$${pp.input}/M out=$${pp.output}/M cwrite=$${pp.cwrite5m}/M cread=$${pp.cread}/M`);
+}
 console.log();
 console.log(`phase         calls    sys-tok    usr-tok    out-tok    sdk$ (cached)    sdk$ (no-cache)`);
 console.log(`──────────────────────────────────────────────────────────────────────────────────────`);
 let totalCached = 0;
 let totalNoCache = 0;
 for (const [phase, b] of Object.entries(stats)) {
-  const cached = sdkCost(b, { cacheSystem: true });
-  const noCache = sdkCost(b, { cacheSystem: false });
+  const cached = sdkCost(b, phase, { cacheSystem: true });
+  const noCache = sdkCost(b, phase, { cacheSystem: false });
   totalCached += cached; totalNoCache += noCache;
   console.log(`${phase.padEnd(13)} ${String(b.calls).padStart(5)}  ${String(b.system).padStart(8)}  ${String(b.user).padStart(8)}  ${String(b.output).padStart(8)}    $${cached.toFixed(4).padStart(8)}        $${noCache.toFixed(4).padStart(8)}`);
 }
 console.log(`──────────────────────────────────────────────────────────────────────────────────────`);
 console.log(`TOTAL                                                  $${totalCached.toFixed(4).padStart(8)}        $${totalNoCache.toFixed(4).padStart(8)}`);
 console.log();
-console.log(`incremental cost (apply + compute) cached:    $${(sdkCost(stats.compute, {cacheSystem:true}) + sdkCost(stats.apply, {cacheSystem:true})).toFixed(4)}`);
-console.log(`full-rescan cost cached:                       $${sdkCost(stats.fullrebuild, {cacheSystem:true}).toFixed(4)}`);
-console.log(`judge cost cached:                             $${sdkCost(stats.judge, {cacheSystem:true}).toFixed(4)}`);
+console.log(`incremental cost (apply + compute) cached:    $${(sdkCost(stats.compute,'compute',{cacheSystem:true}) + sdkCost(stats.apply,'apply',{cacheSystem:true})).toFixed(4)}`);
+console.log(`full-rescan cost cached:                       $${sdkCost(stats.fullrebuild,'fullrebuild',{cacheSystem:true}).toFixed(4)}`);
+console.log(`judge cost cached:                             $${sdkCost(stats.judge,'judge',{cacheSystem:true}).toFixed(4)}`);

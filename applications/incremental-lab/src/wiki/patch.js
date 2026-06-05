@@ -24,12 +24,12 @@ export function serializePatch(patchBySlug) {
  */
 export async function computePatch({
   scopeName, scopeKind, repoName,
-  existingPages, unifiedDiff, changedFileContents,
+  existingPages, unifiedDiff,
   claudeOpts = {},
 }) {
   const built = computePatchPrompt({
     scopeName, scopeKind, repoName,
-    existingPages, unifiedDiff, changedFileContents,
+    existingPages, unifiedDiff,
   });
   const res = await callClaude(built, claudeOpts);
   const patchBySlug = parsePatchOutput(res.content);

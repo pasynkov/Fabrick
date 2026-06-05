@@ -35,7 +35,7 @@ import { config as loadEnv } from 'dotenv';
 loadEnv({ path: '.env.local' });
 loadEnv({ path: '.env' });
 
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { simpleGit } from 'simple-git';
@@ -54,6 +54,7 @@ const argv = process.argv.slice(2);
 const N_ITERS = Number(argv.find((a) => a.startsWith('--iters='))?.split('=')[1] ?? 5);
 const MAX_COST = Number(argv.find((a) => a.startsWith('--max-cost='))?.split('=')[1] ?? 15);
 const MODEL = argv.find((a) => a.startsWith('--model='))?.split('=')[1] ?? 'sonnet';
+const APPLY_MODEL = argv.find((a) => a.startsWith('--apply-model='))?.split('=')[1] ?? 'haiku';
 const CONCURRENCY = Number(argv.find((a) => a.startsWith('--concurrency='))?.split('=')[1] ?? 4);
 const JUDGE_PAGES_PER_SCOPE = Number(argv.find((a) => a.startsWith('--judge-per-scope='))?.split('=')[1] ?? 1);
 
@@ -165,6 +166,7 @@ for (let iter = 0; iter <= N_ITERS; iter++) {
       let applyCost = 0;
       let fullrebuildCost = 0;
       let judgeCost = 0;
+      let patchedSlugs = [];
 
       if (mode === 'baseline-full') {
         const fileList = Object.keys(snap.files).sort();
@@ -178,15 +180,14 @@ for (let iter = 0; iter <= N_ITERS; iter++) {
         writeFileSync(join(patchDir, 'patch.response.md'), res.rawResponse);
         writeFileSync(join(patchDir, 'mode.txt'), 'baseline-full\n');
       } else {
-        // mode === 'patch'  → compute (dev) + apply (sdk)
-        const changedFileContents = loadChangedFileContents(scopePath, diff);
+        // mode === 'patch'  → compute (sonnet, dev) + apply (haiku, sdk)
         const beforeSha = repoData.sourceShas[repoData.dates[iter - 1]];
         const unifiedDiff = await computeUnifiedDiff(repoData.srcGit, beforeSha, sha, scope.root);
 
         const comp = await computePatch({
           scopeName: scope.name, scopeKind: scope.kind, repoName: r.name,
           existingPages: state.pages,
-          unifiedDiff, changedFileContents,
+          unifiedDiff,
           claudeOpts,
         });
         accrue(comp); computeCost = comp.costUsd ?? 0;
@@ -197,11 +198,12 @@ for (let iter = 0; iter <= N_ITERS; iter++) {
         if (comp.allNoOp) {
           writeFileSync(join(patchDir, 'mode.txt'), 'patch-noop\n');
         } else {
+          patchedSlugs = APP_PAGE_SLUGS.filter((slug) => comp.patchBySlug[slug] && !/^no\s+changes\.?$/i.test(comp.patchBySlug[slug].trim()));
           const ap = await applyPatch({
             scopeName: scope.name, scopeKind: scope.kind, repoName: r.name,
             existingPages: state.pages,
             patchBySlug: comp.patchBySlug,
-            claudeOpts,
+            claudeOpts: { ...claudeOpts, model: APPLY_MODEL },
           });
           accrue(ap); applyCost = ap.costUsd ?? 0;
           for (const slug of APP_PAGE_SLUGS) if (ap.pages[slug]) state.pages[slug] = ap.pages[slug];
@@ -236,7 +238,12 @@ for (let iter = 0; iter <= N_ITERS; iter++) {
       const verdicts = [];
       if (Object.keys(fullPages).length > 0) {
         const candidates = APP_PAGE_SLUGS.filter((slug) => state.pages[slug] && fullPages[slug]);
-        const sample = candidates.slice(0, JUDGE_PAGES_PER_SCOPE);
+        // Prefer patched slugs — they reflect real apply-phase quality.
+        const ordered = [
+          ...candidates.filter((s) => patchedSlugs.includes(s)),
+          ...candidates.filter((s) => !patchedSlugs.includes(s)),
+        ];
+        const sample = ordered.slice(0, JUDGE_PAGES_PER_SCOPE);
         for (const slug of sample) {
           const v = await judge({
             pageA: state.pages[slug], pageB: fullPages[slug],
@@ -330,24 +337,6 @@ async function computeUnifiedDiff(git, beforeSha, afterSha, scopeRoot) {
     console.error(`[diff fail] ${scopeRoot}: ${e.message}`);
     return '';
   }
-}
-
-function loadChangedFileContents(scopePath, diff) {
-  const CHANGED_FILE_MAX_BYTES = 8000;
-  const CHANGED_FILE_TOTAL_CAP = 40000;
-  const out = {};
-  const files = [...(diff.files?.changed ?? []), ...(diff.files?.added ?? [])];
-  let total = 0;
-  for (const rel of files) {
-    let content;
-    try { content = readFileSync(join(scopePath, rel), 'utf8'); }
-    catch { continue; }
-    if (content.length > CHANGED_FILE_MAX_BYTES) content = content.slice(0, CHANGED_FILE_MAX_BYTES) + '\n...';
-    if (total + content.length > CHANGED_FILE_TOTAL_CAP) break;
-    out[rel] = content;
-    total += content.length;
-  }
-  return out;
 }
 
 function firstSentenceFromMd(body) {

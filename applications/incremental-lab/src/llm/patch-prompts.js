@@ -21,18 +21,16 @@ const PATCH_BLOCK_SCHEMA = APP_PAGES.map((p) =>
 
 /**
  * Build a compute-patch prompt. Output is a patch document, NOT new pages.
+ * Unified diff is the sole source-of-truth for what changed; we no longer
+ * include full file contents (the diff already encodes both sides).
  */
 export function computePatchPrompt({
   scopeName, scopeKind, repoName,
-  existingPages, unifiedDiff = '', changedFileContents = {},
+  existingPages, unifiedDiff = '',
 }) {
   const existingBlock = APP_PAGES.map((p) =>
     `--- ${p.slug} ---\n${existingPages[p.slug] ?? '(empty)'}`
   ).join('\n\n');
-
-  const changedFilesBlock = Object.entries(changedFileContents)
-    .map(([file, content]) => `[file: ${file}]\n${content}`)
-    .join('\n\n');
 
   const system = `You compute a detailed patch for a microservice scope's 4-page wiki.
 
@@ -69,12 +67,11 @@ ${FORMAT_HINT}`;
 EXISTING WIKI PAGES:
 ${existingBlock}
 
-UNIFIED SOURCE DIFF (authoritative — every change is here):
+UNIFIED SOURCE DIFF (authoritative — every change is here; both before and after are present):
 \`\`\`diff
 ${unifiedDiff || '(no diff supplied)'}
 \`\`\`
-
-${changedFilesBlock ? `CURRENT CONTENT OF CHANGED FILES (for context):\n${changedFilesBlock}\n` : ''}`;
+`;
 
   return { system, user };
 }

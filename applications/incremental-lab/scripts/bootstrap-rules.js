@@ -18,6 +18,7 @@ import { basename, join } from 'node:path';
 import { callClaude } from '../src/llm/cli.js';
 import { bootstrapRoutingRulesPrompt } from '../src/llm/bootstrap-prompts.js';
 import { stableJson } from '../src/snapshot/store.js';
+import { buildFileSlugMap, invertSlugMap } from '../src/wiki/router.js';
 
 const argv = process.argv.slice(2);
 const repoPath = argv.find((a) => !a.startsWith('--'));
@@ -81,6 +82,29 @@ try {
 const rulesPath = join(traceDir, 'routing-rules.json');
 writeFileSync(rulesPath, stableJson(rules));
 console.log(`[wrote] ${rulesPath}`);
+
+// Apply rules to snapshot → concrete file-slug map (deterministic, no LLM).
+const snapshotPath = join(invDir, 'snapshot.json');
+if (existsSync(snapshotPath)) {
+  const snapshot = JSON.parse(readFileSync(snapshotPath, 'utf8'));
+  const fileSlug = buildFileSlugMap(snapshot, rules);
+  const slugFiles = invertSlugMap(fileSlug);
+  const mapPath = join(traceDir, 'file-slug-map.json');
+  writeFileSync(mapPath, stableJson({ files: fileSlug, bySlug: slugFiles }));
+  console.log(`[wrote] ${mapPath}`);
+
+  const totals = {};
+  let unmapped = 0;
+  for (const entry of Object.values(fileSlug)) {
+    if (entry.slugs.length === 0) unmapped += 1;
+    for (const slug of entry.slugs) totals[slug] = (totals[slug] ?? 0) + 1;
+  }
+  console.log(`\n=== FILE→SLUG ===`);
+  for (const slug of ['service', 'contracts', 'config', 'integrations']) {
+    console.log(`  ${slug.padEnd(13)} ${(totals[slug] ?? 0).toString().padStart(4)} files`);
+  }
+  console.log(`  unmapped     ${unmapped.toString().padStart(4)} files (no rule matched)`);
+}
 
 console.log('\n=== SUMMARY ===');
 if (rules.project) {

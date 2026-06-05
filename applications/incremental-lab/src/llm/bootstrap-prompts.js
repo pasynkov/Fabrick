@@ -48,25 +48,24 @@ INFER, FROM THE INPUT ONLY:
      - count: total occurrences
      - filePatterns: where the decorator actually appears (file glob, count)
      - coImports: which imports co-occur on the same symbol
-   A decorator qualifies as a slug signal ONLY IF ALL of:
+   A decorator/annotation qualifies as a slug signal ONLY IF ALL of:
      a) count >= 5  (rare decorators are unreliable — a single new file flips them)
      b) >= 80% of uses concentrate in ONE file pattern that maps to one slug,
-        OR it always co-imports a slug-specific external library
-        (e.g. always with typeorm → integrations; always with @nestjs/microservices → contracts).
-   Decorators that fail either bar — generic helpers like class-validator's IsString/IsInt/
-   IsArray/ValidateNested/Type that happen to appear only in config classes because this
-   project doesn't have validated DTOs — MUST be EXCLUDED. They are not robust slug signals;
-   the next commit could legitimately use them elsewhere. Rely on filePatterns instead.
+        OR it always co-imports a slug-specific EXTERNAL library
+        (i.e. the import names a real outside system: a database driver, message-broker
+        client, cloud SDK, HTTP framework, etc. — NOT a generic helper).
+   Decorators that fail either bar — generic validation / serialization / dependency-
+   injection helpers that happen to concentrate in one file pattern only because of how
+   this project is structured — MUST be EXCLUDED. They are not robust slug signals; the
+   next commit could legitimately use them elsewhere. Rely on filePatterns instead.
 
-   POSITIVE EXAMPLE:
-     @Injectable count=13, 85% in *.service.ts → INCLUDE under "service"
-     @Module     count=13, 100% in *.module.ts → INCLUDE under "service"
-     @Entity     count=6,  100% in *.entity.ts always with typeorm → INCLUDE under "integrations"
-   NEGATIVE EXAMPLE:
-     @IsString   count=33, 70% *.config.ts / 30% *.contract.ts → EXCLUDE (scattered)
-     @IsNotEmpty count=6,  100% *.config.ts but it is a class-validator helper used wherever
-                 validation is needed → EXCLUDE (generic, fragile)
-     @InjectRepository count=2 → EXCLUDE (count too low)
+   ABSTRACT EXAMPLES (substitute names from the input matrix):
+     INCLUDE: <decorator> count=N, >=80% in pattern *.X.<ext> → slug
+     INCLUDE: <decorator> always co-imports <external SDK> → integrations
+     EXCLUDE: <decorator> count<5 (too few samples)
+     EXCLUDE: <decorator> top pattern <80% (scattered)
+     EXCLUDE: <decorator> is a generic validation/serialization/DI helper that COULD
+              appear in any data class — even if it currently concentrates in one pattern
 
 3. Per slug, which IMPORT paths are direct evidence of the slug
    (e.g. an external DB driver import means the file deals with an external integration).
@@ -84,7 +83,7 @@ OUTPUT SHAPE (fill from the input):
   "repoName": "<from input>",
   "project": {
     "language":   "<primary language(s), e.g. TypeScript, Python, Go>",
-    "framework":  "<primary application framework, e.g. NestJS, FastAPI, Spring Boot>",
+    "framework":  "<primary application framework name, or null if none>",
     "kind":       "<one of: service | monorepo | library | gitops | infrastructure | unknown>",
     "runCommands": ["<short command, e.g. npm run start:vision-connector>", ...],
     "buildCommands": ["<build entry from manifest, e.g. npm run build>", ...],

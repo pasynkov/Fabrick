@@ -10,6 +10,11 @@
 
 const SLUGS = ['service', 'contracts', 'config', 'integrations'];
 
+function normalizeSlug(s) {
+  if (!s) return s;
+  return s.endsWith('.md') ? s : `${s}.md`;
+}
+
 // Glob → regex. Supports:
 //   *   matches any chars except '/'
 //   **  matches any chars including '/'
@@ -42,7 +47,8 @@ function globToRegex(glob) {
 function compileFilePatterns(rules) {
   const out = [];
   for (const [pattern, slugs] of Object.entries(rules.filePatterns ?? {})) {
-    out.push({ re: globToRegex(pattern), slugs: Array.isArray(slugs) ? slugs : [slugs] });
+    const arr = Array.isArray(slugs) ? slugs : [slugs];
+    out.push({ re: globToRegex(pattern), slugs: arr.map(normalizeSlug) });
   }
   return out;
 }
@@ -50,7 +56,7 @@ function compileFilePatterns(rules) {
 function decoratorSlug(rules) {
   const out = {};
   for (const slug of SLUGS) {
-    for (const dec of rules.decorators?.[slug] ?? []) out[dec] = slug;
+    for (const dec of rules.decorators?.[slug] ?? []) out[dec] = normalizeSlug(slug);
   }
   return out;
 }
@@ -61,8 +67,8 @@ function importSlug(rules) {
   for (const slug of SLUGS) {
     const entry = imports[slug];
     if (!entry) continue;
-    if (Array.isArray(entry)) for (const p of entry) out[p] = slug;
-    else if (typeof entry === 'object') for (const p of Object.keys(entry)) out[p] = slug;
+    if (Array.isArray(entry)) for (const p of entry) out[p] = normalizeSlug(slug);
+    else if (typeof entry === 'object') for (const p of Object.keys(entry)) out[p] = normalizeSlug(slug);
   }
   return out;
 }
@@ -86,36 +92,42 @@ export function buildFileSlugMap(snapshot, rules) {
   for (const file of Object.keys(snapshot.files).sort()) {
     const slugs = new Set();
     const evidence = [];
+    let patternMatched = false;
 
+    // File pattern is authoritative when it matches. Decorators/imports only
+    // come into play if no path pattern claimed the file (keeps routing crisp
+    // and avoids fanning a single file across all 4 slugs).
     for (const { re, slugs: targets } of filePatterns) {
       if (re.test(file)) {
         for (const slug of targets) slugs.add(slug);
-        evidence.push(`pattern:${targets.join('|')}`);
+        evidence.push(`pattern:${targets.join('|') || 'skip'}`);
+        patternMatched = true;
         break;
       }
     }
 
-    const symbols = byFile[file] ?? [];
-
-    for (const s of symbols) {
-      let m;
-      DECORATOR_RE.lastIndex = 0;
-      while ((m = DECORATOR_RE.exec(s.signature ?? '')) !== null) {
-        const slug = decMap[m[1]];
-        if (slug) {
-          slugs.add(slug);
-          evidence.push(`@${m[1]}→${slug}`);
+    if (!patternMatched) {
+      const symbols = byFile[file] ?? [];
+      for (const s of symbols) {
+        let m;
+        DECORATOR_RE.lastIndex = 0;
+        while ((m = DECORATOR_RE.exec(s.signature ?? '')) !== null) {
+          const slug = decMap[m[1]];
+          if (slug) {
+            slugs.add(slug);
+            evidence.push(`@${m[1]}→${slug}`);
+          }
         }
       }
-    }
-
-    const imports = symbols[0]?.imports ?? [];
-    for (const imp of imports) {
-      if (internalLibs.some((lib) => imp.startsWith(lib))) continue;
-      const slug = impMap[imp];
-      if (slug) {
-        slugs.add(slug);
-        evidence.push(`import:${imp}→${slug}`);
+      const imports = symbols[0]?.imports ?? [];
+      for (const imp of imports) {
+        const slug = impMap[imp];
+        if (slug) {
+          slugs.add(slug);
+          evidence.push(`import:${imp}→${slug}`);
+          continue;
+        }
+        if (internalLibs.some((lib) => imp.startsWith(lib))) continue;
       }
     }
 
@@ -125,9 +137,37 @@ export function buildFileSlugMap(snapshot, rules) {
   return fileSlug;
 }
 
+/**
+ * Path-only routing for files not present in a precomputed file-slug map
+ * (e.g. newly added files in a patch). Uses only filePatterns from rules.
+ */
+export function routeFileByPath(file, rules) {
+  const filePatterns = compileFilePatterns(rules);
+  const slugs = new Set();
+  for (const { re, slugs: targets } of filePatterns) {
+    if (re.test(file)) {
+      for (const slug of targets) slugs.add(slug);
+      return [...slugs];
+    }
+  }
+  return [];
+}
+
+/**
+ * True iff the file matches a rules.filePatterns entry with an empty slug list
+ * (i.e. an EXPLICIT skip — tests, barrels, etc.).
+ */
+export function isExplicitlySkipped(file, rules) {
+  const filePatterns = compileFilePatterns(rules);
+  for (const { re, slugs: targets } of filePatterns) {
+    if (re.test(file)) return targets.length === 0;
+  }
+  return false;
+}
+
 export function invertSlugMap(fileSlug) {
   const out = {};
-  for (const slug of SLUGS) out[slug] = [];
+  for (const slug of SLUGS) out[normalizeSlug(slug)] = [];
   for (const [file, entry] of Object.entries(fileSlug)) {
     for (const slug of entry.slugs) (out[slug] ??= []).push(file);
   }

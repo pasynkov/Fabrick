@@ -16,7 +16,9 @@ import { APP_PAGE_SLUGS } from '../wiki/app-taxonomy.js';
 import { computePatch, applyPatch } from '../wiki/patch.js';
 import { buildScopeIndex, buildRepoIndex } from '../wiki/monorepo-index.js';
 import { pMap } from '../util/concurrent.js';
-import { readState, writeState, readRules, wikiDir } from './state.js';
+import { readState, writeState, readRules, wikiDir, fileSlugMapPath } from './state.js';
+import { parseUnifiedDiff } from '../wiki/diff-split.js';
+import { isExplicitlySkipped } from '../wiki/router.js';
 
 const DIFF_CAP = 50_000;
 
@@ -37,6 +39,7 @@ export async function run(repoPath, argv = []) {
   }
   const rules = readRules(repoPath);
   if (!rules) { console.error('no routing rules'); process.exit(1); }
+  const fileSlugMap = loadFileSlugMap(repoPath);
 
   const git = simpleGit(repoPath);
   const headSha = (await git.revparse(['HEAD'])).trim();
@@ -79,15 +82,20 @@ export async function run(repoPath, argv = []) {
 
     const existingPages = readExistingPages(scopeOut);
 
+    // Filter diff: drop hunks for files explicitly mapped to no slug (tests,
+    // index barrels, etc.). Files unknown to the map are KEPT so the model
+    // still sees them.
+    const filtered = filterDiff(unifiedDiff, rules);
+
     const comp = await computePatch({
       scopeName: scope.name, scopeKind: scope.kind, repoName,
-      existingPages, unifiedDiff, claudeOpts: computeOpts,
+      existingPages, unifiedDiff: filtered.text, claudeOpts: computeOpts,
     });
     accrue(comp, 'compute');
     writeFileSync(join(scopeOut, '_patch.md'), comp.patch);
 
     if (comp.allNoOp) {
-      console.log(`  ${scope.name}: compute=$${(comp.costUsd ?? 0).toFixed(3)} → no changes`);
+      console.log(`  ${scope.name}: compute=$${(comp.costUsd ?? 0).toFixed(3)} → no changes (skipped ${filtered.skippedFiles})`);
       state.scopes[scope.root] = { ...state.scopes[scope.root], name: scope.name, kind: scope.kind, lastPatchedSha: headSha };
       return;
     }
@@ -104,7 +112,7 @@ export async function run(repoPath, argv = []) {
 
     state.scopes[scope.root] = { ...state.scopes[scope.root], name: scope.name, kind: scope.kind, lastPatchedSha: headSha };
     perScopeDescriptions[scope.root] = firstSentence(existingPages['service.md'] ?? '');
-    console.log(`  ${scope.name}: compute=$${(comp.costUsd ?? 0).toFixed(3)} apply=$${(ap.costUsd ?? 0).toFixed(3)}`);
+    console.log(`  ${scope.name}: compute=$${(comp.costUsd ?? 0).toFixed(3)} apply=$${(ap.costUsd ?? 0).toFixed(3)} (skipped ${filtered.skippedFiles})`);
   }, { concurrency });
 
   // Refresh top-level index if any scope was patched (carry over old descriptions for unchanged)
@@ -132,6 +140,25 @@ async function readDiff(git, before, after, scopeRoot) {
     if (out.length > DIFF_CAP) return out.slice(0, DIFF_CAP) + '\n... (truncated)';
     return out;
   } catch { return ''; }
+}
+
+function filterDiff(unifiedDiff, rules) {
+  const blocks = parseUnifiedDiff(unifiedDiff);
+  let kept = 0, skipped = 0;
+  const keepBlocks = [];
+  for (const b of blocks) {
+    if (isExplicitlySkipped(b.file, rules)) { skipped += 1; continue; }
+    keepBlocks.push(b);
+    kept += 1;
+  }
+  return { text: keepBlocks.map((b) => b.text).join('\n'), keptFiles: kept, skippedFiles: skipped };
+}
+
+function loadFileSlugMap(repoPath) {
+  const p = fileSlugMapPath(repoPath);
+  if (!existsSync(p)) return {};
+  const j = JSON.parse(readFileSync(p, 'utf8'));
+  return j.files ?? {};
 }
 
 function readExistingPages(scopeOut) {

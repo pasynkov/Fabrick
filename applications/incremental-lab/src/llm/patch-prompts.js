@@ -77,6 +77,67 @@ ${unifiedDiff || '(no diff supplied)'}
 }
 
 /**
+ * Per-slug compute prompt: ONE wiki page + ONLY the diff hunks for files
+ * routed to this slug. Much smaller than the all-pages variant; safer because
+ * the model can't bleed cross-slug content into the wrong page.
+ */
+export function computeSlugPatchPrompt({ scopeName, scopeKind, repoName, slug, slugTitle, slugFocus, existingPage, slugDiff, otherPages = {} }) {
+  const otherBlock = Object.entries(otherPages)
+    .filter(([s]) => s !== slug)
+    .map(([s, body]) => `--- ${s} (read-only context) ---\n${body ?? '(empty)'}`)
+    .join('\n\n');
+
+  const system = `You compute a detailed patch for ONE wiki page of a microservice scope.
+
+YOUR TARGET PAGE: ${slug} — ${slugTitle}
+FOCUS: ${slugFocus}
+
+You will also see the OTHER 3 pages in this scope as read-only context. They show what is already documented elsewhere — do NOT duplicate content into ${slug} that another page already covers.
+
+PATCH RULES:
+- Read the unified diff. Decide what the diff means for ${slug} specifically (not for the other pages).
+- If the diff has NO content that would change ${slug}, emit exactly: "no changes"
+- Otherwise emit a numbered list of concrete instructions. Each instruction:
+  * names the target (section, bullet, sentence) so it can be located in the existing ${slug}
+  * states the exact new content (verbatim identifiers, numbers, names from source)
+  * is independent and minimal
+- ANY of these belong on ${slug} (be liberal — err on the side of patching):
+  * New external dependency added (new SDK import, new service connection) → service/integrations
+  * Env var added/removed/renamed → config
+  * Endpoint added/changed/removed → contracts
+  * Lifecycle hook added (OnApplicationShutdown, etc.) → service
+  * New deployment-relevant trait (image, replicas, probe, strategy) → service
+- Preserve all existing factual detail. Do not delete unaffected bullets.
+- Use exact identifiers from source verbatim.
+
+INSTRUCTION VOCABULARY:
+- REPLACE <target> WITH: <new text>
+- ADD UNDER <section heading or list>: <new bullet/paragraph>
+- REMOVE <target>
+- RENAME <old identifier> TO <new identifier>
+
+OUTPUT FORMAT (emit exactly one section):
+
+=== PATCH: ${slug} ===
+<instructions OR "no changes">
+
+Return ONLY the patch section. No code fences, no preamble. Do not use any tools.`;
+
+  const user = `SCOPE: ${scopeName} (kind: ${scopeKind}) in repo "${repoName}"
+
+EXISTING ${slug} (your target):
+${existingPage ?? '(empty)'}
+
+${otherBlock ? `OTHER PAGES IN THIS SCOPE (read-only, do not duplicate):\n${otherBlock}\n\n` : ''}UNIFIED DIFF (files in this scope; routed primarily to ${slug}):
+\`\`\`diff
+${slugDiff || '(no diff)'}
+\`\`\`
+`;
+
+  return { system, user };
+}
+
+/**
  * Build an apply-patch prompt. No diff, no source — just patch + existing
  * bodies of ONLY the pages that need to change. Unchanged pages are not in
  * the prompt and not in the output (caller carries them forward verbatim).

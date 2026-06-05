@@ -93,6 +93,8 @@ export async function run(repoPath, argv = []) {
     });
     accrue(comp, 'compute');
     writeFileSync(join(scopeOut, '_patch.md'), comp.patch);
+    writeFileSync(join(scopeOut, '_compute.prompt.txt'), comp.prompt);
+    writeFileSync(join(scopeOut, '_compute.response.md'), comp.rawResponse);
 
     if (comp.allNoOp) {
       console.log(`  ${scope.name}: compute=$${(comp.costUsd ?? 0).toFixed(3)} → no changes (skipped ${filtered.skippedFiles})`);
@@ -105,6 +107,8 @@ export async function run(repoPath, argv = []) {
       existingPages, patchBySlug: comp.patchBySlug, claudeOpts: applyOpts,
     });
     accrue(ap, 'apply');
+    writeFileSync(join(scopeOut, '_apply.prompt.txt'), ap.prompt);
+    writeFileSync(join(scopeOut, '_apply.response.md'), ap.rawResponse);
 
     for (const slug of APP_PAGE_SLUGS) if (ap.pages[slug]) existingPages[slug] = ap.pages[slug];
     for (const slug of APP_PAGE_SLUGS) writeFileSync(join(scopeOut, slug), existingPages[slug] ?? '(empty)\n');

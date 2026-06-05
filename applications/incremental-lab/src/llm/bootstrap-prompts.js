@@ -45,14 +45,28 @@ INFER, FROM THE INPUT ONLY:
 
 2. Per slug, which decorators / annotations are STRONG signals for that slug.
    USE THE decoratorMatrix in the summary. Each decorator shows:
+     - count: total occurrences
      - filePatterns: where the decorator actually appears (file glob, count)
      - coImports: which imports co-occur on the same symbol
-   A decorator is a STRONG signal only if its filePatterns concentrate in one slug-context
-   (e.g. 100% in *.entity.ts → integrations) OR its coImports include a slug-specific library
-   (e.g. always co-imported with typeorm → integrations).
-   Generic helpers (e.g. validators imported from class-validator/class-transformer that scatter
-   across many file patterns) are NOT a slug signal by themselves — let file patterns drive
-   those cases.
+   A decorator qualifies as a slug signal ONLY IF ALL of:
+     a) count >= 5  (rare decorators are unreliable — a single new file flips them)
+     b) >= 80% of uses concentrate in ONE file pattern that maps to one slug,
+        OR it always co-imports a slug-specific external library
+        (e.g. always with typeorm → integrations; always with @nestjs/microservices → contracts).
+   Decorators that fail either bar — generic helpers like class-validator's IsString/IsInt/
+   IsArray/ValidateNested/Type that happen to appear only in config classes because this
+   project doesn't have validated DTOs — MUST be EXCLUDED. They are not robust slug signals;
+   the next commit could legitimately use them elsewhere. Rely on filePatterns instead.
+
+   POSITIVE EXAMPLE:
+     @Injectable count=13, 85% in *.service.ts → INCLUDE under "service"
+     @Module     count=13, 100% in *.module.ts → INCLUDE under "service"
+     @Entity     count=6,  100% in *.entity.ts always with typeorm → INCLUDE under "integrations"
+   NEGATIVE EXAMPLE:
+     @IsString   count=33, 70% *.config.ts / 30% *.contract.ts → EXCLUDE (scattered)
+     @IsNotEmpty count=6,  100% *.config.ts but it is a class-validator helper used wherever
+                 validation is needed → EXCLUDE (generic, fragile)
+     @InjectRepository count=2 → EXCLUDE (count too low)
 
 3. Per slug, which IMPORT paths are direct evidence of the slug
    (e.g. an external DB driver import means the file deals with an external integration).

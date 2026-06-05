@@ -48,6 +48,7 @@ PATCH RULES:
   * is independent and minimal — touch only what changed; do not rewrite paragraphs that are still accurate
 - Preserve all existing factual detail that is still true. Do not delete unaffected bullets.
 - Use exact identifiers from source (env var names, NATS subjects, image tags, replica counts, probe timings).
+- EVERY new factual claim MUST cite the source file as a relative-path markdown link, e.g. \`[onGet()](src/vision-connector/vision-connector.controller.ts)\` or \`[REAPER_GCP_BUCKET_NAME](src/config/reaper.config.ts)\`. The link path is scope-relative (read the diff file headers — drop the scope-root prefix). When an instruction modifies an EXISTING bullet, preserve any existing links and ADD new ones for the newly-cited symbols.
 - Skip method-body refactors and internal class noise.
 
 INSTRUCTION VOCABULARY (use these verbs):
@@ -163,6 +164,7 @@ RULES:
 - Do NOT introduce facts not present in the existing page or the patch instructions.
 - Do NOT remove existing content unless the patch explicitly says REMOVE.
 - Keep formatting (markdown headings, bullet style) consistent with the existing page.
+- PRESERVE every markdown source-file link present in the existing page or the patch instructions. If the patch adds new identifiers, keep the new \`[name](path)\` link the patch supplies — do not strip parentheses or convert links to plain text.
 
 OUTPUT FORMAT (emit exactly these ${slugsToApply.length} page section(s) in order, full body each):
 

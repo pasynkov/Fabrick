@@ -30,7 +30,7 @@ GLOBAL RULES:
 - Every concrete claim must trace to the source code given below. Do not invent.
 - Keep each page short and factual: 5–20 bullet points or 1–3 paragraphs.
 - Use exact identifiers (NATS subject strings, env var names, route paths) verbatim.
-- Cite source files in parens when helpful: "POSTGRES_HOST (sentinel/config/configs/postgres.config.ts)".
+- EVERY concrete claim MUST cite the source file as a relative-path markdown link, e.g. \`[POSTGRES_HOST](src/config/postgres.config.ts)\` or \`[reap()](src/reap/reap.controller.ts)\`. The link path is the file path relative to the scope root (omit a leading "/"). When a single bullet aggregates several files, list all of them inline as separate links.
 - Do NOT write a "## Related" section — it is auto-generated.
 
 OUTPUT FORMAT (strict — emit exactly these markers):

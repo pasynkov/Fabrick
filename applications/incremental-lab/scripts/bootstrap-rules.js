@@ -13,7 +13,7 @@ import { config as loadEnv } from 'dotenv';
 loadEnv({ path: '.env.local' });
 loadEnv({ path: '.env' });
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { callClaude } from '../src/llm/cli.js';
 import { bootstrapRoutingRulesPrompt } from '../src/llm/bootstrap-prompts.js';
@@ -43,7 +43,31 @@ const rootFilesPath = join(invDir, 'root-files.json');
 const rootFiles = existsSync(rootFilesPath) ? JSON.parse(readFileSync(rootFilesPath, 'utf8')) : {};
 const repoName = basename(repoPath);
 
-const built = bootstrapRoutingRulesPrompt({ repoName, summary, sampleSymbols, rootFiles });
+// Skill-pattern bootstrap: load the SKILL.md + detection rubric + all framework hints
+// from skills/bootstrap-routing/. The LLM picks the right framework hint itself
+// based on detect.md and the supplied root files.
+const skillDir = join(process.cwd(), 'skills', 'bootstrap-routing');
+const skill = readSkill(skillDir);
+
+const built = bootstrapRoutingRulesPrompt({ repoName, summary, sampleSymbols, rootFiles, skill });
+
+function readSkill(dir) {
+  if (!existsSync(dir)) return null;
+  const skillPath = join(dir, 'SKILL.md');
+  const main = existsSync(skillPath) ? readFileSync(skillPath, 'utf8') : '';
+  const detectPath = join(dir, 'detect.md');
+  const detect = existsSync(detectPath) ? readFileSync(detectPath, 'utf8') : '';
+  const fwDir = join(dir, 'frameworks');
+  const frameworks = {};
+  if (existsSync(fwDir)) {
+    for (const f of readdirSync(fwDir)) {
+      if (!f.endsWith('.md')) continue;
+      const name = f.replace(/\.md$/, '');
+      frameworks[name] = readFileSync(join(fwDir, f), 'utf8');
+    }
+  }
+  return { main, detect, frameworks };
+}
 
 const traceDir = join(repoPath, '.fabrick');
 mkdirSync(traceDir, { recursive: true });

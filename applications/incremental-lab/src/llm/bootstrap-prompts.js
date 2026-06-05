@@ -18,7 +18,8 @@ const SLUG_DEFINITIONS = `
                   This is NOT the same as project-internal shared libraries — those should be ignored.
 `.trim();
 
-export function bootstrapRoutingRulesPrompt({ repoName, summary, sampleSymbols, rootFiles = {} }) {
+export function bootstrapRoutingRulesPrompt({ repoName, summary, sampleSymbols, rootFiles = {}, skill = null }) {
+  if (skill?.main) return bootstrapWithSkill({ repoName, summary, sampleSymbols, rootFiles, skill });
   const sampleBlock = sampleSymbols.slice(0, 20).map((s) =>
     `[${s.kind}] ${s.name}\n  file: ${s.file}\n  signature: ${trim(s.signature ?? '', 240)}\n  imports: ${(s.imports ?? []).slice(0, 8).join(', ')}`
   ).join('\n\n');
@@ -130,3 +131,43 @@ ${sampleBlock}
 }
 
 function trim(s, n) { return s.length > n ? s.slice(0, n - 3) + '...' : s; }
+
+/**
+ * Skill-driven variant: system prompt is the SKILL.md + detect.md + all framework hints.
+ * The model picks the matching framework hint based on detect.md rubric and the supplied root files.
+ */
+function bootstrapWithSkill({ repoName, summary, sampleSymbols, rootFiles, skill }) {
+  const sampleBlock = sampleSymbols.slice(0, 20).map((s) =>
+    `[${s.kind}] ${s.name}\n  file: ${s.file}\n  signature: ${trim(s.signature ?? '', 240)}\n  imports: ${(s.imports ?? []).slice(0, 8).join(', ')}`
+  ).join('\n\n');
+
+  const rootFilesBlock = Object.entries(rootFiles)
+    .map(([name, content]) => `=== ${name} ===\n${content}`)
+    .join('\n\n');
+
+  const frameworksBlock = Object.entries(skill.frameworks ?? {})
+    .map(([name, content]) => `\n\n========== frameworks/${name}.md ==========\n${content}`)
+    .join('');
+
+  const system = `${skill.main}
+
+========== detect.md ==========
+${skill.detect}
+${frameworksBlock}`;
+
+  const user = `REPO: ${repoName}
+
+SNAPSHOT SUMMARY:
+${JSON.stringify(summary, null, 2)}
+
+ROOT FILES (verbatim, truncated to 8KB each):
+${rootFilesBlock || '(no root files captured)'}
+
+SAMPLE SYMBOLS (20 random, full shape):
+${sampleBlock}
+
+Apply the steps in SKILL.md. Detect language+framework via detect.md, then apply the matching frameworks/<name>.md hint as starter rules, then tune against the snapshot.
+Emit ONLY the JSON object — no markdown, no preamble.`;
+
+  return { system, user };
+}

@@ -59,6 +59,42 @@ for (const s of snap.symbols) {
   }
 }
 
+// Decorator usage matrix: for each decorator, where (file pattern) and with what imports.
+// Helps the bootstrap LLM judge whether a decorator is a strong, file-pattern-correlated
+// signal (e.g. @Entity always in *.entity.ts) or a generic helper used across contexts.
+function filePattern(file) {
+  const base = file.split('/').pop() ?? file;
+  const m = base.match(/(\.[a-z0-9]+\.[a-z]+)$/i);
+  if (m) return `*${m[1]}`;
+  const ext = base.match(/(\.[a-z0-9]+)$/i);
+  return ext ? `*${ext[1]}` : base;
+}
+const decoratorMatrix = {};
+for (const s of snap.symbols) {
+  let m2;
+  const seen = new Set();
+  while ((m2 = decoratorRe.exec(s.signature ?? '')) !== null) {
+    const name = m2[1];
+    if (seen.has(name)) continue;
+    seen.add(name);
+    const slot = (decoratorMatrix[name] ??= { count: 0, filePatterns: {}, coImports: {} });
+    slot.count += 1;
+    const pat = filePattern(s.file);
+    slot.filePatterns[pat] = (slot.filePatterns[pat] ?? 0) + 1;
+    for (const imp of s.imports ?? []) slot.coImports[imp] = (slot.coImports[imp] ?? 0) + 1;
+  }
+}
+// Compress matrix: keep only top correlations
+const decoratorMatrixCompact = {};
+for (const [name, slot] of Object.entries(decoratorMatrix)) {
+  if (slot.count < 2) continue; // ignore one-off uses
+  decoratorMatrixCompact[name] = {
+    count: slot.count,
+    filePatterns: Object.entries(slot.filePatterns).sort((a, b) => b[1] - a[1]).slice(0, 5),
+    coImports: Object.entries(slot.coImports).sort((a, b) => b[1] - a[1]).slice(0, 6),
+  };
+}
+
 // Import frequency
 const importFreq = {};
 for (const s of snap.symbols) {
@@ -77,9 +113,10 @@ writeFileSync(join(outDir, 'summary.json'), stableJson({
   symbolCount: snap.symbols.length,
   kindCounts,
   skippedFiles: skipped.length,
-  topDecorators: Object.entries(decoratorFreq).sort((a, b) => b[1] - a[1]).slice(0, 30),
+  topDecorators: Object.entries(decoratorFreq).sort((a, b) => b[1] - a[1]).slice(0, 40),
   topImports: Object.entries(importFreq).sort((a, b) => b[1] - a[1]).slice(0, 30),
   topFiles: Object.entries(byFile).sort((a, b) => b[1] - a[1]).slice(0, 30),
+  decoratorMatrix: decoratorMatrixCompact,
 }));
 
 const byKindDir = join(outDir, 'by-kind');

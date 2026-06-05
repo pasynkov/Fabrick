@@ -38,15 +38,22 @@ INFER, FROM THE INPUT ONLY:
    project-prefixed module paths, relative paths into the repo). External = third-party SDKs
    that talk to systems outside the process.
 
-2. Per slug, which decorators / annotations consistently mark code that documents that slug.
-   Read the signatures. If a decorator appears mostly on classes/methods that look like incoming
-   message handlers, it goes under "contracts". If it appears on classes holding validated env-var
-   fields, it goes under "config". And so on.
+2. Per slug, which decorators / annotations are STRONG signals for that slug.
+   USE THE decoratorMatrix in the summary. Each decorator shows:
+     - filePatterns: where the decorator actually appears (file glob, count)
+     - coImports: which imports co-occur on the same symbol
+   A decorator is a STRONG signal only if its filePatterns concentrate in one slug-context
+   (e.g. 100% in *.entity.ts → integrations) OR its coImports include a slug-specific library
+   (e.g. always co-imported with typeorm → integrations).
+   Generic helpers (e.g. validators imported from class-validator/class-transformer that scatter
+   across many file patterns) are NOT a slug signal by themselves — let file patterns drive
+   those cases.
 
-3. Per slug, which IMPORT paths indicate the slug. (e.g. an external DB driver import means
-   the file deals with an external integration.)
+3. Per slug, which IMPORT paths are direct evidence of the slug
+   (e.g. an external DB driver import means the file deals with an external integration).
 
-4. File-name patterns that strongly suggest a slug.
+4. File-name patterns that strongly suggest a slug. THIS IS THE PRIMARY signal when decorators
+   are ambiguous. List patterns visible in the topFiles + decoratorMatrix.filePatterns.
 
 DO NOT INVENT:
 - Only emit decorators/imports/paths that actually appear in the input.

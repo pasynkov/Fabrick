@@ -1,22 +1,18 @@
 /**
- * Cheap cost-estimator used by the patch CLI to decide, per scope, whether
+ * Cheap size-estimator used by the patch CLI to decide, per scope, whether
  * to run the incremental compute+apply pipeline or just regenerate the
- * scope from scratch (which has zero drift). Estimation is byte-based — no
- * LLM call, no tree-sitter.
+ * scope from scratch (which has zero drift). Estimation is TOKEN-based —
+ * pricing is volatile, token counts are stable across model and pricing
+ * changes. No LLM call, no tree-sitter.
  *
- * Numbers come from observed per-PR runs on Nami; treat them as a guide,
- * not exact predictions. The decision is binary anyway.
+ * Returned shape from estimate*Cost is { inTok, outTok, totalTok }.
+ * dynamicThreshold takes total tokens of a hypothetical fullscan.
  */
 
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 const TOK_PER_BYTE = 0.25;            // 1 token ~ 4 bytes
-const PRICE = {
-  sonnetIn: 3,    sonnetOut: 15,
-  haikuIn: 1,     haikuOut: 5,
-};
-
 function tokens(bytes) { return Math.ceil(bytes * TOK_PER_BYTE); }
 
 /**
@@ -55,32 +51,33 @@ export function estimateScopeSourceBytes(scopePath) {
 }
 
 /**
- * Estimated cost of a fresh generateAppScope call (sonnet, all source in).
+ * Estimated token counts for a fresh generateAppScope call (one sonnet call).
  */
-export function estimateFullscanCost(sourceBytes) {
+export function estimateFullscanTokens(sourceBytes) {
   const systemOverhead = 4000;
   const inTok = tokens(sourceBytes + systemOverhead);
-  const outTok = 2000;   // ~4 page bodies of ~500 tokens each
-  return ((inTok * PRICE.sonnetIn) + (outTok * PRICE.sonnetOut)) / 1_000_000;
+  const outTok = 2000;          // ~4 page bodies of ~500 tok each
+  return { inTok, outTok, totalTok: inTok + outTok };
 }
 
 /**
- * Estimated cost of compute+apply patch for a scope. Worst-case assumes all
- * 4 slugs need an apply call.
+ * Estimated token counts for compute+apply patch for a scope. Worst-case
+ * assumes all 4 slugs trigger an apply call.
  */
-export function estimatePatchCost(diffBytes, existingPagesBytes) {
+export function estimatePatchTokens(diffBytes, existingPagesBytes) {
   const computeSystemOverhead = 3000;
   const computeInTok = tokens(diffBytes + existingPagesBytes + computeSystemOverhead);
-  const computeOutTok = 800;   // patch instructions
-  const computeCost = ((computeInTok * PRICE.sonnetIn) + (computeOutTok * PRICE.sonnetOut)) / 1_000_000;
+  const computeOutTok = 800;    // patch instructions
 
-  // apply (haiku) — sees existing pages of changed slugs + patch
   const applySystemOverhead = 1500;
   const applyInTok = tokens(existingPagesBytes + 1500 + applySystemOverhead);
-  const applyOutTok = tokens(existingPagesBytes);   // regen pages
-  const applyCost = ((applyInTok * PRICE.haikuIn) + (applyOutTok * PRICE.haikuOut)) / 1_000_000;
+  const applyOutTok = tokens(existingPagesBytes);
 
-  return computeCost + applyCost;
+  return {
+    inTok: computeInTok + applyInTok,
+    outTok: computeOutTok + applyOutTok,
+    totalTok: computeInTok + computeOutTok + applyInTok + applyOutTok,
+  };
 }
 
 export function sumExistingPagesBytes(existingPages) {
@@ -90,48 +87,55 @@ export function sumExistingPagesBytes(existingPages) {
 }
 
 /**
- * Dynamic patch/fullscan-ratio threshold that adapts to content size.
- * Cheap content (small fullscan) → low threshold (rebuild aggressively
- * because the absolute cost saving from patching is tiny anyway and
- * rebuilds eliminate drift). Expensive content → high threshold (patch
- * unless the diff is overwhelming).
+ * Dynamic patch/fullscan-ratio threshold that adapts to content size in
+ * TOKENS (not dollars — pricing is volatile, tokens are stable).
  *
- * threshold = base + scale * log10(fullscanCost / referenceCost)
+ * Cheap content (small fullscan) → low threshold (rebuild aggressively
+ * because patch saves only a tiny absolute amount and rebuilds eliminate
+ * drift). Expensive content → high threshold (patch unless diff is huge).
+ *
+ * threshold = base + scale * log10(fullscanTotalTok / refTok)
  * clamped to [min, max].
+ *
+ * Defaults centered on 8K tokens — a typical small wiki scope. Anchors:
+ *    1K tokens → threshold 0.30 (always rebuild on tiny content)
+ *    8K tokens → threshold 0.50
+ *   80K tokens → threshold 0.75
+ *  800K tokens → threshold 0.90 (only rebuild on extreme refactors)
  */
-export function dynamicThreshold(fullscanCostUsd, opts = {}) {
+export function dynamicThreshold(fullscanTotalTok, opts = {}) {
   const base   = opts.base   ?? 0.5;
   const scale  = opts.scale  ?? 0.25;
-  const ref    = opts.ref    ?? 0.20;
+  const refTok = opts.refTok ?? 8000;
   const min    = opts.min    ?? 0.30;
   const max    = opts.max    ?? 0.90;
-  const ratio  = Math.max(fullscanCostUsd / ref, 0.01);
+  const ratio  = Math.max(fullscanTotalTok / refTok, 0.01);
   const tr     = base + scale * Math.log10(ratio);
   return Math.max(min, Math.min(max, tr));
 }
 
 /**
- * Synthesis-side cost models. Bundle bytes = sum of all wiki pages fed
- * to the synthesis prompt. Changed bundle bytes = sum of before+after
- * bodies of wiki pages whose fingerprint moved.
+ * Synthesis-side estimates. Bundle bytes = sum of all wiki pages fed to
+ * the synthesis prompt. Changed bundle bytes = sum of before+after bodies
+ * of wiki pages whose fingerprint moved.
  */
-export function estimateSynthesisFullscanCost(bundleBytes) {
+export function estimateSynthesisFullscanTokens(bundleBytes) {
   const skillOverhead = 6000;
   const inTok = tokens(bundleBytes + skillOverhead);
-  const outTok = 2500;          // ~4 topics × ~600 tok
-  return ((inTok * PRICE.sonnetIn) + (outTok * PRICE.sonnetOut)) / 1_000_000;
+  const outTok = 2500;
+  return { inTok, outTok, totalTok: inTok + outTok };
 }
 
-export function estimateSynthesisPatchCost(changedBundleBytes, existingTopicsBytes) {
+export function estimateSynthesisPatchTokens(changedBundleBytes, existingTopicsBytes) {
   const computeOverhead = 4000;
   const computeInTok = tokens(existingTopicsBytes + changedBundleBytes + computeOverhead);
   const computeOutTok = 700;
-  const computeCost = ((computeInTok * PRICE.sonnetIn) + (computeOutTok * PRICE.sonnetOut)) / 1_000_000;
-
   const applyOverhead = 2000;
   const applyInTok = tokens(existingTopicsBytes + 1500 + applyOverhead);
   const applyOutTok = tokens(existingTopicsBytes);
-  const applyCost = ((applyInTok * PRICE.haikuIn) + (applyOutTok * PRICE.haikuOut)) / 1_000_000;
-
-  return computeCost + applyCost;
+  return {
+    inTok: computeInTok + applyInTok,
+    outTok: computeOutTok + applyOutTok,
+    totalTok: computeInTok + computeOutTok + applyInTok + applyOutTok,
+  };
 }

@@ -25,7 +25,7 @@ import { stableJson } from '../snapshot/store.js';
 import { stampFrontmatter, stripFrontmatter, firstSentence as fmFirstSentence } from '../wiki/frontmatter.js';
 import { buildSynthLinkRewriter } from '../wiki/synthesis-link-rewrite.js';
 import { extractMarkdownSymbols, diffMarkdownSymbols, diffMarkdownFingerprints, renderMarkdownDiff } from '../extract/markdown.js';
-import { dynamicThreshold, estimateSynthesisFullscanCost, estimateSynthesisPatchCost } from '../wiki/cost-estimate.js';
+import { dynamicThreshold, estimateSynthesisFullscanTokens, estimateSynthesisPatchTokens } from '../wiki/cost-estimate.js';
 
 const TOPIC_TITLE = Object.fromEntries(SYNTHESIS_TAXONOMY.map((t) => [t.slug, t.title]));
 
@@ -198,11 +198,11 @@ async function runPatch({ outDir, baselineDir, systemName, repos, computeModel, 
       ss + Object.values(sc.pages).reduce((sss, b) => sss + (b ?? '').length, 0), 0), 0);
   const existingTopicsBytes = Object.values(existingPages).reduce((s, b) => s + (b ?? '').length, 0);
   const changedBundleBytes = changed.reduce((s, c) => s + (c.before?.length ?? 0) + (c.after?.length ?? 0), 0);
-  const eFull = estimateSynthesisFullscanCost(bundleBytes);
-  const ePatch = estimateSynthesisPatchCost(changedBundleBytes, existingTopicsBytes);
-  const ratio = eFull > 0 ? ePatch / eFull : 0;
-  const threshold = dynamicThreshold(eFull);
-  console.log(`[cost-pred] patch~$${ePatch.toFixed(3)} fullscan~$${eFull.toFixed(3)} ratio=${ratio.toFixed(2)} threshold=${threshold.toFixed(2)}`);
+  const eFull = estimateSynthesisFullscanTokens(bundleBytes);
+  const ePatch = estimateSynthesisPatchTokens(changedBundleBytes, existingTopicsBytes);
+  const ratio = eFull.totalTok > 0 ? ePatch.totalTok / eFull.totalTok : 0;
+  const threshold = dynamicThreshold(eFull.totalTok);
+  console.log(`[cost-pred] patch~${ePatch.totalTok}tok fullscan~${eFull.totalTok}tok ratio=${ratio.toFixed(2)} threshold=${threshold.toFixed(2)}`);
   if (ratio > threshold) {
     console.log(`[cost-pred] REGEN (ratio > threshold) — rebuilding synthesis instead of patching`);
     await runGenesis({ outDir, baselineDir, systemName, repos, computeModel, maxCostUsd });

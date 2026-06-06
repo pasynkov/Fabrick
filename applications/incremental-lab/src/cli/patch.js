@@ -20,7 +20,7 @@ import { readState, writeState, readRules, wikiDir, fileSlugMapPath } from './st
 import { parseUnifiedDiff } from '../wiki/diff-split.js';
 import { isExplicitlySkipped } from '../wiki/router.js';
 import { stampFrontmatter, stripFrontmatter, firstSentence as fmFirstSentence } from '../wiki/frontmatter.js';
-import { estimateScopeSourceBytes, estimateFullscanCost, estimatePatchCost, sumExistingPagesBytes, dynamicThreshold } from '../wiki/cost-estimate.js';
+import { estimateScopeSourceBytes, estimateFullscanTokens, estimatePatchTokens, sumExistingPagesBytes, dynamicThreshold } from '../wiki/cost-estimate.js';
 import { generateAppScope } from '../wiki/app-page-generator.js';
 import { buildSnapshot } from '../snapshot/snapshot.js';
 
@@ -98,10 +98,10 @@ export async function run(repoPath, argv = []) {
     const scopePath = join(repoPath, scope.root);
     const sourceEst = estimateScopeSourceBytes(scopePath);
     const existingBytes = sumExistingPagesBytes(existingPages);
-    const eFull = estimateFullscanCost(sourceEst.bytes);
-    const ePatch = estimatePatchCost(filtered.text.length, existingBytes);
-    const ratio = eFull > 0 ? ePatch / eFull : 0;
-    const threshold = rebuildThresholdFixed ?? dynamicThreshold(eFull);
+    const eFull = estimateFullscanTokens(sourceEst.bytes);
+    const ePatch = estimatePatchTokens(filtered.text.length, existingBytes);
+    const ratio = eFull.totalTok > 0 ? ePatch.totalTok / eFull.totalTok : 0;
+    const threshold = rebuildThresholdFixed ?? dynamicThreshold(eFull.totalTok);
     if (ratio > threshold) {
       const snap = buildSnapshot(scopePath);
       const fileList = Object.keys(snap.files).sort();
@@ -112,7 +112,7 @@ export async function run(repoPath, argv = []) {
       accrue(res, 'compute');
       writeFileSync(join(scopeOut, '_compute.prompt.txt'), res.prompt);
       writeFileSync(join(scopeOut, '_compute.response.md'), res.rawResponse);
-      writeFileSync(join(scopeOut, '_patch.md'), `=== REGEN (auto): patch/fullscan ratio ${ratio.toFixed(2)} > threshold ${threshold.toFixed(2)} (fullscan ~$${eFull.toFixed(3)}) ===\n`);
+      writeFileSync(join(scopeOut, '_patch.md'), `=== REGEN (auto): patch/fullscan ratio ${ratio.toFixed(2)} > threshold ${threshold.toFixed(2)} (fullscan ~${eFull.totalTok} tok) ===\n`);
       for (const slug of APP_PAGE_SLUGS) if (res.pages[slug]) existingPages[slug] = res.pages[slug];
       for (const slug of APP_PAGE_SLUGS) {
         const body = existingPages[slug] ?? '(empty)\n';
@@ -132,7 +132,7 @@ export async function run(repoPath, argv = []) {
       writeFileSync(join(scopeOut, 'index.md'), buildScopeIndex({ scope, pages: existingPages, sha: headSha }));
       state.scopes[scope.root] = { ...state.scopes[scope.root], name: scope.name, kind: scope.kind, lastPatchedSha: headSha };
       perScopeDescriptions[scope.root] = fmFirstSentence(existingPages['service.md'] ?? '');
-      console.log(`  ${scope.name}: REGEN $${(res.costUsd ?? 0).toFixed(3)} (ratio=${ratio.toFixed(2)} > thr=${threshold.toFixed(2)}, full=$${eFull.toFixed(3)})`);
+      console.log(`  ${scope.name}: REGEN $${(res.costUsd ?? 0).toFixed(3)} (ratio=${ratio.toFixed(2)} > thr=${threshold.toFixed(2)}, full~${eFull.totalTok}tok)`);
       return;
     }
 

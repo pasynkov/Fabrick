@@ -74,6 +74,52 @@ function labelOf(s) {
 }
 
 /**
+ * One LLM call (haiku, ~$0.002) → 1-sentence human description of the
+ * change captured by `summary` (a result of summariseChange). Used for
+ * log entries so a human can scan the log without reading raw diffs.
+ *
+ * Falls back to the slugCount summary if the call fails.
+ */
+import { callClaude } from '../llm/cli.js';
+
+export async function describeChange({ summary, mode, before = {}, after = {}, claudeOpts = {} }) {
+  if (mode === 'deleted') {
+    return `Removed scope; ${summary.removedSlugs?.length ?? 0} wiki page(s) deleted.`;
+  }
+  // Build compact bullet list of changed slugs + label samples.
+  const slugLines = Object.entries(summary.slugCounts ?? {}).map(([slug, c]) =>
+    `${slug}: +${c.added} -${c.removed} ~${c.changed}`).join('\n');
+  if (!slugLines) return 'No detectable changes.';
+  const sampleLines = (summary.sample ?? []).join('\n');
+  const diffSnippets = [];
+  for (const [slug, b] of Object.entries(after)) {
+    const a = before[slug] ?? '';
+    if (!a || a === b) continue;
+    diffSnippets.push(`--- ${slug} (snippet diff first 400 chars) ---`);
+    const len = Math.min(400, b.length);
+    diffSnippets.push(b.slice(0, len));
+    if (diffSnippets.join('\n').length > 1500) break;
+  }
+  const system = `You write ONE short sentence (≤ 25 words) describing what changed in a documentation update. Be specific about facts that moved. Avoid vague verbs like "updated" or "improved". Use exact identifiers when visible. Output ONLY the sentence, no preamble.`;
+  const user = `Mode: ${mode}
+Per-slug counts:
+${slugLines}
+
+Sample bullet labels:
+${sampleLines || '(none)'}
+
+After snippets:
+${diffSnippets.join('\n').slice(0, 1500)}`;
+  try {
+    const res = await callClaude({ system, user }, { model: 'haiku', timeoutMs: 180_000, ...claudeOpts });
+    const text = (res.content ?? '').trim().split('\n')[0].slice(0, 220);
+    return text || 'No description available.';
+  } catch (e) {
+    return `(haiku describe failed: ${e.message?.slice(0, 80)}) — ${slugLines.replace(/\n/g, '; ')}`;
+  }
+}
+
+/**
  * Append one entry to <repo>/.fabrick/patches.log.jsonl.
  */
 export function appendPatchLog(repoPath, entry) {

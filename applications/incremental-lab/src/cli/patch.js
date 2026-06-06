@@ -23,7 +23,7 @@ import { stampFrontmatter, stripFrontmatter, firstSentence as fmFirstSentence } 
 import { estimateScopeSourceBytes, estimateFullscanTokens, estimatePatchTokens, sumExistingPagesBytes, dynamicThreshold } from '../wiki/cost-estimate.js';
 import { generateAppScope } from '../wiki/app-page-generator.js';
 import { buildSnapshot } from '../snapshot/snapshot.js';
-import { snapshotPages, readPagesAfter, summariseScopeChange, appendPatchLog, resolveTitle, summariseDeletion } from '../wiki/patch-log.js';
+import { snapshotPages, readPagesAfter, summariseScopeChange, appendPatchLog, resolveTitle, summariseDeletion, describeChange } from '../wiki/patch-log.js';
 import { rmSync } from 'node:fs';
 
 const DIFF_CAP = 50_000;
@@ -76,8 +76,9 @@ export async function run(repoPath, argv = []) {
     const delEntry = summariseDeletion({ scopeName: prev.name ?? scopeRoot, scopeDir: scopeOut });
     rmSync(scopeOut, { recursive: true, force: true });
     delete state.scopes[scopeRoot];
+    delEntry.description = await describeChange({ summary: delEntry, mode: 'deleted' });
     scopeLog.push(delEntry);
-    console.log(`  ${prev.name ?? scopeRoot}: DELETED (${delEntry.removedSlugs.length} pages removed)`);
+    console.log(`  ${prev.name ?? scopeRoot}: DELETED  ${delEntry.description}`);
   }
 
   let totalCompute = 0;
@@ -155,8 +156,10 @@ export async function run(repoPath, argv = []) {
       state.scopes[scope.root] = { ...state.scopes[scope.root], name: scope.name, kind: scope.kind, lastPatchedSha: headSha };
       perScopeDescriptions[scope.root] = fmFirstSentence(existingPages['service.md'] ?? '');
       const afterPages = readPagesAfter(scopeOut);
-      scopeLog.push(summariseScopeChange({ scopeName: scope.name, mode: 'regen-auto', before: beforePages, after: afterPages }));
-      console.log(`  ${scope.name}: REGEN $${(res.costUsd ?? 0).toFixed(3)} (ratio=${ratio.toFixed(2)} > thr=${threshold.toFixed(2)}, full~${eFull.totalTok}tok)`);
+      const sc = summariseScopeChange({ scopeName: scope.name, mode: 'regen-auto', before: beforePages, after: afterPages });
+      sc.description = await describeChange({ summary: sc, mode: sc.mode, before: beforePages, after: afterPages });
+      scopeLog.push(sc);
+      console.log(`  ${scope.name}: REGEN $${(res.costUsd ?? 0).toFixed(3)} — ${sc.description}`);
       return;
     }
 
@@ -205,8 +208,10 @@ export async function run(repoPath, argv = []) {
     state.scopes[scope.root] = { ...state.scopes[scope.root], name: scope.name, kind: scope.kind, lastPatchedSha: headSha };
     perScopeDescriptions[scope.root] = fmFirstSentence(existingPages['service.md'] ?? '');
     const afterPages = readPagesAfter(scopeOut);
-    scopeLog.push(summariseScopeChange({ scopeName: scope.name, mode: 'patch', before: beforePages, after: afterPages }));
-    console.log(`  ${scope.name}: compute=$${(comp.costUsd ?? 0).toFixed(3)} apply=$${(ap.costUsd ?? 0).toFixed(3)} (skipped ${filtered.skippedFiles})`);
+    const sc = summariseScopeChange({ scopeName: scope.name, mode: 'patch', before: beforePages, after: afterPages });
+    sc.description = await describeChange({ summary: sc, mode: 'patch', before: beforePages, after: afterPages });
+    scopeLog.push(sc);
+    console.log(`  ${scope.name}: compute=$${(comp.costUsd ?? 0).toFixed(3)} apply=$${(ap.costUsd ?? 0).toFixed(3)} — ${sc.description}`);
   }, { concurrency });
 
   // Refresh top-level index if any scope was patched (carry over old descriptions for unchanged)

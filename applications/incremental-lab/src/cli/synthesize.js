@@ -26,7 +26,7 @@ import { stampFrontmatter, stripFrontmatter, firstSentence as fmFirstSentence } 
 import { buildSynthLinkRewriter } from '../wiki/synthesis-link-rewrite.js';
 import { extractMarkdownSymbols, diffMarkdownSymbols, diffMarkdownFingerprints, renderMarkdownDiff } from '../extract/markdown.js';
 import { dynamicThreshold, estimateSynthesisFullscanTokens, estimateSynthesisPatchTokens } from '../wiki/cost-estimate.js';
-import { snapshotPages, readPagesAfter, summariseChange, appendLog, resolveSynthesisTitle } from '../wiki/patch-log.js';
+import { snapshotPages, readPagesAfter, summariseChange, appendLog, resolveSynthesisTitle, describeChange } from '../wiki/patch-log.js';
 
 const TOPIC_TITLE = Object.fromEntries(SYNTHESIS_TAXONOMY.map((t) => [t.slug, t.title]));
 
@@ -115,6 +115,7 @@ async function runGenesis({ outDir, baselineDir, systemName, repos, computeModel
     slugs: SYNTHESIS_PAGE_SLUGS,
     before: beforePages, after: afterPages,
   });
+  summary.description = await describeChange({ summary, mode: summary.mode, before: beforePages, after: afterPages });
   const title = resolveSynthesisTitle({ explicitTitle, repoTitles: repos.map((r) => r.repoName) });
   appendLog(outDir, {
     at: new Date().toISOString(),
@@ -124,6 +125,7 @@ async function runGenesis({ outDir, baselineDir, systemName, repos, computeModel
     repos: repos.map((r) => r.repoName),
     topics: [summary],
   });
+  console.log(`[desc]  ${summary.description}`);
   console.log(`[log]   appended entry to ${join(outDir, 'patches.log.jsonl')}`);
 
   // Snapshot current wikis as the patch baseline.
@@ -313,6 +315,7 @@ async function runPatch({ outDir, baselineDir, systemName, repos, computeModel, 
     before: beforePages, after: afterPages,
     extras: { changedWikiPagesCount: changed.length, appliedSlugs: slugsToApply },
   });
+  summary.description = await describeChange({ summary, mode: 'patch', before: beforePages, after: afterPages });
   const title = resolveSynthesisTitle({ explicitTitle, repoTitles: repos.map((r) => r.repoName) });
   appendLog(outDir, {
     at: new Date().toISOString(),
@@ -322,6 +325,7 @@ async function runPatch({ outDir, baselineDir, systemName, repos, computeModel, 
     repos: repos.map((r) => r.repoName),
     topics: [summary],
   });
+  console.log(`[desc]  ${summary.description}`);
   console.log(`[wrote] ${outDir}/  + refreshed baseline`);
   console.log(`[log]   appended entry to ${join(outDir, 'patches.log.jsonl')}`);
 }

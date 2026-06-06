@@ -104,6 +104,30 @@ Claude Code subprocess adds ~12.5K tokens of system instructions per call. ~10.7
 
 `scripts/batch-test.js` compared parallel vs sequential vs stream-json multi-turn batching on identical workload: parallel wins on both cost and wall time (multi-turn accumulates context across turns → expensive). Current implementation: parallel subprocess per scope, no batching.
 
+### D13. Cost-driven auto-rebuild instead of patch when ratio crosses threshold
+
+Per scope (wiki) or per system (synthesis), the patch CLI estimates two token totals before calling the LLM:
+
+- `estimateFullscanTokens` — what a fresh `generateAppScope` / `synthesisGenesis` would cost
+- `estimatePatchTokens`    — what `compute + apply` would cost given the current diff and existing pages
+
+If `patchTokens / fullscanTokens > threshold`, we skip patch and rebuild instead. Same money, zero accumulated drift on that scope. Result on backend1 6-iter replay: wiki cost dropped from $2.24 → $1.68 (-25 %). On synthesis: every iter triggers rebuild because synthesis fullscan is always small; chain drift eliminated by construction.
+
+The estimator is byte-based (no LLM, no tree-sitter) — heuristic only, but the decision is binary so precision doesn't matter much. CLI flag `--rebuild-threshold=<0..1>` pins a static value when needed; default is dynamic (D14).
+
+### D14. Threshold curve denominated in tokens, not dollars
+
+Pricing is volatile across models, plans, and regions. Token counts are stable. `dynamicThreshold(fullscanTotalTok)` returns a clamped `[0.30, 0.90]` value on a log curve centred at `refTok = 8000`:
+
+| fullscan tokens | threshold |
+|-----------------|-----------|
+|   1 000         | 0.30      | (rebuild aggressively on tiny content)
+|   8 000         | 0.50      |
+|  50 000         | 0.70      |
+| 500 000         | 0.90      | (only rebuild on extreme refactors)
+
+CLI logs report `tok` counts, never USD. When pricing changes upstream we don't have to touch the threshold logic.
+
 ## Pipeline diagram
 
 ```
@@ -319,9 +343,10 @@ Claude Code subprocess adds ~12.5K tokens of system instructions per call. ~10.7
 |------------------------------------|-----------------|-----------------------------------|
 | bootstrap (per repo, 1-time)       | $0.25           | NestJS framework detected, 9 external integrations, 17 file patterns |
 | wiki fullscan (per repo, 1-time)   | $0.40 – $0.70   | ~150 source-file links per repo, 0 broken |
-| wiki patch (per PR, per repo)      | $0.10 – $0.30   | judge avg 0.85–0.92 per page      |
+| wiki patch (per PR, per repo)      | $0.10 – $0.30   | judge avg 0.85–0.92 per page; auto-REGEN on big-diff scopes (D13/D14) |
 | synthesis genesis                  | $0.17           | 4 topics, ~225 lines, 0 broken links |
-| synthesis patch (chain of 5)       | $1.10 total     | drift avg 0.78, 0 contradictions  |
+| synthesis patch (chain of 5)       | $1.10 total     | drift avg 0.78, 0 contradictions (static threshold) |
+| synthesis with dynamic threshold   | $0.85 total     | every iter triggers REGEN → drift = 0 by construction |
 | search query (5 questions × 3 iters) | $0.56         | answers correctly reflect timeline |
 
 Cumulative one-time cost to stand up Nami documentation: **$1.40** (2 bootstraps + 2 fullscans + 1 synthesis genesis).

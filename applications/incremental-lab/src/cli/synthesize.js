@@ -24,7 +24,7 @@ import { wikiDir, readRules } from './state.js';
 import { stableJson } from '../snapshot/store.js';
 import { stampFrontmatter, stripFrontmatter, firstSentence as fmFirstSentence } from '../wiki/frontmatter.js';
 import { buildSynthLinkRewriter } from '../wiki/synthesis-link-rewrite.js';
-import { extractMarkdownSymbols, diffMarkdownSymbols, renderMarkdownDiff } from '../extract/markdown.js';
+import { extractMarkdownSymbols, diffMarkdownSymbols, diffMarkdownFingerprints, renderMarkdownDiff } from '../extract/markdown.js';
 
 const TOPIC_TITLE = Object.fromEntries(SYNTHESIS_TAXONOMY.map((t) => [t.slug, t.title]));
 
@@ -144,14 +144,15 @@ async function runPatch({ outDir, baselineDir, systemName, repos, computeModel, 
         const baseBody = existsSync(basePath) ? stripFrontmatter(readFileSync(basePath, 'utf8')).content : null;
         if (baseBody === body) continue;
 
-        // Filter out churn-only changes: if no semantic markdown symbols moved
-        // (just frontmatter/timestamp shuffle), skip. When symbols DID move,
-        // still pass FULL before+after bodies — synthesis quality drops
-        // sharply when the compute LLM doesn't see the unchanged context.
+        // Skip purely-paraphrase changes: compare FINGERPRINTS (label + link
+        // set), not full body. Only fire when facts move (added/deleted/
+        // relabeled bullet, or link target changed). LLM rewording of an
+        // unchanged fact does NOT trigger synthesis patch.
         const symsBefore = baseBody == null ? [] : extractMarkdownSymbols(slug, baseBody);
         const symsAfter = extractMarkdownSymbols(slug, body);
-        const mdDiff = diffMarkdownSymbols(symsBefore, symsAfter);
-        if (mdDiff.added.length + mdDiff.deleted.length + mdDiff.changed.length === 0) continue;
+        const fpDiff = diffMarkdownFingerprints(symsBefore, symsAfter);
+        if (fpDiff.added.length + fpDiff.deleted.length + fpDiff.changed.length === 0) continue;
+        // Bodies still passed in full for compute context.
         changed.push({
           repoName: repo.repoName,
           scopeName: scope.name,
@@ -159,7 +160,7 @@ async function runPatch({ outDir, baselineDir, systemName, repos, computeModel, 
           slug,
           before: baseBody,
           after: body,
-          symbolCounts: { added: mdDiff.added.length, deleted: mdDiff.deleted.length, changed: mdDiff.changed.length },
+          symbolCounts: { added: fpDiff.added.length, deleted: fpDiff.deleted.length, changed: fpDiff.changed.length },
           changeKind: baseBody == null ? 'added' : 'modified',
         });
       }

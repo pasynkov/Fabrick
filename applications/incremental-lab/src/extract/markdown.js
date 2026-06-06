@@ -99,6 +99,7 @@ export function extractMarkdownSymbols(file, body) {
       }
       const links = extractLinks(line);
       const bodyForHash = key + '|' + Object.values(values).join('|');
+      const fingerprintHash = hash([key, ...links.map((l) => l.path).sort()].join('|'));
       out.push({
         id: `${file}::table::${sectionPath.join('>')}::${key}`,
         kind: 'table_row',
@@ -108,6 +109,7 @@ export function extractMarkdownSymbols(file, body) {
         values,
         links,
         bodyHash: hash(bodyForHash),
+        fingerprintHash,
       });
       i++;
       continue;
@@ -135,6 +137,7 @@ export function extractMarkdownSymbols(file, body) {
       const label = deriveLabel(body);
       const links = extractLinks(body);
       const trimmed = body.trim();
+      const fingerprintHash = hash([label, ...links.map((l) => l.path).sort()].join('|'));
       out.push({
         id: `${file}::bullet::${sectionPath.join('>')}::${label}`,
         kind: 'bullet',
@@ -144,6 +147,7 @@ export function extractMarkdownSymbols(file, body) {
         body: trimmed,
         links,
         bodyHash: hash(trimmed),
+        fingerprintHash,
       });
       i = j;
       continue;
@@ -164,6 +168,26 @@ function parseTableRow(line) {
  * Diff two symbol arrays (returned by extractMarkdownSymbols) at the symbol level.
  * Returns { added, deleted, changed (id, bodyHashBefore→After, linkChanges) }.
  */
+/**
+ * Stricter diff: ignore body-text paraphrase. A symbol is "changed" only when
+ * its fingerprint (label + sorted link paths) shifts. Catches added/removed
+ * facts and link retargets; ignores wording-only LLM variance.
+ */
+export function diffMarkdownFingerprints(before, after) {
+  const beforeMap = new Map(before.map((s) => [s.id, s]));
+  const afterMap = new Map(after.map((s) => [s.id, s]));
+  const added = [];
+  const deleted = [];
+  const changed = [];
+  for (const [id, b] of beforeMap) {
+    const a = afterMap.get(id);
+    if (!a) { deleted.push(b); continue; }
+    if (a.fingerprintHash !== b.fingerprintHash) changed.push({ id, kind: a.kind, before: b, after: a });
+  }
+  for (const [id, a] of afterMap) if (!beforeMap.has(id)) added.push(a);
+  return { added, deleted, changed };
+}
+
 export function diffMarkdownSymbols(before, after) {
   const beforeMap = new Map(before.map((s) => [s.id, s]));
   const afterMap = new Map(after.map((s) => [s.id, s]));

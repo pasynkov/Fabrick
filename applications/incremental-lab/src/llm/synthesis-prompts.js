@@ -41,14 +41,16 @@ export function computeSynthesisPatchPrompt({ system: systemName, existingPages,
   ).join('\n\n');
 
   const changesBlock = changedWikiPages.map((c) => {
-    const header = `### ${c.repoName} / ${c.scopeName} / ${c.slug}  (${c.changeKind})`;
+    const counts = c.symbolCounts ?? {};
+    const countsStr = `+${counts.added ?? 0} -${counts.deleted ?? 0} ~${counts.changed ?? 0}`;
+    const header = `### ${c.repoName} / ${c.scopeName} / ${c.slug}  (${c.changeKind}; symbols ${countsStr})`;
     if (c.changeKind === 'deleted') return `${header}\n(scope/page removed)`;
     return `${header}\n--- previous body ---\n${c.before ?? '(none)'}\n\n--- current body ---\n${c.after ?? '(empty)'}`;
   }).join('\n\n');
 
   const system = `You compute a detailed patch for the 4-page cross-repo synthesis of system "${systemName}".
 
-Input: the current synthesis pages + a list of per-repo wiki pages that have changed (added, modified, or deleted) since synthesis was last generated. Decide which synthesis topics need updates and produce a patch document — instructions another model will execute.
+Input: the current synthesis pages + every wiki page that changed since synthesis was last generated. Each change shows the previous AND current bodies in full plus a symbol-counts header (added/deleted/changed bullets+table rows). Decide which synthesis topics need updates and produce a patch document.
 
 TOPICS TO MAINTAIN:
 - system.md            high-level architecture, services, repos, runtime platform

@@ -20,7 +20,7 @@ import { readState, writeState, readRules, wikiDir, fileSlugMapPath } from './st
 import { parseUnifiedDiff } from '../wiki/diff-split.js';
 import { isExplicitlySkipped } from '../wiki/router.js';
 import { stampFrontmatter, stripFrontmatter, firstSentence as fmFirstSentence } from '../wiki/frontmatter.js';
-import { estimateScopeSourceBytes, estimateFullscanCost, estimatePatchCost, sumExistingPagesBytes } from '../wiki/cost-estimate.js';
+import { estimateScopeSourceBytes, estimateFullscanCost, estimatePatchCost, sumExistingPagesBytes, dynamicThreshold } from '../wiki/cost-estimate.js';
 import { generateAppScope } from '../wiki/app-page-generator.js';
 import { buildSnapshot } from '../snapshot/snapshot.js';
 
@@ -35,7 +35,8 @@ export async function run(repoPath, argv = []) {
   const applyModel = argv.find((a) => a.startsWith('--apply-model='))?.split('=')[1] ?? 'haiku';
   const concurrency = Number(argv.find((a) => a.startsWith('--concurrency='))?.split('=')[1] ?? 4);
   const maxCostUsd = Number(argv.find((a) => a.startsWith('--max-cost='))?.split('=')[1] ?? 10);
-  const rebuildThreshold = Number(argv.find((a) => a.startsWith('--rebuild-threshold='))?.split('=')[1] ?? 0.7);
+  const rebuildThresholdOverride = argv.find((a) => a.startsWith('--rebuild-threshold='));
+  const rebuildThresholdFixed = rebuildThresholdOverride ? Number(rebuildThresholdOverride.split('=')[1]) : null;
 
   const state = readState(repoPath);
   if (!state?.baselineSha) {
@@ -100,7 +101,8 @@ export async function run(repoPath, argv = []) {
     const eFull = estimateFullscanCost(sourceEst.bytes);
     const ePatch = estimatePatchCost(filtered.text.length, existingBytes);
     const ratio = eFull > 0 ? ePatch / eFull : 0;
-    if (ratio > rebuildThreshold) {
+    const threshold = rebuildThresholdFixed ?? dynamicThreshold(eFull);
+    if (ratio > threshold) {
       const snap = buildSnapshot(scopePath);
       const fileList = Object.keys(snap.files).sort();
       const res = await generateAppScope({
@@ -110,7 +112,7 @@ export async function run(repoPath, argv = []) {
       accrue(res, 'compute');
       writeFileSync(join(scopeOut, '_compute.prompt.txt'), res.prompt);
       writeFileSync(join(scopeOut, '_compute.response.md'), res.rawResponse);
-      writeFileSync(join(scopeOut, '_patch.md'), `=== REGEN (auto): patch/fullscan ratio ${ratio.toFixed(2)} > ${rebuildThreshold} ===\n`);
+      writeFileSync(join(scopeOut, '_patch.md'), `=== REGEN (auto): patch/fullscan ratio ${ratio.toFixed(2)} > threshold ${threshold.toFixed(2)} (fullscan ~$${eFull.toFixed(3)}) ===\n`);
       for (const slug of APP_PAGE_SLUGS) if (res.pages[slug]) existingPages[slug] = res.pages[slug];
       for (const slug of APP_PAGE_SLUGS) {
         const body = existingPages[slug] ?? '(empty)\n';
@@ -130,7 +132,7 @@ export async function run(repoPath, argv = []) {
       writeFileSync(join(scopeOut, 'index.md'), buildScopeIndex({ scope, pages: existingPages, sha: headSha }));
       state.scopes[scope.root] = { ...state.scopes[scope.root], name: scope.name, kind: scope.kind, lastPatchedSha: headSha };
       perScopeDescriptions[scope.root] = fmFirstSentence(existingPages['service.md'] ?? '');
-      console.log(`  ${scope.name}: REGEN $${(res.costUsd ?? 0).toFixed(3)} (est patch/full=${ratio.toFixed(2)})`);
+      console.log(`  ${scope.name}: REGEN $${(res.costUsd ?? 0).toFixed(3)} (ratio=${ratio.toFixed(2)} > thr=${threshold.toFixed(2)}, full=$${eFull.toFixed(3)})`);
       return;
     }
 

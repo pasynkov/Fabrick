@@ -88,3 +88,50 @@ export function sumExistingPagesBytes(existingPages) {
   for (const body of Object.values(existingPages ?? {})) total += (body ?? '').length;
   return total;
 }
+
+/**
+ * Dynamic patch/fullscan-ratio threshold that adapts to content size.
+ * Cheap content (small fullscan) → low threshold (rebuild aggressively
+ * because the absolute cost saving from patching is tiny anyway and
+ * rebuilds eliminate drift). Expensive content → high threshold (patch
+ * unless the diff is overwhelming).
+ *
+ * threshold = base + scale * log10(fullscanCost / referenceCost)
+ * clamped to [min, max].
+ */
+export function dynamicThreshold(fullscanCostUsd, opts = {}) {
+  const base   = opts.base   ?? 0.5;
+  const scale  = opts.scale  ?? 0.25;
+  const ref    = opts.ref    ?? 0.20;
+  const min    = opts.min    ?? 0.30;
+  const max    = opts.max    ?? 0.90;
+  const ratio  = Math.max(fullscanCostUsd / ref, 0.01);
+  const tr     = base + scale * Math.log10(ratio);
+  return Math.max(min, Math.min(max, tr));
+}
+
+/**
+ * Synthesis-side cost models. Bundle bytes = sum of all wiki pages fed
+ * to the synthesis prompt. Changed bundle bytes = sum of before+after
+ * bodies of wiki pages whose fingerprint moved.
+ */
+export function estimateSynthesisFullscanCost(bundleBytes) {
+  const skillOverhead = 6000;
+  const inTok = tokens(bundleBytes + skillOverhead);
+  const outTok = 2500;          // ~4 topics × ~600 tok
+  return ((inTok * PRICE.sonnetIn) + (outTok * PRICE.sonnetOut)) / 1_000_000;
+}
+
+export function estimateSynthesisPatchCost(changedBundleBytes, existingTopicsBytes) {
+  const computeOverhead = 4000;
+  const computeInTok = tokens(existingTopicsBytes + changedBundleBytes + computeOverhead);
+  const computeOutTok = 700;
+  const computeCost = ((computeInTok * PRICE.sonnetIn) + (computeOutTok * PRICE.sonnetOut)) / 1_000_000;
+
+  const applyOverhead = 2000;
+  const applyInTok = tokens(existingTopicsBytes + 1500 + applyOverhead);
+  const applyOutTok = tokens(existingTopicsBytes);
+  const applyCost = ((applyInTok * PRICE.haikuIn) + (applyOutTok * PRICE.haikuOut)) / 1_000_000;
+
+  return computeCost + applyCost;
+}

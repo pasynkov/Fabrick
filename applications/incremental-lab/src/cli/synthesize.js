@@ -25,6 +25,7 @@ import { stableJson } from '../snapshot/store.js';
 import { stampFrontmatter, stripFrontmatter, firstSentence as fmFirstSentence } from '../wiki/frontmatter.js';
 import { buildSynthLinkRewriter } from '../wiki/synthesis-link-rewrite.js';
 import { extractMarkdownSymbols, diffMarkdownSymbols, diffMarkdownFingerprints, renderMarkdownDiff } from '../extract/markdown.js';
+import { dynamicThreshold, estimateSynthesisFullscanCost, estimateSynthesisPatchCost } from '../wiki/cost-estimate.js';
 
 const TOPIC_TITLE = Object.fromEntries(SYNTHESIS_TAXONOMY.map((t) => [t.slug, t.title]));
 
@@ -186,6 +187,25 @@ async function runPatch({ outDir, baselineDir, systemName, repos, computeModel, 
   console.log(`[patch] ${changed.length} wiki pages changed`);
   if (changed.length === 0) {
     console.log('[patch] nothing to do');
+    return;
+  }
+
+  // Cost-driven branch: when patch ≈ fullscan, just rebuild — same money,
+  // zero accumulated drift. Dynamic threshold favors rebuild when fullscan
+  // is cheap (synthesis is always pretty small).
+  const bundleBytes = repos.reduce((s, r) =>
+    s + r.scopes.reduce((ss, sc) =>
+      ss + Object.values(sc.pages).reduce((sss, b) => sss + (b ?? '').length, 0), 0), 0);
+  const existingTopicsBytes = Object.values(existingPages).reduce((s, b) => s + (b ?? '').length, 0);
+  const changedBundleBytes = changed.reduce((s, c) => s + (c.before?.length ?? 0) + (c.after?.length ?? 0), 0);
+  const eFull = estimateSynthesisFullscanCost(bundleBytes);
+  const ePatch = estimateSynthesisPatchCost(changedBundleBytes, existingTopicsBytes);
+  const ratio = eFull > 0 ? ePatch / eFull : 0;
+  const threshold = dynamicThreshold(eFull);
+  console.log(`[cost-pred] patch~$${ePatch.toFixed(3)} fullscan~$${eFull.toFixed(3)} ratio=${ratio.toFixed(2)} threshold=${threshold.toFixed(2)}`);
+  if (ratio > threshold) {
+    console.log(`[cost-pred] REGEN (ratio > threshold) — rebuilding synthesis instead of patching`);
+    await runGenesis({ outDir, baselineDir, systemName, repos, computeModel, maxCostUsd });
     return;
   }
 

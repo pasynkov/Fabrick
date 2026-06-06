@@ -16,6 +16,7 @@ import { fileURLToPath } from 'node:url';
 import { callClaude } from '../llm/cli.js';
 import {
   synthesisGeneratePrompt, parseSynthesisOutput, SYNTHESIS_PAGE_SLUGS,
+  SYNTHESIS_TAXONOMY, SYNTHESIS_AUTO_SLUGS,
   computeSynthesisPatchPrompt, computeSynthesisPatchPerTopicPrompt, applySynthesisPatchPrompt,
 } from '../llm/synthesis-prompts.js';
 import { pMap } from '../util/concurrent.js';
@@ -25,12 +26,7 @@ import { stampFrontmatter, stripFrontmatter, firstSentence as fmFirstSentence } 
 import { buildSynthLinkRewriter } from '../wiki/synthesis-link-rewrite.js';
 import { extractMarkdownSymbols, diffMarkdownSymbols, renderMarkdownDiff } from '../extract/markdown.js';
 
-const TOPIC_TITLE = {
-  'system.md':          'System Overview',
-  'data-flows.md':      'Data Flows',
-  'transport-graph.md': 'Transport Graph',
-  'infra.md':           'Infrastructure',
-};
+const TOPIC_TITLE = Object.fromEntries(SYNTHESIS_TAXONOMY.map((t) => [t.slug, t.title]));
 
 function writeTopic(outDir, slug, body, ctx) {
   let finalBody = body;
@@ -100,8 +96,10 @@ async function runGenesis({ outDir, baselineDir, systemName, repos, computeModel
   const pages = parseSynthesisOutput(res.content);
   const linkRewriter = buildSynthLinkRewriter(repos);
   for (const slug of SYNTHESIS_PAGE_SLUGS) {
+    if (SYNTHESIS_AUTO_SLUGS.has(slug)) continue;
     writeTopic(outDir, slug, pages[slug] ?? '(empty)\n', { systemName, linkRewriter });
   }
+  writeAutoIndex(outDir, systemName, repos);
 
   // Snapshot current wikis as the patch baseline.
   rmSync(baselineDir, { recursive: true, force: true });
@@ -237,8 +235,10 @@ async function runPatch({ outDir, baselineDir, systemName, repos, computeModel, 
     const newPages = parseSynthesisOutput(apRes.content);
     const linkRewriter = buildSynthLinkRewriter(repos);
     for (const slug of slugsToApply) {
+      if (SYNTHESIS_AUTO_SLUGS.has(slug)) continue;
       if (newPages[slug]) writeTopic(outDir, slug, newPages[slug], { systemName, linkRewriter });
     }
+    writeAutoIndex(outDir, systemName, repos);
   }
 
   // Refresh baseline.
@@ -260,6 +260,36 @@ async function runPatch({ outDir, baselineDir, systemName, repos, computeModel, 
   }));
 
   console.log(`[wrote] ${outDir}/  + refreshed baseline`);
+}
+
+function writeAutoIndex(outDir, systemName, repos) {
+  const lines = [`# ${systemName} — System Index`, ''];
+  lines.push(`Cross-repo system documentation. ${repos.length} repos:`);
+  for (const r of repos) {
+    const desc = r.project?.summary ?? '';
+    lines.push(`- **${r.repoName}** — ${desc}`);
+  }
+  lines.push('', '## Topics', '');
+  for (const t of SYNTHESIS_TAXONOMY) {
+    if (t.slug === 'index.md') continue;
+    const p = join(outDir, t.slug);
+    let blurb = t.focus.split('.')[0];
+    if (existsSync(p)) {
+      const { meta } = stripFrontmatter(readFileSync(p, 'utf8'));
+      if (meta.description) blurb = meta.description;
+    }
+    lines.push(`- [${t.title}](${t.slug}) — ${blurb}`);
+  }
+  const body = lines.join('\n') + '\n';
+  const fm = {
+    name: `${systemName} — Index`,
+    description: `Top-level navigation for the ${systemName} system synthesis (${SYNTHESIS_TAXONOMY.length - 1} topics).`,
+    type: 'synthesis',
+    system: systemName,
+    slug: 'index.md',
+    updatedAt: new Date().toISOString(),
+  };
+  writeFileSync(join(outDir, 'index.md'), stampFrontmatter(fm, body));
 }
 
 function parseSynthesisPatch(raw) {

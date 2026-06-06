@@ -4,7 +4,22 @@
  * wikis with their scope metadata.
  */
 
-export const SYNTHESIS_PAGE_SLUGS = ['system.md', 'data-flows.md', 'transport-graph.md', 'infra.md'];
+/**
+ * Fixed synthesis taxonomy. 4 broad topics worked better in drift tests than
+ * a wider 10-topic split — fewer pages = each one keeps the full system
+ * picture and patches preserve unchanged neighbors. index.md is auto-generated
+ * by the harness as a breadcrumb list.
+ */
+export const SYNTHESIS_TAXONOMY = [
+  { slug: 'index.md',           title: 'Index',           focus: 'AUTO-GENERATED. Topic list + repo list.' },
+  { slug: 'system.md',          title: 'System Overview', focus: 'Purpose, runtime platform, repos, deployable services.' },
+  { slug: 'data-flows.md',      title: 'Data Flows',      focus: 'End-to-end business pipelines, services traversed, data shape per hop.' },
+  { slug: 'transport-graph.md', title: 'Transport Graph', focus: 'NATS subjects / Kafka topics / HTTP routes / gRPC produced and consumed.' },
+  { slug: 'infra.md',           title: 'Infrastructure',  focus: 'Deployment topology, ConfigMaps, external systems.' },
+];
+
+export const SYNTHESIS_PAGE_SLUGS = SYNTHESIS_TAXONOMY.map((t) => t.slug);
+export const SYNTHESIS_AUTO_SLUGS = new Set(['index.md']);
 
 export function synthesisGeneratePrompt({ system: systemName, repos, skill }) {
   const repoBlocks = repos.map((r) => renderRepoBlock(r)).join('\n\n');
@@ -100,12 +115,7 @@ ${changesBlock}
   return { system, user };
 }
 
-const SYNTHESIS_TOPIC_FOCUS = {
-  'system.md':          'High-level architecture: WHAT the system is, repos it spans, deployable services, runtime platform.',
-  'data-flows.md':      'End-to-end business pipelines. Chain of services per pipeline + data shape at each hop.',
-  'transport-graph.md': 'Inter-service messaging graph: NATS subjects / Kafka topics / HTTP routes / gRPC produced and consumed.',
-  'infra.md':           'Deployment topology: namespaces, replicas, scaling, ConfigMaps, external systems.',
-};
+const SYNTHESIS_TOPIC_FOCUS = Object.fromEntries(SYNTHESIS_TAXONOMY.map((t) => [t.slug, t.focus]));
 
 export function computeSynthesisPatchPerTopicPrompt({ system: systemName, topic, existingPages, changedWikiPages }) {
   const targetBody = existingPages[topic] ?? '(empty)';

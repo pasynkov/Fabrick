@@ -21,6 +21,7 @@ import {
 import { wikiDir, readRules } from './state.js';
 import { stableJson } from '../snapshot/store.js';
 import { stampFrontmatter, stripFrontmatter, firstSentence as fmFirstSentence } from '../wiki/frontmatter.js';
+import { buildSynthLinkRewriter } from '../wiki/synthesis-link-rewrite.js';
 
 const TOPIC_TITLE = {
   'system.md':          'System Overview',
@@ -30,15 +31,23 @@ const TOPIC_TITLE = {
 };
 
 function writeTopic(outDir, slug, body, ctx) {
+  let finalBody = body;
+  if (ctx.linkRewriter) {
+    const res = ctx.linkRewriter(body);
+    finalBody = res.body;
+    if (res.rewrites || res.unresolved) {
+      console.log(`  [${slug}] link rewrite: ${res.rewrites} fixed, ${res.unresolved} unresolved`);
+    }
+  }
   const fm = {
     name: `${ctx.systemName} — ${TOPIC_TITLE[slug] ?? slug}`,
-    description: fmFirstSentence(body),
+    description: fmFirstSentence(finalBody),
     type: 'synthesis',
     system: ctx.systemName,
     slug,
     updatedAt: new Date().toISOString(),
   };
-  writeFileSync(join(outDir, slug), stampFrontmatter(fm, body));
+  writeFileSync(join(outDir, slug), stampFrontmatter(fm, finalBody));
 }
 
 const SELF_ROOT = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
@@ -86,8 +95,9 @@ async function runGenesis({ outDir, baselineDir, systemName, repos, computeModel
 
   writeFileSync(join(outDir, '_synthesis.response.md'), res.content);
   const pages = parseSynthesisOutput(res.content);
+  const linkRewriter = buildSynthLinkRewriter(repos);
   for (const slug of SYNTHESIS_PAGE_SLUGS) {
-    writeTopic(outDir, slug, pages[slug] ?? '(empty)\n', { systemName });
+    writeTopic(outDir, slug, pages[slug] ?? '(empty)\n', { systemName, linkRewriter });
   }
 
   // Snapshot current wikis as the patch baseline.
@@ -192,8 +202,9 @@ async function runPatch({ outDir, baselineDir, systemName, repos, computeModel, 
     writeFileSync(join(outDir, '_apply.response.md'), apRes.content);
 
     const newPages = parseSynthesisOutput(apRes.content);
+    const linkRewriter = buildSynthLinkRewriter(repos);
     for (const slug of slugsToApply) {
-      if (newPages[slug]) writeTopic(outDir, slug, newPages[slug], { systemName });
+      if (newPages[slug]) writeTopic(outDir, slug, newPages[slug], { systemName, linkRewriter });
     }
   }
 

@@ -23,6 +23,8 @@ import { stampFrontmatter, stripFrontmatter, firstSentence as fmFirstSentence } 
 import { estimateScopeSourceBytes, estimateFullscanTokens, estimatePatchTokens, sumExistingPagesBytes, dynamicThreshold } from '../wiki/cost-estimate.js';
 import { generateAppScope } from '../wiki/app-page-generator.js';
 import { buildSnapshot } from '../snapshot/snapshot.js';
+import { snapshotPages, readPagesAfter, summariseScopeChange, appendPatchLog, resolveTitle, summariseDeletion } from '../wiki/patch-log.js';
+import { rmSync } from 'node:fs';
 
 const DIFF_CAP = 50_000;
 
@@ -37,6 +39,9 @@ export async function run(repoPath, argv = []) {
   const maxCostUsd = Number(argv.find((a) => a.startsWith('--max-cost='))?.split('=')[1] ?? 10);
   const rebuildThresholdOverride = argv.find((a) => a.startsWith('--rebuild-threshold='));
   const rebuildThresholdFixed = rebuildThresholdOverride ? Number(rebuildThresholdOverride.split('=')[1]) : null;
+  const explicitTitle = argv.find((a) => a.startsWith('--title='))?.split('=')[1];
+  const prNumber = argv.find((a) => a.startsWith('--pr='))?.split('=')[1]
+    ? Number(argv.find((a) => a.startsWith('--pr=')).split('=')[1]) : null;
 
   const state = readState(repoPath);
   if (!state?.baselineSha) {
@@ -58,6 +63,22 @@ export async function run(repoPath, argv = []) {
   const repoName = rules.project?.repoName ?? repoPath.split('/').pop();
   const scopes = detectScopes(repoPath).filter((s) => s.kind === 'app');
   const wDir = wikiDir(repoPath);
+
+  const { title, prNumber: resolvedPr } = await resolveTitle({ git, baselineSha: state.baselineSha, headSha, explicitTitle, prNumber });
+  console.log(`[patch] title: "${title}"`);
+  const scopeLog = [];
+
+  // Detect deletions: scope tracked in state but no longer in current scopes
+  const currentScopeRoots = new Set(scopes.map((s) => s.root));
+  for (const [scopeRoot, prev] of Object.entries(state.scopes ?? {})) {
+    if (currentScopeRoots.has(scopeRoot)) continue;
+    const scopeOut = join(wDir, scopeRoot.replace(/\//g, '__'));
+    const delEntry = summariseDeletion({ scopeName: prev.name ?? scopeRoot, scopeDir: scopeOut });
+    rmSync(scopeOut, { recursive: true, force: true });
+    delete state.scopes[scopeRoot];
+    scopeLog.push(delEntry);
+    console.log(`  ${prev.name ?? scopeRoot}: DELETED (${delEntry.removedSlugs.length} pages removed)`);
+  }
 
   let totalCompute = 0;
   let totalApply = 0;
@@ -87,6 +108,7 @@ export async function run(repoPath, argv = []) {
     }
 
     const existingPages = readExistingPages(scopeOut);
+    const beforePages = snapshotPages(existingPages);
 
     // Filter diff: drop hunks for files explicitly mapped to no slug (tests,
     // index barrels, etc.). Files unknown to the map are KEPT so the model
@@ -132,6 +154,8 @@ export async function run(repoPath, argv = []) {
       writeFileSync(join(scopeOut, 'index.md'), buildScopeIndex({ scope, pages: existingPages, sha: headSha }));
       state.scopes[scope.root] = { ...state.scopes[scope.root], name: scope.name, kind: scope.kind, lastPatchedSha: headSha };
       perScopeDescriptions[scope.root] = fmFirstSentence(existingPages['service.md'] ?? '');
+      const afterPages = readPagesAfter(scopeOut);
+      scopeLog.push(summariseScopeChange({ scopeName: scope.name, mode: 'regen-auto', before: beforePages, after: afterPages }));
       console.log(`  ${scope.name}: REGEN $${(res.costUsd ?? 0).toFixed(3)} (ratio=${ratio.toFixed(2)} > thr=${threshold.toFixed(2)}, full~${eFull.totalTok}tok)`);
       return;
     }
@@ -148,6 +172,7 @@ export async function run(repoPath, argv = []) {
     if (comp.allNoOp) {
       console.log(`  ${scope.name}: compute=$${(comp.costUsd ?? 0).toFixed(3)} → no changes (skipped ${filtered.skippedFiles})`);
       state.scopes[scope.root] = { ...state.scopes[scope.root], name: scope.name, kind: scope.kind, lastPatchedSha: headSha };
+      scopeLog.push({ scope: scope.name, mode: 'patch-noop', slugCounts: {}, sample: [] });
       return;
     }
 
@@ -179,6 +204,8 @@ export async function run(repoPath, argv = []) {
 
     state.scopes[scope.root] = { ...state.scopes[scope.root], name: scope.name, kind: scope.kind, lastPatchedSha: headSha };
     perScopeDescriptions[scope.root] = fmFirstSentence(existingPages['service.md'] ?? '');
+    const afterPages = readPagesAfter(scopeOut);
+    scopeLog.push(summariseScopeChange({ scopeName: scope.name, mode: 'patch', before: beforePages, after: afterPages }));
     console.log(`  ${scope.name}: compute=$${(comp.costUsd ?? 0).toFixed(3)} apply=$${(ap.costUsd ?? 0).toFixed(3)} (skipped ${filtered.skippedFiles})`);
   }, { concurrency });
 
@@ -192,13 +219,25 @@ export async function run(repoPath, argv = []) {
   writeFileSync(join(wDir, 'index.md'),
     buildRepoIndex({ repoName, scopes, sha: headSha, perScopeDescriptions }));
 
+  const baselineSnapshot = state.baselineSha;
   state.baselineSha = headSha;
   state.lastPatchAt = new Date().toISOString();
   state.lastPatchCostUsd = totalCompute + totalApply;
   writeState(repoPath, state);
 
+  appendPatchLog(repoPath, {
+    at: new Date().toISOString(),
+    baselineSha: baselineSnapshot,
+    headSha,
+    title,
+    prNumber: resolvedPr,
+    costUsd: totalCompute + totalApply,
+    scopes: scopeLog,
+  });
+
   console.log('');
   console.log(`[patch] compute=$${totalCompute.toFixed(2)} apply=$${totalApply.toFixed(2)} total=$${(totalCompute + totalApply).toFixed(2)}`);
+  console.log(`[log]   appended entry to .fabrick/patches.log.jsonl`);
 }
 
 async function readDiff(git, before, after, scopeRoot) {

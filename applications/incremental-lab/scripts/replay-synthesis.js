@@ -30,6 +30,7 @@ const itersArg = argv.find((a) => a.startsWith('--iters='))?.split('=')[1];
 const iters = itersArg ? itersArg.split(',').map(Number) : [0, 1, 2, 3, 4, 5];
 const systemName = argv.find((a) => a.startsWith('--system='))?.split('=')[1] ?? basename(outDir);
 const maxCost = Number(argv.find((a) => a.startsWith('--max-cost='))?.split('=')[1] ?? 10);
+const perTopic = argv.includes('--per-topic');
 
 // Verify history exists for each repo.
 for (const p of repoPaths) {
@@ -79,6 +80,7 @@ try {
     const t0 = Date.now();
     const cliArgs = ['--repos=' + repoPaths.join(','), `--system=${systemName}`, `--max-cost=${(maxCost - totalCost).toFixed(2)}`];
     if (i === iters[0]) cliArgs.push('--rebuild');
+    if (perTopic) cliArgs.push('--per-topic');
     await runSynthesize(outDir, cliArgs);
     const ms = Date.now() - t0;
 

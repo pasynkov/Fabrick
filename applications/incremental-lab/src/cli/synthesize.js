@@ -16,8 +16,9 @@ import { fileURLToPath } from 'node:url';
 import { callClaude } from '../llm/cli.js';
 import {
   synthesisGeneratePrompt, parseSynthesisOutput, SYNTHESIS_PAGE_SLUGS,
-  computeSynthesisPatchPrompt, applySynthesisPatchPrompt,
+  computeSynthesisPatchPrompt, computeSynthesisPatchPerTopicPrompt, applySynthesisPatchPrompt,
 } from '../llm/synthesis-prompts.js';
+import { pMap } from '../util/concurrent.js';
 import { wikiDir, readRules } from './state.js';
 import { stableJson } from '../snapshot/store.js';
 import { stampFrontmatter, stripFrontmatter, firstSentence as fmFirstSentence } from '../wiki/frontmatter.js';
@@ -69,6 +70,7 @@ export async function run(outDir, argv = []) {
   const applyModel = argv.find((a) => a.startsWith('--apply-model='))?.split('=')[1] ?? 'haiku';
   const maxCostUsd = Number(argv.find((a) => a.startsWith('--max-cost='))?.split('=')[1] ?? 5);
   const rebuild = argv.includes('--rebuild');
+  const perTopic = argv.includes('--per-topic');
 
   const repos = repoPaths.map((p) => loadRepoWikis(p));
   for (const r of repos) console.log(`[load] ${r.repoName}: ${r.scopes.length} scopes`);
@@ -79,7 +81,7 @@ export async function run(outDir, argv = []) {
   if (rebuild || !existsSync(baselineDir)) {
     await runGenesis({ outDir, baselineDir, systemName, repos, computeModel, maxCostUsd });
   } else {
-    await runPatch({ outDir, baselineDir, systemName, repos, computeModel, applyModel, maxCostUsd });
+    await runPatch({ outDir, baselineDir, systemName, repos, computeModel, applyModel, maxCostUsd, perTopic });
   }
 }
 
@@ -121,7 +123,7 @@ async function runGenesis({ outDir, baselineDir, systemName, repos, computeModel
   console.log(`[wrote] ${outDir}/  + baseline at _baseline-wiki/`);
 }
 
-async function runPatch({ outDir, baselineDir, systemName, repos, computeModel, applyModel, maxCostUsd }) {
+async function runPatch({ outDir, baselineDir, systemName, repos, computeModel, applyModel, maxCostUsd, perTopic = false }) {
   const existingPages = {};
   for (const slug of SYNTHESIS_PAGE_SLUGS) {
     if (existsSync(join(outDir, slug))) {
@@ -188,19 +190,38 @@ async function runPatch({ outDir, baselineDir, systemName, repos, computeModel, 
     return;
   }
 
-  // Compute patch (sonnet)
-  const computeBuilt = computeSynthesisPatchPrompt({ system: systemName, existingPages, changedWikiPages: changed });
-  writeFileSync(join(outDir, '_compute.prompt.txt'), `--- system ---\n${computeBuilt.system}\n\n--- user ---\n${computeBuilt.user}`);
+  // Compute patch — single-call (default) OR per-topic parallel (4 calls)
+  let patchBySlug = {};
+  let computeCost = 0;
   const t1 = Date.now();
-  const compRes = await callClaude(computeBuilt, { model: computeModel, timeoutMs: 900_000, maxBudgetUsd: maxCostUsd });
-  console.log(`[compute] ${Date.now() - t1}ms cost $${(compRes.costUsd ?? 0).toFixed(4)}`);
-  writeFileSync(join(outDir, '_compute.response.md'), compRes.content);
-
-  const patchBySlug = parseSynthesisPatch(compRes.content);
+  if (perTopic) {
+    console.log('[compute] per-topic mode: 4 parallel calls');
+    const results = {};
+    await pMap(SYNTHESIS_PAGE_SLUGS, async (slug) => {
+      const built = computeSynthesisPatchPerTopicPrompt({ system: systemName, topic: slug, existingPages, changedWikiPages: changed });
+      writeFileSync(join(outDir, `_compute.${slug}.prompt.txt`), `--- system ---\n${built.system}\n\n--- user ---\n${built.user}`);
+      const res = await callClaude(built, { model: computeModel, timeoutMs: 900_000, maxBudgetUsd: maxCostUsd });
+      writeFileSync(join(outDir, `_compute.${slug}.response.md`), res.content);
+      computeCost += res.costUsd ?? 0;
+      const parsed = parseSynthesisPatch(res.content);
+      results[slug] = parsed[slug] ?? '';
+      console.log(`  ${slug}: $${(res.costUsd ?? 0).toFixed(4)}`);
+    }, { concurrency: 4 });
+    patchBySlug = results;
+  } else {
+    const computeBuilt = computeSynthesisPatchPrompt({ system: systemName, existingPages, changedWikiPages: changed });
+    writeFileSync(join(outDir, '_compute.prompt.txt'), `--- system ---\n${computeBuilt.system}\n\n--- user ---\n${computeBuilt.user}`);
+    const compRes = await callClaude(computeBuilt, { model: computeModel, timeoutMs: 900_000, maxBudgetUsd: maxCostUsd });
+    computeCost = compRes.costUsd ?? 0;
+    writeFileSync(join(outDir, '_compute.response.md'), compRes.content);
+    patchBySlug = parseSynthesisPatch(compRes.content);
+  }
+  console.log(`[compute] total ${Date.now() - t1}ms cost $${computeCost.toFixed(4)}`);
   writeFileSync(join(outDir, '_patch.md'),
     SYNTHESIS_PAGE_SLUGS.map((slug) => `=== PATCH: ${slug} ===\n${patchBySlug[slug] ?? 'no changes'}`).join('\n\n') + '\n');
 
   const slugsToApply = SYNTHESIS_PAGE_SLUGS.filter((slug) => !isNoChanges(patchBySlug[slug]));
+  let applyCost = 0;
   if (slugsToApply.length === 0) {
     console.log('[patch] all topics no-op; refreshing baseline only');
   } else {
@@ -209,7 +230,8 @@ async function runPatch({ outDir, baselineDir, systemName, repos, computeModel, 
     writeFileSync(join(outDir, '_apply.prompt.txt'), `--- system ---\n${applyBuilt.system}\n\n--- user ---\n${applyBuilt.user}`);
     const t2 = Date.now();
     const apRes = await callClaude(applyBuilt, { model: applyModel, timeoutMs: 900_000, maxBudgetUsd: maxCostUsd });
-    console.log(`[apply]   ${Date.now() - t2}ms cost $${(apRes.costUsd ?? 0).toFixed(4)}`);
+    applyCost = apRes.costUsd ?? 0;
+    console.log(`[apply]   ${Date.now() - t2}ms cost $${applyCost.toFixed(4)}`);
     writeFileSync(join(outDir, '_apply.response.md'), apRes.content);
 
     const newPages = parseSynthesisOutput(apRes.content);
@@ -224,7 +246,7 @@ async function runPatch({ outDir, baselineDir, systemName, repos, computeModel, 
   mkdirSync(baselineDir, { recursive: true });
   for (const repo of repos) cpSync(wikiDir(repo.repoPath), join(baselineDir, repo.repoName), { recursive: true });
 
-  const totalCost = (compRes.costUsd ?? 0) + (slugsToApply.length ? 0 : 0);
+  const totalCost = computeCost + applyCost;
   writeFileSync(join(outDir, '_meta.json'), stableJson({
     systemName,
     generatedAt: new Date().toISOString(),

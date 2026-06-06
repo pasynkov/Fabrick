@@ -18,33 +18,34 @@ import { APP_PAGE_SLUGS } from './app-taxonomy.js';
  * Snapshot current page bodies (already in `existingPages`) keyed by slug.
  * No I/O — caller already stripped frontmatter.
  */
-export function snapshotPages(existingPages) {
+export function snapshotPages(existingPages, slugs = APP_PAGE_SLUGS) {
   const out = {};
-  for (const slug of APP_PAGE_SLUGS) out[slug] = existingPages[slug] ?? '';
+  for (const slug of slugs) out[slug] = existingPages[slug] ?? '';
   return out;
 }
 
 /**
- * Read current pages from disk (after a patch/regen), strip frontmatter,
- * return as { slug: body }.
+ * Read current pages from disk (after a patch/regen/genesis), strip
+ * frontmatter, return as { slug: body }.
  */
-export function readPagesAfter(scopeOut) {
+export function readPagesAfter(dir, slugs = APP_PAGE_SLUGS) {
   const out = {};
-  for (const slug of APP_PAGE_SLUGS) {
-    const p = join(scopeOut, slug);
+  for (const slug of slugs) {
+    const p = join(dir, slug);
     if (existsSync(p)) out[slug] = stripFrontmatter(readFileSync(p, 'utf8')).content;
   }
   return out;
 }
 
 /**
- * Build per-scope summary for the log entry by diffing before/after page
- * symbol sets. Deterministic — uses markdown extractor only.
+ * Build per-unit summary for a log entry by diffing before/after page
+ * symbol sets. Deterministic — uses markdown extractor only. Works for
+ * any slug set (wiki scope = APP_PAGE_SLUGS, synthesis = SYNTHESIS_PAGE_SLUGS).
  */
-export function summariseScopeChange({ scopeName, mode, before, after }) {
+export function summariseChange({ name, mode, slugs = APP_PAGE_SLUGS, before, after, extras = {} }) {
   const slugCounts = {};
   const sample = [];
-  for (const slug of APP_PAGE_SLUGS) {
+  for (const slug of slugs) {
     const a = before[slug] ?? '';
     const b = after[slug] ?? '';
     if (a === b) continue;
@@ -56,7 +57,13 @@ export function summariseScopeChange({ scopeName, mode, before, after }) {
     for (const s of d.deleted.slice(0, 1)) sample.push(`-${slug}:${labelOf(s)}`);
     for (const c of d.changed.slice(0, 1)) sample.push(`~${slug}:${labelOf(c.after)}`);
   }
-  return { scope: scopeName, mode, slugCounts, sample: sample.slice(0, 8) };
+  return { name, mode, slugCounts, sample: sample.slice(0, 8), ...extras };
+}
+
+/** Back-compat alias for wiki-side caller. */
+export function summariseScopeChange({ scopeName, mode, before, after }) {
+  const r = summariseChange({ name: scopeName, mode, slugs: APP_PAGE_SLUGS, before, after });
+  return { scope: r.name, mode: r.mode, slugCounts: r.slugCounts, sample: r.sample };
 }
 
 function labelOf(s) {
@@ -72,6 +79,22 @@ function labelOf(s) {
 export function appendPatchLog(repoPath, entry) {
   const p = join(repoPath, '.fabrick', 'patches.log.jsonl');
   appendFileSync(p, JSON.stringify(entry) + '\n');
+}
+
+/**
+ * Append one entry to a generic <dir>/patches.log.jsonl. Used by synthesis.
+ */
+export function appendLog(dir, entry) {
+  appendFileSync(join(dir, 'patches.log.jsonl'), JSON.stringify(entry) + '\n');
+}
+
+/**
+ * Resolve a synthesis-side title. Falls back to "synthesis sync".
+ */
+export function resolveSynthesisTitle({ explicitTitle, repoTitles = [] }) {
+  if (explicitTitle) return explicitTitle;
+  if (repoTitles.length === 0) return 'synthesis sync';
+  return `synthesis sync: ${repoTitles.join('; ')}`;
 }
 
 /**

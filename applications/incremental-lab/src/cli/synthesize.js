@@ -26,6 +26,7 @@ import { stampFrontmatter, stripFrontmatter, firstSentence as fmFirstSentence } 
 import { buildSynthLinkRewriter } from '../wiki/synthesis-link-rewrite.js';
 import { extractMarkdownSymbols, diffMarkdownSymbols, diffMarkdownFingerprints, renderMarkdownDiff } from '../extract/markdown.js';
 import { dynamicThreshold, estimateSynthesisFullscanTokens, estimateSynthesisPatchTokens } from '../wiki/cost-estimate.js';
+import { snapshotPages, readPagesAfter, summariseChange, appendLog, resolveSynthesisTitle } from '../wiki/patch-log.js';
 
 const TOPIC_TITLE = Object.fromEntries(SYNTHESIS_TAXONOMY.map((t) => [t.slug, t.title]));
 
@@ -68,6 +69,7 @@ export async function run(outDir, argv = []) {
   const maxCostUsd = Number(argv.find((a) => a.startsWith('--max-cost='))?.split('=')[1] ?? 5);
   const rebuild = argv.includes('--rebuild');
   const perTopic = argv.includes('--per-topic');
+  const explicitTitle = argv.find((a) => a.startsWith('--title='))?.split('=')[1];
 
   const repos = repoPaths.map((p) => loadRepoWikis(p));
   for (const r of repos) console.log(`[load] ${r.repoName}: ${r.scopes.length} scopes`);
@@ -76,13 +78,16 @@ export async function run(outDir, argv = []) {
   const baselineDir = join(outDir, '_baseline-wiki');
 
   if (rebuild || !existsSync(baselineDir)) {
-    await runGenesis({ outDir, baselineDir, systemName, repos, computeModel, maxCostUsd });
+    await runGenesis({ outDir, baselineDir, systemName, repos, computeModel, maxCostUsd, explicitTitle, forced: rebuild });
   } else {
-    await runPatch({ outDir, baselineDir, systemName, repos, computeModel, applyModel, maxCostUsd, perTopic });
+    await runPatch({ outDir, baselineDir, systemName, repos, computeModel, applyModel, maxCostUsd, perTopic, explicitTitle });
   }
 }
 
-async function runGenesis({ outDir, baselineDir, systemName, repos, computeModel, maxCostUsd }) {
+async function runGenesis({ outDir, baselineDir, systemName, repos, computeModel, maxCostUsd, explicitTitle, forced = false }) {
+  // Snapshot existing topic bodies (may be empty on first genesis) for diff log.
+  const beforePages = snapshotPages(readPagesAfter(outDir, SYNTHESIS_PAGE_SLUGS), SYNTHESIS_PAGE_SLUGS);
+
   const skill = readFileSync(SKILL_PATH, 'utf8');
   const built = synthesisGeneratePrompt({ system: systemName, repos, skill });
   writeFileSync(join(outDir, '_synthesis.prompt.txt'), `--- system ---\n${built.system}\n\n--- user ---\n${built.user}`);
@@ -101,6 +106,25 @@ async function runGenesis({ outDir, baselineDir, systemName, repos, computeModel
     writeTopic(outDir, slug, pages[slug] ?? '(empty)\n', { systemName, linkRewriter });
   }
   writeAutoIndex(outDir, systemName, repos);
+
+  // Log run.
+  const afterPages = readPagesAfter(outDir, SYNTHESIS_PAGE_SLUGS);
+  const summary = summariseChange({
+    name: systemName,
+    mode: forced ? 'regen-forced' : 'genesis',
+    slugs: SYNTHESIS_PAGE_SLUGS,
+    before: beforePages, after: afterPages,
+  });
+  const title = resolveSynthesisTitle({ explicitTitle, repoTitles: repos.map((r) => r.repoName) });
+  appendLog(outDir, {
+    at: new Date().toISOString(),
+    title,
+    mode: summary.mode,
+    costUsd: res.costUsd ?? 0,
+    repos: repos.map((r) => r.repoName),
+    topics: [summary],
+  });
+  console.log(`[log]   appended entry to ${join(outDir, 'patches.log.jsonl')}`);
 
   // Snapshot current wikis as the patch baseline.
   rmSync(baselineDir, { recursive: true, force: true });
@@ -122,7 +146,8 @@ async function runGenesis({ outDir, baselineDir, systemName, repos, computeModel
   console.log(`[wrote] ${outDir}/  + baseline at _baseline-wiki/`);
 }
 
-async function runPatch({ outDir, baselineDir, systemName, repos, computeModel, applyModel, maxCostUsd, perTopic = false }) {
+async function runPatch({ outDir, baselineDir, systemName, repos, computeModel, applyModel, maxCostUsd, perTopic = false, explicitTitle }) {
+  const beforePages = readPagesAfter(outDir, SYNTHESIS_PAGE_SLUGS);
   const existingPages = {};
   for (const slug of SYNTHESIS_PAGE_SLUGS) {
     if (existsSync(join(outDir, slug))) {
@@ -205,7 +230,7 @@ async function runPatch({ outDir, baselineDir, systemName, repos, computeModel, 
   console.log(`[cost-pred] patch~${ePatch.totalTok}tok fullscan~${eFull.totalTok}tok ratio=${ratio.toFixed(2)} threshold=${threshold.toFixed(2)}`);
   if (ratio > threshold) {
     console.log(`[cost-pred] REGEN (ratio > threshold) — rebuilding synthesis instead of patching`);
-    await runGenesis({ outDir, baselineDir, systemName, repos, computeModel, maxCostUsd });
+    await runGenesis({ outDir, baselineDir, systemName, repos, computeModel, maxCostUsd, explicitTitle, forced: false });
     return;
   }
 
@@ -280,7 +305,25 @@ async function runPatch({ outDir, baselineDir, systemName, repos, computeModel, 
     repos: repos.map((r) => ({ repoName: r.repoName, scopes: r.scopes.map((s) => s.name) })),
   }));
 
+  const afterPages = readPagesAfter(outDir, SYNTHESIS_PAGE_SLUGS);
+  const summary = summariseChange({
+    name: systemName,
+    mode: 'patch',
+    slugs: SYNTHESIS_PAGE_SLUGS,
+    before: beforePages, after: afterPages,
+    extras: { changedWikiPagesCount: changed.length, appliedSlugs: slugsToApply },
+  });
+  const title = resolveSynthesisTitle({ explicitTitle, repoTitles: repos.map((r) => r.repoName) });
+  appendLog(outDir, {
+    at: new Date().toISOString(),
+    title,
+    mode: 'patch',
+    costUsd: totalCost,
+    repos: repos.map((r) => r.repoName),
+    topics: [summary],
+  });
   console.log(`[wrote] ${outDir}/  + refreshed baseline`);
+  console.log(`[log]   appended entry to ${join(outDir, 'patches.log.jsonl')}`);
 }
 
 function writeAutoIndex(outDir, systemName, repos) {

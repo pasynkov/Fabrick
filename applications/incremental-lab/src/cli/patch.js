@@ -20,6 +20,9 @@ import { readState, writeState, readRules, wikiDir, fileSlugMapPath } from './st
 import { parseUnifiedDiff } from '../wiki/diff-split.js';
 import { isExplicitlySkipped } from '../wiki/router.js';
 import { stampFrontmatter, stripFrontmatter, firstSentence as fmFirstSentence } from '../wiki/frontmatter.js';
+import { estimateScopeSourceBytes, estimateFullscanCost, estimatePatchCost, sumExistingPagesBytes } from '../wiki/cost-estimate.js';
+import { generateAppScope } from '../wiki/app-page-generator.js';
+import { buildSnapshot } from '../snapshot/snapshot.js';
 
 const DIFF_CAP = 50_000;
 
@@ -32,6 +35,7 @@ export async function run(repoPath, argv = []) {
   const applyModel = argv.find((a) => a.startsWith('--apply-model='))?.split('=')[1] ?? 'haiku';
   const concurrency = Number(argv.find((a) => a.startsWith('--concurrency='))?.split('=')[1] ?? 4);
   const maxCostUsd = Number(argv.find((a) => a.startsWith('--max-cost='))?.split('=')[1] ?? 10);
+  const rebuildThreshold = Number(argv.find((a) => a.startsWith('--rebuild-threshold='))?.split('=')[1] ?? 0.7);
 
   const state = readState(repoPath);
   if (!state?.baselineSha) {
@@ -87,6 +91,48 @@ export async function run(repoPath, argv = []) {
     // index barrels, etc.). Files unknown to the map are KEPT so the model
     // still sees them.
     const filtered = filterDiff(unifiedDiff, rules);
+
+    // Cost-driven branch: when the predicted patch cost approaches a full
+    // regen, just regen — same money, zero drift.
+    const scopePath = join(repoPath, scope.root);
+    const sourceEst = estimateScopeSourceBytes(scopePath);
+    const existingBytes = sumExistingPagesBytes(existingPages);
+    const eFull = estimateFullscanCost(sourceEst.bytes);
+    const ePatch = estimatePatchCost(filtered.text.length, existingBytes);
+    const ratio = eFull > 0 ? ePatch / eFull : 0;
+    if (ratio > rebuildThreshold) {
+      const snap = buildSnapshot(scopePath);
+      const fileList = Object.keys(snap.files).sort();
+      const res = await generateAppScope({
+        scopePath, scopeName: scope.name, scopeKind: scope.kind, repoName,
+        sourceFiles: fileList, claudeOpts: computeOpts,
+      });
+      accrue(res, 'compute');
+      writeFileSync(join(scopeOut, '_compute.prompt.txt'), res.prompt);
+      writeFileSync(join(scopeOut, '_compute.response.md'), res.rawResponse);
+      writeFileSync(join(scopeOut, '_patch.md'), `=== REGEN (auto): patch/fullscan ratio ${ratio.toFixed(2)} > ${rebuildThreshold} ===\n`);
+      for (const slug of APP_PAGE_SLUGS) if (res.pages[slug]) existingPages[slug] = res.pages[slug];
+      for (const slug of APP_PAGE_SLUGS) {
+        const body = existingPages[slug] ?? '(empty)\n';
+        const def = APP_PAGES.find((p) => p.slug === slug);
+        const fm = {
+          name: `${scope.name} — ${def?.title ?? slug}`,
+          description: fmFirstSentence(body),
+          type: 'wiki',
+          repo: repoName,
+          scope: scope.name,
+          slug,
+          sha: headSha,
+          updatedAt: new Date().toISOString(),
+        };
+        writeFileSync(join(scopeOut, slug), stampFrontmatter(fm, body));
+      }
+      writeFileSync(join(scopeOut, 'index.md'), buildScopeIndex({ scope, pages: existingPages, sha: headSha }));
+      state.scopes[scope.root] = { ...state.scopes[scope.root], name: scope.name, kind: scope.kind, lastPatchedSha: headSha };
+      perScopeDescriptions[scope.root] = fmFirstSentence(existingPages['service.md'] ?? '');
+      console.log(`  ${scope.name}: REGEN $${(res.costUsd ?? 0).toFixed(3)} (est patch/full=${ratio.toFixed(2)})`);
+      return;
+    }
 
     const comp = await computePatch({
       scopeName: scope.name, scopeKind: scope.kind, repoName,

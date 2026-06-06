@@ -14,10 +14,11 @@ import { simpleGit } from 'simple-git';
 import { detectScopes } from '../scope/monorepo.js';
 import { buildSnapshot } from '../snapshot/snapshot.js';
 import { generateAppScope } from '../wiki/app-page-generator.js';
-import { APP_PAGE_SLUGS } from '../wiki/app-taxonomy.js';
+import { APP_PAGE_SLUGS, APP_PAGES } from '../wiki/app-taxonomy.js';
 import { buildRepoIndex, buildScopeIndex } from '../wiki/monorepo-index.js';
 import { pMap } from '../util/concurrent.js';
 import { fabrickDir, readRules, readState, writeState, wikiDir } from './state.js';
+import { stampFrontmatter, firstSentence as fmFirstSentence } from '../wiki/frontmatter.js';
 
 export async function run(repoPath, argv = []) {
   if (!repoPath || !existsSync(repoPath)) {
@@ -71,10 +72,24 @@ export async function run(repoPath, argv = []) {
 
     const scopeOut = join(wDir, scope.root.replace(/\//g, '__'));
     mkdirSync(scopeOut, { recursive: true });
-    for (const slug of APP_PAGE_SLUGS) writeFileSync(join(scopeOut, slug), res.pages[slug] ?? '(empty)\n');
+    for (const slug of APP_PAGE_SLUGS) {
+      const body = res.pages[slug] ?? '(empty)\n';
+      const def = APP_PAGES.find((p) => p.slug === slug);
+      const fm = {
+        name: `${scope.name} — ${def?.title ?? slug}`,
+        description: fmFirstSentence(body),
+        type: 'wiki',
+        repo: repoName,
+        scope: scope.name,
+        slug,
+        sha,
+        updatedAt: new Date().toISOString(),
+      };
+      writeFileSync(join(scopeOut, slug), stampFrontmatter(fm, body));
+    }
     writeFileSync(join(scopeOut, 'index.md'), buildScopeIndex({ scope, pages: res.pages, sha }));
 
-    perScopeDescriptions[scope.root] = firstSentence(res.pages['service.md'] ?? '');
+    perScopeDescriptions[scope.root] = fmFirstSentence(res.pages['service.md'] ?? '');
     state.scopes[scope.root] = { name: scope.name, kind: scope.kind, lastPatchedSha: sha };
     console.log(`  ${scope.name}: $${(res.costUsd ?? 0).toFixed(3)} (${fileList.length} files)`);
   }, { concurrency });
@@ -93,14 +108,3 @@ export async function run(repoPath, argv = []) {
   console.log('next: fabrick patch <repo>   (after upstream commits)');
 }
 
-function firstSentence(body) {
-  if (!body) return '';
-  for (const line of body.split('\n')) {
-    const t = line.trim();
-    if (!t || t.startsWith('#') || t.startsWith('-') || t.startsWith('*') || t.startsWith('**')) continue;
-    const m = t.match(/^[^.!?]{20,160}[.!?]/);
-    if (m) return m[0];
-    return t.length > 140 ? t.slice(0, 137) + '...' : t;
-  }
-  return '';
-}

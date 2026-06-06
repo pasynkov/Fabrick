@@ -12,13 +12,14 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { simpleGit } from 'simple-git';
 import { detectScopes } from '../scope/monorepo.js';
-import { APP_PAGE_SLUGS } from '../wiki/app-taxonomy.js';
+import { APP_PAGE_SLUGS, APP_PAGES } from '../wiki/app-taxonomy.js';
 import { computePatch, applyPatch } from '../wiki/patch.js';
 import { buildScopeIndex, buildRepoIndex } from '../wiki/monorepo-index.js';
 import { pMap } from '../util/concurrent.js';
 import { readState, writeState, readRules, wikiDir, fileSlugMapPath } from './state.js';
 import { parseUnifiedDiff } from '../wiki/diff-split.js';
 import { isExplicitlySkipped } from '../wiki/router.js';
+import { stampFrontmatter, stripFrontmatter, firstSentence as fmFirstSentence } from '../wiki/frontmatter.js';
 
 const DIFF_CAP = 50_000;
 
@@ -111,11 +112,25 @@ export async function run(repoPath, argv = []) {
     writeFileSync(join(scopeOut, '_apply.response.md'), ap.rawResponse);
 
     for (const slug of APP_PAGE_SLUGS) if (ap.pages[slug]) existingPages[slug] = ap.pages[slug];
-    for (const slug of APP_PAGE_SLUGS) writeFileSync(join(scopeOut, slug), existingPages[slug] ?? '(empty)\n');
+    for (const slug of APP_PAGE_SLUGS) {
+      const body = existingPages[slug] ?? '(empty)\n';
+      const def = APP_PAGES.find((p) => p.slug === slug);
+      const fm = {
+        name: `${scope.name} — ${def?.title ?? slug}`,
+        description: fmFirstSentence(body),
+        type: 'wiki',
+        repo: repoName,
+        scope: scope.name,
+        slug,
+        sha: headSha,
+        updatedAt: new Date().toISOString(),
+      };
+      writeFileSync(join(scopeOut, slug), stampFrontmatter(fm, body));
+    }
     writeFileSync(join(scopeOut, 'index.md'), buildScopeIndex({ scope, pages: existingPages, sha: headSha }));
 
     state.scopes[scope.root] = { ...state.scopes[scope.root], name: scope.name, kind: scope.kind, lastPatchedSha: headSha };
-    perScopeDescriptions[scope.root] = firstSentence(existingPages['service.md'] ?? '');
+    perScopeDescriptions[scope.root] = fmFirstSentence(existingPages['service.md'] ?? '');
     console.log(`  ${scope.name}: compute=$${(comp.costUsd ?? 0).toFixed(3)} apply=$${(ap.costUsd ?? 0).toFixed(3)} (skipped ${filtered.skippedFiles})`);
   }, { concurrency });
 
@@ -123,7 +138,7 @@ export async function run(repoPath, argv = []) {
   for (const scope of scopes) {
     if (!perScopeDescriptions[scope.root]) {
       const p = join(wDir, scope.root.replace(/\//g, '__'), 'service.md');
-      if (existsSync(p)) perScopeDescriptions[scope.root] = firstSentence(readFileSync(p, 'utf8'));
+      if (existsSync(p)) perScopeDescriptions[scope.root] = fmFirstSentence(readFileSync(p, 'utf8'));
     }
   }
   writeFileSync(join(wDir, 'index.md'),
@@ -169,19 +184,12 @@ function readExistingPages(scopeOut) {
   const out = {};
   for (const slug of APP_PAGE_SLUGS) {
     const p = join(scopeOut, slug);
-    if (existsSync(p)) out[slug] = readFileSync(p, 'utf8');
+    if (existsSync(p)) {
+      // Strip frontmatter — LLM should not see (or echo) it.
+      const raw = readFileSync(p, 'utf8');
+      out[slug] = stripFrontmatter(raw).content;
+    }
   }
   return out;
 }
 
-function firstSentence(body) {
-  if (!body) return '';
-  for (const line of body.split('\n')) {
-    const t = line.trim();
-    if (!t || t.startsWith('#') || t.startsWith('-') || t.startsWith('*') || t.startsWith('**')) continue;
-    const m = t.match(/^[^.!?]{20,160}[.!?]/);
-    if (m) return m[0];
-    return t.length > 140 ? t.slice(0, 137) + '...' : t;
-  }
-  return '';
-}

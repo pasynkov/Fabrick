@@ -20,6 +20,26 @@ import {
 } from '../llm/synthesis-prompts.js';
 import { wikiDir, readRules } from './state.js';
 import { stableJson } from '../snapshot/store.js';
+import { stampFrontmatter, stripFrontmatter, firstSentence as fmFirstSentence } from '../wiki/frontmatter.js';
+
+const TOPIC_TITLE = {
+  'system.md':          'System Overview',
+  'data-flows.md':      'Data Flows',
+  'transport-graph.md': 'Transport Graph',
+  'infra.md':           'Infrastructure',
+};
+
+function writeTopic(outDir, slug, body, ctx) {
+  const fm = {
+    name: `${ctx.systemName} — ${TOPIC_TITLE[slug] ?? slug}`,
+    description: fmFirstSentence(body),
+    type: 'synthesis',
+    system: ctx.systemName,
+    slug,
+    updatedAt: new Date().toISOString(),
+  };
+  writeFileSync(join(outDir, slug), stampFrontmatter(fm, body));
+}
 
 const SELF_ROOT = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
 const SKILL_PATH = join(SELF_ROOT, 'skills', 'synthesis', 'SKILL.md');
@@ -66,7 +86,9 @@ async function runGenesis({ outDir, baselineDir, systemName, repos, computeModel
 
   writeFileSync(join(outDir, '_synthesis.response.md'), res.content);
   const pages = parseSynthesisOutput(res.content);
-  for (const slug of SYNTHESIS_PAGE_SLUGS) writeFileSync(join(outDir, slug), pages[slug] ?? '(empty)\n');
+  for (const slug of SYNTHESIS_PAGE_SLUGS) {
+    writeTopic(outDir, slug, pages[slug] ?? '(empty)\n', { systemName });
+  }
 
   // Snapshot current wikis as the patch baseline.
   rmSync(baselineDir, { recursive: true, force: true });
@@ -91,7 +113,11 @@ async function runGenesis({ outDir, baselineDir, systemName, repos, computeModel
 async function runPatch({ outDir, baselineDir, systemName, repos, computeModel, applyModel, maxCostUsd }) {
   const existingPages = {};
   for (const slug of SYNTHESIS_PAGE_SLUGS) {
-    existingPages[slug] = existsSync(join(outDir, slug)) ? readFileSync(join(outDir, slug), 'utf8') : '';
+    if (existsSync(join(outDir, slug))) {
+      existingPages[slug] = stripFrontmatter(readFileSync(join(outDir, slug), 'utf8')).content;
+    } else {
+      existingPages[slug] = '';
+    }
   }
 
   // Detect changes between baseline-wiki and current wikis.
@@ -104,7 +130,7 @@ async function runPatch({ outDir, baselineDir, systemName, repos, computeModel, 
     for (const scope of repo.scopes) {
       for (const [slug, body] of Object.entries(scope.pages)) {
         const basePath = join(baseRepoDir, scope.dirName, slug);
-        const baseBody = existsSync(basePath) ? readFileSync(basePath, 'utf8') : null;
+        const baseBody = existsSync(basePath) ? stripFrontmatter(readFileSync(basePath, 'utf8')).content : null;
         if (baseBody === body) continue;
         changed.push({
           repoName: repo.repoName,
@@ -116,7 +142,6 @@ async function runPatch({ outDir, baselineDir, systemName, repos, computeModel, 
           changeKind: baseBody == null ? 'added' : 'modified',
         });
       }
-      // detect deleted pages (in baseline but not in current)
       if (existsSync(join(baseRepoDir, scope.dirName))) {
         const baseSlugs = readdirSync(join(baseRepoDir, scope.dirName)).filter((f) => f.endsWith('.md'));
         for (const slug of baseSlugs) {
@@ -126,7 +151,7 @@ async function runPatch({ outDir, baselineDir, systemName, repos, computeModel, 
               scopeName: scope.name,
               dirName: scope.dirName,
               slug,
-              before: readFileSync(join(baseRepoDir, scope.dirName, slug), 'utf8'),
+              before: stripFrontmatter(readFileSync(join(baseRepoDir, scope.dirName, slug), 'utf8')).content,
               after: null,
               changeKind: 'deleted',
             });
@@ -168,7 +193,7 @@ async function runPatch({ outDir, baselineDir, systemName, repos, computeModel, 
 
     const newPages = parseSynthesisOutput(apRes.content);
     for (const slug of slugsToApply) {
-      if (newPages[slug]) writeFileSync(join(outDir, slug), newPages[slug]);
+      if (newPages[slug]) writeTopic(outDir, slug, newPages[slug], { systemName });
     }
   }
 
@@ -228,7 +253,7 @@ function loadRepoWikis(repoPath) {
     const pages = {};
     for (const f of ['service.md', 'contracts.md', 'config.md', 'integrations.md']) {
       const p = join(sDir, f);
-      if (existsSync(p)) pages[f] = readFileSync(p, 'utf8');
+      if (existsSync(p)) pages[f] = stripFrontmatter(readFileSync(p, 'utf8')).content;
     }
     if (Object.keys(pages).length === 0) continue;
     scopes.push({

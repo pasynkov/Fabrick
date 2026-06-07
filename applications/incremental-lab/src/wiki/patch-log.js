@@ -10,7 +10,7 @@
 
 import { appendFileSync, existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { extractMarkdownSymbols, diffMarkdownSymbols } from '../extract/markdown.js';
+import { extractMarkdownSymbols, diffMarkdownSymbols, renderMarkdownDiff } from '../extract/markdown.js';
 import { stripFrontmatter } from './frontmatter.js';
 import { APP_PAGE_SLUGS } from './app-taxonomy.js';
 
@@ -86,33 +86,37 @@ export async function describeChange({ summary, mode, before = {}, after = {}, c
   if (mode === 'deleted') {
     return `Removed scope; ${summary.removedSlugs?.length ?? 0} wiki page(s) deleted.`;
   }
-  // Build compact bullet list of changed slugs + label samples.
   const slugLines = Object.entries(summary.slugCounts ?? {}).map(([slug, c]) =>
     `${slug}: +${c.added} -${c.removed} ~${c.changed}`).join('\n');
   if (!slugLines) return 'No detectable changes.';
-  const sampleLines = (summary.sample ?? []).join('\n');
-  const diffSnippets = [];
-  for (const [slug, b] of Object.entries(after)) {
+
+  // Render REAL semantic diff per changed slug — added/removed/changed
+  // bullets with full bodies. Caps the output so the haiku prompt stays
+  // ~3-4K tokens even for big regens.
+  const DIFF_CAP = 6000;
+  const diffBlocks = [];
+  for (const slug of Object.keys(summary.slugCounts ?? {})) {
     const a = before[slug] ?? '';
-    if (!a || a === b) continue;
-    diffSnippets.push(`--- ${slug} (snippet diff first 400 chars) ---`);
-    const len = Math.min(400, b.length);
-    diffSnippets.push(b.slice(0, len));
-    if (diffSnippets.join('\n').length > 1500) break;
+    const b = after[slug] ?? '';
+    if (a === b) continue;
+    const symsA = extractMarkdownSymbols(slug, a);
+    const symsB = extractMarkdownSymbols(slug, b);
+    const d = diffMarkdownSymbols(symsA, symsB);
+    diffBlocks.push(renderMarkdownDiff(slug, d));
+    if (diffBlocks.join('\n').length > DIFF_CAP) break;
   }
-  const system = `You write ONE short sentence (≤ 25 words) describing what changed in a documentation update. Be specific about facts that moved. Avoid vague verbs like "updated" or "improved". Use exact identifiers when visible. Output ONLY the sentence, no preamble.`;
+  let diffText = diffBlocks.join('\n');
+  if (diffText.length > DIFF_CAP) diffText = diffText.slice(0, DIFF_CAP) + '\n... (truncated)';
+
+  const system = `You write ONE short sentence (≤ 30 words) describing what changed in a documentation update. Read the symbol-level diff below: + means added bullet/row, - means removed, ~ means body changed. Mention specific identifiers (env var names, NATS subjects, image tags, replica counts) that moved. Avoid vague verbs like "updated" or "improved". Output ONLY the sentence, no preamble.`;
   const user = `Mode: ${mode}
-Per-slug counts:
-${slugLines}
+Per-slug counts: ${slugLines.replace(/\n/g, '  ')}
 
-Sample bullet labels:
-${sampleLines || '(none)'}
-
-After snippets:
-${diffSnippets.join('\n').slice(0, 1500)}`;
+SYMBOL-LEVEL DIFF:
+${diffText}`;
   try {
     const res = await callClaude({ system, user }, { model: 'haiku', timeoutMs: 180_000, ...claudeOpts });
-    const text = (res.content ?? '').trim().split('\n')[0].slice(0, 220);
+    const text = (res.content ?? '').trim().split('\n')[0].slice(0, 240);
     return text || 'No description available.';
   } catch (e) {
     return `(haiku describe failed: ${e.message?.slice(0, 80)}) — ${slugLines.replace(/\n/g, '; ')}`;

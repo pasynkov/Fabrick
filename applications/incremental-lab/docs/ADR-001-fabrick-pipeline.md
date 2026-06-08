@@ -115,6 +115,51 @@ If `patchTokens / fullscanTokens > threshold`, we skip patch and rebuild instead
 
 The estimator is byte-based (no LLM, no tree-sitter) — heuristic only, but the decision is binary so precision doesn't matter much. CLI flag `--rebuild-threshold=<0..1>` pins a static value when needed; default is dynamic (D14).
 
+### D15-orig-misplaced
+
+Every `fabrick patch` and `fabrick synthesize` run appends one JSON line to a log:
+
+- wiki:      `<repo>/.fabrick/patches.log.jsonl`
+- synthesis: `<out>/patches.log.jsonl`
+
+Entry shape:
+
+```jsonc
+{
+  at, title, baselineSha, headSha, costUsd,
+  scopes: [
+    {
+      scope, mode,                              // patch | patch-noop | regen-auto | regen-forced | deleted | genesis
+      slugCounts: { "<slug>": {added,removed,changed}, ... },
+      sample:    ["+slug:label", "~slug:label", ...],
+      description: "<1 sentence>"               // see D16
+    }
+  ]
+}
+```
+
+Title source priority:
+- `--title="text"`
+- `--pr=<num>`           → "PR #N: <git log subject>"
+- default                → git log `<baseline>..<head>` `--pretty=%s -1`
+- synthesis fallback     → "synthesis sync: <repo1>; <repo2>"
+
+Modes capture every transition, including DELETED scopes (state had it, current `detectScopes()` doesn't) and REGEN scopes (D13 threshold triggered fullscan). Per-scope `slugCounts` derived deterministically from the markdown extractor — same code path as the D11 fingerprint filter.
+
+### D16. One-sentence haiku description per scope, fed the real symbol diff
+
+The `slugCounts` summary tells you that `service.md` changed 5 bullets, but not WHAT. For each scope in the log entry, run one haiku call (≤ $0.02) that gets the actual `renderMarkdownDiff` text — added/removed/changed bullets with full bodies — and must produce one sentence (≤ 30 words) naming the specific identifiers that moved (env var names, NATS subjects, image tags, replicas).
+
+Critical: counts-only or sample-labels-only prompts produced descriptions that paraphrased; feeding the real diff gives us:
+
+> "added NATS subjects `Harvester.GetHarvest`, `Crypto.Cex.Binance.Vision.GetTrades` and Kafka topic `Harvester.Reap`"
+
+instead of:
+
+> "Contracts.md restructured NATS as request-reply consumer"
+
+Cost overhead: 5–10 % of a patch run. Worth it — log becomes a readable changelog (`jq '.scopes[] | "\(.scope): \(.description)"' patches.log.jsonl`).
+
 ### D14. Threshold curve denominated in tokens, not dollars
 
 Pricing is volatile across models, plans, and regions. Token counts are stable. `dynamicThreshold(fullscanTotalTok)` returns a clamped `[0.30, 0.90]` value on a log curve centred at `refTok = 8000`:

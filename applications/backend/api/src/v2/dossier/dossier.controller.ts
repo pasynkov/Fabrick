@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Request, UseGuards, Version } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Request, UseGuards } from '@nestjs/common';
 import { CommandBus } from '@nestjs/cqrs';
 import { FabrickAuthGuard } from '../../auth/fabrick-auth.guard';
 import { DossierPagesRepository } from './services/dossier-pages.repository';

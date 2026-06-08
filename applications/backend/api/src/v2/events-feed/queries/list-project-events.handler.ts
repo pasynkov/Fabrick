@@ -36,13 +36,7 @@ export class ListProjectEventsHandler implements IQueryHandler<ListProjectEvents
 
     if (query.types) {
       const { sql, params } = buildTypeFilter(query.types);
-      if (sql) {
-        // TypeORM parameter binding with raw SQL for OR conditions
-        const paramObj: Record<string, string> = {};
-        params.forEach((p, i) => { paramObj[`typeParam${i}`] = p; });
-        const rewrittenSql = sql.replace(/\$(\d+)/g, (_, n) => `:typeParam${parseInt(n) - 1}`);
-        qb.andWhere(rewrittenSql, paramObj);
-      }
+      if (sql) qb.andWhere(sql, params);
     }
 
     const rows = await qb.getMany();

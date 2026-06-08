@@ -2,9 +2,7 @@ import { EventsHandler, EventPublisher, IEventHandler } from '@nestjs/cqrs';
 import { Inject, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository as TypeOrmRepository } from 'typeorm';
-import { Repository } from '../../../entities/repository.entity';
 import { Project } from '../../../entities/project.entity';
-import { Organization } from '../../../entities/organization.entity';
 import { DossierUpdated } from '../../dossier/events/dossier-updated.event';
 import { Compendium } from '../compendium.aggregate';
 import { CompendiumBundleService } from '../services/compendium-bundle.service';
@@ -20,12 +18,8 @@ export class DossierUpdatedHandler implements IEventHandler<DossierUpdated> {
   private readonly logger = new Logger(DossierUpdatedHandler.name);
 
   constructor(
-    @InjectRepository(Repository)
-    private readonly repoRepo: TypeOrmRepository<Repository>,
     @InjectRepository(Project)
     private readonly projectRepo: TypeOrmRepository<Project>,
-    @InjectRepository(Organization)
-    private readonly orgRepo: TypeOrmRepository<Organization>,
     private readonly bundleService: CompendiumBundleService,
     private readonly jwtService: CompendiumJwtService,
     private readonly ulidService: UlidService,
@@ -46,24 +40,11 @@ export class DossierUpdatedHandler implements IEventHandler<DossierUpdated> {
         return;
       }
 
-      const org = (project as any).org as Organization;
-      const orgSlug = org.slug;
+      const orgSlug = (project as any).org.slug;
       const projectSlug = project.slug;
 
-      const repos = await this.repoRepo.find({ where: { projectId: project.id } });
-      const repoSlugs = repos.map((r) => r.slug);
+      const { ref: bundleRef, repoSlugs } = await this.bundleService.assembleAndUpload(orgSlug, project.id, event.id);
 
-      // Step 1-2: assemble + hash input bundle
-      const { bundle, ref: bundleRef } = await this.bundleService.assembleInput(
-        orgSlug,
-        project.id,
-        event.id,
-      );
-
-      // Step 3: upload bundle to Azure Blob
-      await this.bundleService.upload(orgSlug, event.id, bundle);
-
-      // Step 4: resolve API key + audit
       let anthropicApiKey: string;
       try {
         const resolution = await this.apiKeyResolutionService.resolveForProject(project.id);
@@ -74,17 +55,14 @@ export class DossierUpdatedHandler implements IEventHandler<DossierUpdated> {
         anthropicApiKey = '';
       }
 
-      // Step 5: sign callback JWT
       const callbackToken = this.jwtService.sign(event.id);
 
-      // Step 6: fire Compendium regen
       const compendium = this.eventPublisher.mergeObjectContext(
         new Compendium(project.id, event.orgId, this.ulidService),
       );
       compendium.fireRegen(event.id, bundleRef, repoSlugs);
       compendium.commit();
 
-      // Step 7: publish synthesis-jobs queue message
       await this.queueService.publish('synthesis-jobs', {
         type: 'compendium-event',
         jobId: event.id,

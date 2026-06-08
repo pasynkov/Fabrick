@@ -33,21 +33,15 @@ export class ProcessCompendiumResultHandler implements ICommandHandler<ProcessCo
 
     const compendiumUpdatedId = compendium.acceptResult(command.jobId, command.result);
 
-    // Persist all compendium events synchronously before returning
     const uncommittedEvents = compendium.getUncommittedEvents() as BaseDomainEvent[];
     await this.eventStore.persistBatch(uncommittedEvents.map((e) => e.toEntity()));
-
-    // Commit to EventBus for any downstream side effects
     compendium.commit();
 
-    // Upsert compendium_pages from the final compendium pages
     await this.compendiumPagesRepo.upsertAll(
       command.orgId,
       command.projectId,
       command.result.finalCompendium.pages,
     );
-
-    // Delete both bundles
     await this.bundleService.deleteBoth(command.inputRef, command.resultRef);
 
     return { compendiumUpdatedId };

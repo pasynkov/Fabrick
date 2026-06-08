@@ -48,14 +48,10 @@ export class PushDossierUpdateHandler implements ICommandHandler<PushDossierUpda
 
     const dossierUpdatedId = dossier.applyPushUpdate(command.dto);
 
-    // Persist events synchronously before returning so the HTTP response
-    // reflects the completed state. EventBus handlers (side effects) run async.
+    // Persist synchronously so the response reflects the completed state; EventBus side-effects run async.
     const uncommittedEvents = dossier.getUncommittedEvents() as BaseDomainEvent[];
-
-    // Persist all events to event store
     await this.eventStore.persistBatch(uncommittedEvents.map((e) => e.toEntity()));
 
-    // Apply page upserts/deletions synchronously
     for (const evt of uncommittedEvents) {
       if (evt instanceof DossierRegenApplied || evt instanceof DossierPatchApplied) {
         if (evt.bodies && evt.scope && evt.repoId && evt.projectId) {
@@ -74,7 +70,6 @@ export class PushDossierUpdateHandler implements ICommandHandler<PushDossierUpda
       }
     }
 
-    // Commit to EventBus for async side effects (compendium cascade, etc.)
     dossier.commit();
 
     return { dossierUpdatedId };

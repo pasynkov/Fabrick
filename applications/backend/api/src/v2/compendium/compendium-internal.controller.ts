@@ -1,9 +1,8 @@
-import { Body, Controller, Headers, HttpCode, InternalServerErrorException, Post, UnauthorizedException, Version } from '@nestjs/common';
+import { Body, Controller, Headers, HttpCode, InternalServerErrorException, Post, UnauthorizedException } from '@nestjs/common';
 import { CommandBus } from '@nestjs/cqrs';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository as TypeOrmRepository } from 'typeorm';
 import { Project } from '../../entities/project.entity';
-import { Organization } from '../../entities/organization.entity';
 import { CompendiumJwtService } from './services/compendium-jwt.service';
 import { CompendiumBundleService, BundleRef } from './services/compendium-bundle.service';
 import { ProcessCompendiumResultCommand } from './commands/process-compendium-result.command';
@@ -17,8 +16,6 @@ export class CompendiumInternalController {
     private readonly bundleService: CompendiumBundleService,
     @InjectRepository(Project)
     private readonly projectRepo: TypeOrmRepository<Project>,
-    @InjectRepository(Organization)
-    private readonly orgRepo: TypeOrmRepository<Organization>,
   ) {}
 
   @Post('callback')
@@ -32,8 +29,6 @@ export class CompendiumInternalController {
 
     this.jwtService.verify(token, dto.jobId);
 
-    // derive inputRef from jobId - find in project_events via meta
-    // We need to download the result bundle from the ref provided
     const resultRef: BundleRef = {
       container: dto.resultBundleRef.container,
       key: dto.resultBundleRef.key,
@@ -47,19 +42,13 @@ export class CompendiumInternalController {
       throw new InternalServerErrorException('Failed to download result bundle');
     }
 
-    // Derive inputRef from result bundle key pattern
-    // The result key is <orgSlug>/compendium-jobs/<id>-<hash>.result.json
-    // The input key is <orgSlug>/compendium-jobs/<id>-<inputHash>.json
-    const inputKey = dto.resultBundleRef.key.replace('.result.json', '.json');
+    // Input key is derived from result key: <orgSlug>/compendium-jobs/<id>-<hash>.result.json -> .json
     const inputRef: BundleRef = {
       container: dto.resultBundleRef.container,
-      key: inputKey,
+      key: dto.resultBundleRef.key.replace('.result.json', '.json'),
       hash: '',
     };
 
-    // Fetch project to get orgId
-    const projectId = result.jobId ? undefined : result.projectId;
-    // result has jobId field or we use dto.jobId
     const resolvedProjectId = result.projectId;
     if (!resolvedProjectId) throw new InternalServerErrorException('Invalid result bundle: missing projectId');
 

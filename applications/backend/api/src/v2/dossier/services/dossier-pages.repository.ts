@@ -43,16 +43,6 @@ export class DossierPagesRepository {
     }
   }
 
-  async upsertAll(
-    orgId: string,
-    projectId: string,
-    repoId: string,
-    scope: string,
-    bodies: Record<string, string>,
-  ): Promise<void> {
-    return this.upsertChanged(orgId, projectId, repoId, scope, bodies);
-  }
-
   async deleteScope(repoId: string, scope: string): Promise<void> {
     await this.repo.delete({ repoId, scope });
   }

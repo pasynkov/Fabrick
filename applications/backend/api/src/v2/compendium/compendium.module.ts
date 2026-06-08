@@ -7,7 +7,6 @@ import { ApiKeysModule } from '../../api-keys/api-keys.module';
 import { QueueModule } from '../../queue/queue.module';
 import { Repository } from '../../entities/repository.entity';
 import { Project } from '../../entities/project.entity';
-import { Organization } from '../../entities/organization.entity';
 import { OrgMember } from '../../entities/org-member.entity';
 import { CompendiumPage } from '../entities/compendium-page.entity';
 import { DossierPage } from '../entities/dossier-page.entity';
@@ -23,7 +22,7 @@ import { CompendiumPagesRepository } from './services/compendium-pages.repositor
 @Module({
   imports: [
     CqrsModule,
-    TypeOrmModule.forFeature([CompendiumPage, DossierPage, Repository, Project, Organization, OrgMember]),
+    TypeOrmModule.forFeature([CompendiumPage, DossierPage, Repository, Project, OrgMember]),
     AuthModule,
     StorageModule,
     ApiKeysModule,

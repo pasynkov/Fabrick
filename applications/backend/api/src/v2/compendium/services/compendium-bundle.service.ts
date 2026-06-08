@@ -33,14 +33,17 @@ export class CompendiumBundleService {
     private readonly compendiumPageRepo: TypeOrmRepository<CompendiumPage>,
   ) {}
 
-  async assembleInput(
+  async assembleAndUpload(
     orgSlug: string,
     projectId: string,
     dossierUpdatedId: string,
-  ): Promise<{ bundle: CompendiumInputBundle; ref: BundleRef }> {
-    const repos = await this.repoRepo.find({ where: { projectId } });
+  ): Promise<{ ref: BundleRef; repoSlugs: string[] }> {
+    const [repos, compendiumPages, allDossierPages] = await Promise.all([
+      this.repoRepo.find({ where: { projectId } }),
+      this.compendiumPageRepo.find({ where: { projectId } }),
+      this.dossierPageRepo.find({ where: { projectId } }),
+    ]);
 
-    const compendiumPages = await this.compendiumPageRepo.find({ where: { projectId } });
     const currentCompendium =
       compendiumPages.length > 0
         ? { pages: compendiumPages.map((p) => ({ slug: p.slug, title: p.title, content: p.content, sources: p.sources, related: p.related })) }
@@ -48,11 +51,9 @@ export class CompendiumBundleService {
 
     const currentDossiers: Record<string, any> = {};
     for (const repo of repos) {
-      const pages = await this.dossierPageRepo.find({ where: { repoId: repo.id } });
+      const pages = allDossierPages.filter((p) => p.repoId === repo.id);
       if (pages.length > 0) {
-        currentDossiers[repo.slug] = {
-          scopes: this.groupByScope(pages),
-        };
+        currentDossiers[repo.slug] = { scopes: this.groupByScope(pages) };
       }
     }
 
@@ -61,24 +62,14 @@ export class CompendiumBundleService {
       dossierUpdatedId,
       currentCompendium,
       currentDossiers,
-      projectMeta: {
-        repos: repos.map((r) => ({ id: r.id, slug: r.slug, name: r.name })),
-      },
+      projectMeta: { repos: repos.map((r) => ({ id: r.id, slug: r.slug, name: r.name })) },
     };
 
     const json = JSON.stringify(bundle);
     const hash = createHash('sha256').update(json).digest('hex');
     const key = `compendium-jobs/${dossierUpdatedId}-${hash}.json`;
-
-    return { bundle, ref: { container: orgSlug, key, hash } };
-  }
-
-  async upload(orgSlug: string, id: string, bundle: CompendiumInputBundle): Promise<BundleRef> {
-    const json = JSON.stringify(bundle);
-    const hash = createHash('sha256').update(json).digest('hex');
-    const key = `compendium-jobs/${id}-${hash}.json`;
     await this.storageService.putObject(orgSlug, key, Buffer.from(json));
-    return { container: orgSlug, key, hash };
+    return { ref: { container: orgSlug, key, hash }, repoSlugs: repos.map((r) => r.slug) };
   }
 
   async download(ref: BundleRef): Promise<any> {

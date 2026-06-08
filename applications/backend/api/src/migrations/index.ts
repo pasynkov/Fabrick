@@ -9,6 +9,7 @@ import { AddPlatformAdmin1748100000000 } from './1748100000000-AddPlatformAdmin'
 import { AddPromptRevisions1748200000000 } from './1748200000000-AddPromptRevisions';
 import { SeedPromptRevisions1748200100000 } from './1748200100000-SeedPromptRevisions';
 import { AddPromptRevisionIdToAnalytics1748200200000 } from './1748200200000-AddPromptRevisionIdToAnalytics';
+import { AddV2EventTables1749000000000 } from './1749000000000-AddV2EventTables';
 
 export const migrations = [
   Init1700000000000,
@@ -22,4 +23,5 @@ export const migrations = [
   AddPromptRevisions1748200000000,
   SeedPromptRevisions1748200100000,
   AddPromptRevisionIdToAnalytics1748200200000,
+  AddV2EventTables1749000000000,
 ];

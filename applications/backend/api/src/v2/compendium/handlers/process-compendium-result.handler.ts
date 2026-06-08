@@ -7,9 +7,8 @@ import { Compendium } from '../compendium.aggregate';
 import { CompendiumPagesRepository } from '../services/compendium-pages.repository';
 import { CompendiumBundleService } from '../services/compendium-bundle.service';
 import { UlidService } from '../../event-store/ulid.service';
-import { EventStoreService } from '../../event-store/event-store.service';
+import { AggregateRepository } from '../../event-store/aggregate.repository';
 import { ProcessCompendiumResultCommand } from '../commands/process-compendium-result.command';
-import { BaseDomainEvent } from '../../event-store/domain/base-domain-event';
 
 @CommandHandler(ProcessCompendiumResultCommand)
 export class ProcessCompendiumResultHandler implements ICommandHandler<ProcessCompendiumResultCommand> {
@@ -20,7 +19,7 @@ export class ProcessCompendiumResultHandler implements ICommandHandler<ProcessCo
     private readonly ulidService: UlidService,
     private readonly compendiumPagesRepo: CompendiumPagesRepository,
     private readonly bundleService: CompendiumBundleService,
-    private readonly eventStore: EventStoreService,
+    private readonly aggregateRepo: AggregateRepository,
   ) {}
 
   async execute(command: ProcessCompendiumResultCommand): Promise<{ compendiumUpdatedId: string }> {
@@ -33,15 +32,16 @@ export class ProcessCompendiumResultHandler implements ICommandHandler<ProcessCo
 
     const compendiumUpdatedId = compendium.acceptResult(command.jobId, command.result);
 
-    const uncommittedEvents = compendium.getUncommittedEvents() as BaseDomainEvent[];
-    await this.eventStore.persistBatch(uncommittedEvents.map((e) => e.toEntity()));
-    compendium.commit();
+    await this.aggregateRepo.persist(compendium);
 
     await this.compendiumPagesRepo.upsertAll(
       command.orgId,
       command.projectId,
       command.result.finalCompendium.pages,
     );
+
+    compendium.commit();
+
     await this.bundleService.deleteBoth(command.inputRef, command.resultRef);
 
     return { compendiumUpdatedId };

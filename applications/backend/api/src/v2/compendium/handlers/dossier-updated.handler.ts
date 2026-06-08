@@ -8,6 +8,7 @@ import { Compendium } from '../compendium.aggregate';
 import { CompendiumBundleService } from '../services/compendium-bundle.service';
 import { CompendiumJwtService } from '../services/compendium-jwt.service';
 import { UlidService } from '../../event-store/ulid.service';
+import { AggregateRepository } from '../../event-store/aggregate.repository';
 import { ApiKeyResolutionService } from '../../../api-keys/api-key-resolution.service';
 import { ApiKeyAuditService } from '../../../api-keys/api-key-audit.service';
 import { QUEUE_SERVICE } from '../../../queue/queue.module';
@@ -27,6 +28,7 @@ export class DossierUpdatedHandler implements IEventHandler<DossierUpdated> {
     private readonly apiKeyAuditService: ApiKeyAuditService,
     @Inject(QUEUE_SERVICE) private readonly queueService: QueueService,
     private readonly eventPublisher: EventPublisher,
+    private readonly aggregateRepo: AggregateRepository,
   ) {}
 
   async handle(event: DossierUpdated): Promise<void> {
@@ -61,6 +63,7 @@ export class DossierUpdatedHandler implements IEventHandler<DossierUpdated> {
         new Compendium(project.id, event.orgId, this.ulidService),
       );
       compendium.fireRegen(event.id, bundleRef, repoSlugs);
+      await this.aggregateRepo.persist(compendium);
       compendium.commit();
 
       await this.queueService.publish('synthesis-jobs', {

@@ -6,7 +6,9 @@ import { AppModule } from '../src/app.module';
 import { StorageService } from '../src/storage/storage.service';
 import { QUEUE_SERVICE } from '../src/queue/queue.module';
 import { JwtService } from '@nestjs/jwt';
-import { createHash } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
+
+const uniq = () => randomUUID().slice(0, 8);
 
 const mockStorage = {
   putObject: jest.fn().mockResolvedValue(undefined),
@@ -44,36 +46,33 @@ describe('V2 Dossier Push E2E', () => {
     await app.close();
   });
 
-  beforeEach(async () => {
-    // Include v2 tables first to prevent FK-check deadlock with async DossierUpdatedHandler
-    await dataSource.query(
-      'TRUNCATE project_events, dossier_pages, compendium_pages, users, organizations, org_members, projects, repositories CASCADE',
-    );
+  beforeEach(() => {
     jest.clearAllMocks();
   });
 
   async function setup() {
+    const sfx = uniq();
     const regRes = await request(app.getHttpServer())
       .post('/v1/auth/register')
-      .send({ email: 'v2test@example.com', password: 'password123' });
+      .send({ email: `v2test-${sfx}@example.com`, password: 'password123' });
     const token = regRes.body.access_token;
 
     const orgRes = await request(app.getHttpServer())
       .post('/v1/orgs')
       .set('Authorization', `Bearer ${token}`)
-      .send({ name: 'V2 Test Org' });
+      .send({ name: `V2 Test Org ${sfx}` });
     const orgId = orgRes.body.id;
 
     const projRes = await request(app.getHttpServer())
       .post(`/v1/orgs/${orgId}/projects`)
       .set('Authorization', `Bearer ${token}`)
-      .send({ name: 'V2 Project' });
+      .send({ name: `V2 Project ${sfx}` });
     const projectId = projRes.body.id;
 
     const repoRes = await request(app.getHttpServer())
       .post(`/v1/projects/${projectId}/repos`)
       .set('Authorization', `Bearer ${token}`)
-      .send({ name: 'v2-repo', gitRemote: 'https://github.com/test/v2-repo.git' });
+      .send({ name: `v2-repo-${sfx}`, gitRemote: `https://github.com/test/v2-repo-${sfx}.git` });
     const repoId = repoRes.body.id;
 
     return { token, orgId, projectId, repoId };
@@ -223,7 +222,7 @@ describe('V2 Dossier Push E2E', () => {
 
       const otherReg = await request(app.getHttpServer())
         .post('/v1/auth/register')
-        .send({ email: 'other@example.com', password: 'password123' });
+        .send({ email: `other-${uniq()}@example.com`, password: 'password123' });
       const otherToken = otherReg.body.access_token;
 
       await request(app.getHttpServer())
@@ -398,35 +397,33 @@ describe('V2 Compendium Callback E2E', () => {
     await app.close();
   });
 
-  beforeEach(async () => {
-    await dataSource.query(
-      'TRUNCATE project_events, dossier_pages, compendium_pages, users, organizations, org_members, projects, repositories CASCADE',
-    );
+  beforeEach(() => {
     jest.clearAllMocks();
   });
 
   async function setupWithPush() {
+    const sfx = uniq();
     const regRes = await request(app.getHttpServer())
       .post('/v1/auth/register')
-      .send({ email: 'comptest@example.com', password: 'password123' });
+      .send({ email: `comptest-${sfx}@example.com`, password: 'password123' });
     const token = regRes.body.access_token;
 
     const orgRes = await request(app.getHttpServer())
       .post('/v1/orgs')
       .set('Authorization', `Bearer ${token}`)
-      .send({ name: 'Comp Test Org' });
+      .send({ name: `Comp Test Org ${sfx}` });
     const orgId = orgRes.body.id;
 
     const projRes = await request(app.getHttpServer())
       .post(`/v1/orgs/${orgId}/projects`)
       .set('Authorization', `Bearer ${token}`)
-      .send({ name: 'Comp Project' });
+      .send({ name: `Comp Project ${sfx}` });
     const projectId = projRes.body.id;
 
     const repoRes = await request(app.getHttpServer())
       .post(`/v1/projects/${projectId}/repos`)
       .set('Authorization', `Bearer ${token}`)
-      .send({ name: 'comp-repo', gitRemote: 'https://github.com/test/comp-repo.git' });
+      .send({ name: `comp-repo-${sfx}`, gitRemote: `https://github.com/test/comp-repo-${sfx}.git` });
     const repoId = repoRes.body.id;
 
     // Push dossier events
@@ -603,35 +600,33 @@ describe('V2 Events Timeline Feed E2E', () => {
     await app.close();
   });
 
-  beforeEach(async () => {
-    await dataSource.query(
-      'TRUNCATE project_events, dossier_pages, compendium_pages, users, organizations, org_members, projects, repositories CASCADE',
-    );
+  beforeEach(() => {
     jest.clearAllMocks();
   });
 
   async function setupWithPush() {
+    const sfx = uniq();
     const regRes = await request(app.getHttpServer())
       .post('/v1/auth/register')
-      .send({ email: 'feedtest@example.com', password: 'password123' });
+      .send({ email: `feedtest-${sfx}@example.com`, password: 'password123' });
     const token = regRes.body.access_token;
 
     const orgRes = await request(app.getHttpServer())
       .post('/v1/orgs')
       .set('Authorization', `Bearer ${token}`)
-      .send({ name: 'Feed Test Org' });
+      .send({ name: `Feed Test Org ${sfx}` });
     const orgId = orgRes.body.id;
 
     const projRes = await request(app.getHttpServer())
       .post(`/v1/orgs/${orgId}/projects`)
       .set('Authorization', `Bearer ${token}`)
-      .send({ name: 'Feed Project' });
+      .send({ name: `Feed Project ${sfx}` });
     const projectId = projRes.body.id;
 
     const repoRes = await request(app.getHttpServer())
       .post(`/v1/projects/${projectId}/repos`)
       .set('Authorization', `Bearer ${token}`)
-      .send({ name: 'feed-repo', gitRemote: 'https://github.com/test/feed-repo.git' });
+      .send({ name: `feed-repo-${sfx}`, gitRemote: `https://github.com/test/feed-repo-${sfx}.git` });
     const repoId = repoRes.body.id;
 
     const pushRes = await request(app.getHttpServer())
@@ -719,25 +714,26 @@ describe('V2 Events Timeline Feed E2E', () => {
       const { token, repoId } = await setupWithPush();
 
       // Create another repo and push to it
+      const sfx2 = uniq();
       const reg2 = await request(app.getHttpServer())
         .post('/v1/auth/register')
-        .send({ email: 'feed2@example.com', password: 'password123' });
+        .send({ email: `feed2-${sfx2}@example.com`, password: 'password123' });
       const t2 = reg2.body.access_token;
 
       const org2 = await request(app.getHttpServer())
         .post('/v1/orgs')
         .set('Authorization', `Bearer ${t2}`)
-        .send({ name: 'Feed Org 2' });
+        .send({ name: `Feed Org 2 ${sfx2}` });
 
       const proj2 = await request(app.getHttpServer())
         .post(`/v1/orgs/${org2.body.id}/projects`)
         .set('Authorization', `Bearer ${t2}`)
-        .send({ name: 'Feed Project 2' });
+        .send({ name: `Feed Project 2 ${sfx2}` });
 
       const repo2 = await request(app.getHttpServer())
         .post(`/v1/projects/${proj2.body.id}/repos`)
         .set('Authorization', `Bearer ${t2}`)
-        .send({ name: 'feed-repo2', gitRemote: 'https://github.com/test/feed-repo2.git' });
+        .send({ name: `feed-repo2-${sfx2}`, gitRemote: `https://github.com/test/feed-repo2-${sfx2}.git` });
 
       const push2 = await request(app.getHttpServer())
         .post(`/v2/repos/${repo2.body.id}/dossier/events`)
@@ -791,7 +787,7 @@ describe('V2 Events Timeline Feed E2E', () => {
 
       const other = await request(app.getHttpServer())
         .post('/v1/auth/register')
-        .send({ email: 'nomember@example.com', password: 'password123' });
+        .send({ email: `nomember-${uniq()}@example.com`, password: 'password123' });
       const otherToken = other.body.access_token;
 
       await request(app.getHttpServer())

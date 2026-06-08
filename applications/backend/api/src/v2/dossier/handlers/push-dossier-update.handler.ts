@@ -5,7 +5,7 @@ import { Repository as TypeOrmRepository } from 'typeorm';
 import { Repository } from '../../../entities/repository.entity';
 import { OrgMember } from '../../../entities/org-member.entity';
 import { UlidService } from '../../event-store/ulid.service';
-import { EventStoreService } from '../../event-store/event-store.service';
+import { AggregateRepository } from '../../event-store/aggregate.repository';
 import { Dossier } from '../dossier.aggregate';
 import { PushDossierUpdateCommand } from '../commands/push-dossier-update.command';
 import { DossierPagesRepository } from '../services/dossier-pages.repository';
@@ -23,7 +23,7 @@ export class PushDossierUpdateHandler implements ICommandHandler<PushDossierUpda
     private readonly memberRepo: TypeOrmRepository<OrgMember>,
     private readonly eventPublisher: EventPublisher,
     private readonly ulidService: UlidService,
-    private readonly eventStore: EventStoreService,
+    private readonly aggregateRepo: AggregateRepository,
     private readonly dossierPagesRepo: DossierPagesRepository,
   ) {}
 
@@ -47,10 +47,9 @@ export class PushDossierUpdateHandler implements ICommandHandler<PushDossierUpda
     );
 
     const dossierUpdatedId = dossier.applyPushUpdate(command.dto);
-
-    // Persist synchronously so the response reflects the completed state; EventBus side-effects run async.
     const uncommittedEvents = dossier.getUncommittedEvents() as BaseDomainEvent[];
-    await this.eventStore.persistBatch(uncommittedEvents.map((e) => e.toEntity()));
+
+    await this.aggregateRepo.persist(dossier);
 
     for (const evt of uncommittedEvents) {
       if (evt instanceof DossierRegenApplied || evt instanceof DossierPatchApplied) {

@@ -1,5 +1,11 @@
 import { Injectable } from '@nestjs/common';
 
+function resolveUrl(apiUrl: string, path: string): string {
+  const base = apiUrl.trim().replace(/\/$/, '');
+  const versionedPath = path.startsWith('/health') || path.startsWith('/v1') || path.startsWith('/v2') ? path : `/v1${path}`;
+  return `${base}${versionedPath}`;
+}
+
 @Injectable()
 export class ApiService {
   async request<T>(
@@ -13,9 +19,7 @@ export class ApiService {
     };
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
-    const base = apiUrl.trim().replace(/\/$/, '');
-    const versionedPath = path.startsWith('/health') ? path : `/v1${path}`;
-    const url = `${base}${versionedPath}`;
+    const url = resolveUrl(apiUrl, path);
     let res: Response;
     try {
       res = await fetch(url, {
@@ -40,9 +44,7 @@ export class ApiService {
   }
 
   async download(apiUrl: string, path: string, token: string): Promise<Buffer> {
-    const base = apiUrl.trim().replace(/\/$/, '');
-    const versionedPath = path.startsWith('/health') ? path : `/v1${path}`;
-    const url = `${base}${versionedPath}`;
+    const url = resolveUrl(apiUrl, path);
     let res: Response;
     try {
       res = await fetch(url, {

@@ -19,6 +19,7 @@ export interface CompendiumInputBundle {
   currentCompendium: any | null;
   currentDossiers: Record<string, any>;
   projectMeta: { repos: Array<{ id: string; slug: string; name: string }> };
+  repos: Array<{ slug: string; name: string; scopes: string[] }>;
 }
 
 @Injectable()
@@ -57,12 +58,20 @@ export class CompendiumBundleService {
       }
     }
 
+    // Build repos+scopes context: each repo lists distinct scope names from its dossier pages.
+    const reposWithScopes = repos.map((r) => {
+      const pages = allDossierPages.filter((p) => p.repoId === r.id);
+      const scopes = Array.from(new Set(pages.map((p) => p.scope)));
+      return { slug: r.slug, name: r.name, scopes };
+    });
+
     const bundle: CompendiumInputBundle = {
       projectId,
       dossierUpdatedId,
       currentCompendium,
       currentDossiers,
       projectMeta: { repos: repos.map((r) => ({ id: r.id, slug: r.slug, name: r.name })) },
+      repos: reposWithScopes,
     };
 
     const json = JSON.stringify(bundle);

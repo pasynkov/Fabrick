@@ -8,6 +8,9 @@ import { Repository } from '../src/entities/repository.entity';
 import { SearchRequest } from '../src/entities/search-request.entity';
 import { TokenUsage } from '../src/entities/token-usage.entity';
 import { PromptRevision } from '../src/entities/prompt-revision.entity';
+import { ProjectEvent } from '../src/v2/entities/project-event.entity';
+import { DossierPage } from '../src/v2/entities/dossier-page.entity';
+import { CompendiumPage } from '../src/v2/entities/compendium-page.entity';
 
 const host = process.env.DB_HOST || 'localhost';
 const port = parseInt(process.env.DB_PORT || '5432', 10);
@@ -36,7 +39,7 @@ export default async function globalSetup() {
     database: testDb,
     username,
     password,
-    entities: [User, Organization, OrgMember, Project, Repository, SearchRequest, TokenUsage, PromptRevision],
+    entities: [User, Organization, OrgMember, Project, Repository, SearchRequest, TokenUsage, PromptRevision, ProjectEvent, DossierPage, CompendiumPage],
     migrations,
   });
   await ds.initialize();

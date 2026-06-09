@@ -3,6 +3,7 @@ import { QUEUE_SERVICE } from '../queue/queue.module';
 import { QueueService } from '../queue/queue.interface';
 import { StorageService } from '../storage/storage.service';
 import { SynthesisImpl, RepoWikiInput, ExistingPage } from '@app/shared';
+import { handleCompendiumEvent } from './compendium-event.handler';
 
 interface SynthesisJob {
   projectId: string;
@@ -27,7 +28,11 @@ export class SynthesisProcessor implements OnModuleInit {
 
   async onModuleInit() {
     await this.queueService.subscribe('synthesis-jobs', async (payload) => {
-      await this.processJob(payload as unknown as SynthesisJob);
+      if ((payload as any).type === 'compendium-event') {
+        await handleCompendiumEvent(payload, this.storageService, this.apiBaseUrl);
+      } else {
+        await this.processJob(payload as unknown as SynthesisJob);
+      }
     });
     this.logger.log('Subscribed to synthesis-jobs queue');
   }

@@ -22,6 +22,10 @@ import { SynthesisModule } from './synthesis/synthesis.module';
 import { SearchModule } from './search/search.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { PromptsModule } from './prompts/prompts.module';
+import { V2Module } from './v2/v2.module';
+import { ProjectEvent } from './v2/entities/project-event.entity';
+import { DossierPage } from './v2/entities/dossier-page.entity';
+import { CompendiumPage } from './v2/entities/compendium-page.entity';
 
 @Module({
   imports: [
@@ -33,7 +37,7 @@ import { PromptsModule } from './prompts/prompts.module';
         database: process.env.DB_NAME || 'fabrick',
         username: process.env.DB_USER || 'fabrick',
         password: process.env.DB_PASS || 'fabrick',
-        entities: [User, Organization, OrgMember, Project, Repository, ApiKeyAuditLog, WikiPage, SearchRequest, TokenUsage, PromptRevision],
+        entities: [User, Organization, OrgMember, Project, Repository, ApiKeyAuditLog, WikiPage, SearchRequest, TokenUsage, PromptRevision, ProjectEvent, DossierPage, CompendiumPage],
         synchronize: false,
         migrationsRun: true,
         migrations,
@@ -51,6 +55,7 @@ import { PromptsModule } from './prompts/prompts.module';
     AnalyticsModule,
     AdminModule,
     PromptsModule,
+    V2Module,
   ],
   controllers: [HealthController],
 })

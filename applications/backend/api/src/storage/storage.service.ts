@@ -35,6 +35,16 @@ export class StorageService {
     }
   }
 
+  async deleteObject(container: string, key: string): Promise<void> {
+    try {
+      const blobClient = this.client.getContainerClient(container).getBlobClient(key);
+      await blobClient.deleteIfExists();
+    } catch (err: any) {
+      this.logger.error(`deleteObject failed: ${err?.message}`);
+      throw new InternalServerErrorException('Storage error');
+    }
+  }
+
   async listObjects(container: string, prefix: string): Promise<string[]> {
     try {
       const containerClient = this.client.getContainerClient(container);

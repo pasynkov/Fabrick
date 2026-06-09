@@ -22,6 +22,7 @@ import { SandboxV2Controller } from './sandbox-v2.controller';
     FsDossierRepository,
     { provide: COMPENDIUM_REPOSITORY, useExisting: FsCompendiumRepository },
     { provide: DOSSIER_REPOSITORY, useExisting: FsDossierRepository },
+    { provide: PROMPT_REPOSITORY, useClass: FilePromptRepository },
     SearchImplV2,
   ],
 })

@@ -446,10 +446,11 @@ export class SearchImplV2 {
             `dossier_read_pages accepts at most ${MAX_READ_PAGES_BATCH} refs per call (got ${refs.length})`,
           );
         }
-        if (state.pagesRead >= this.budget.maxPagesRead) {
+        const allowed = Math.max(0, this.budget.maxPagesRead - state.pagesRead);
+        if (allowed === 0) {
           return errorResult(`page-read budget exhausted (max ${this.budget.maxPagesRead})`);
         }
-        const normalizedRefs = refs.map((r: any) => ({
+        const normalizedRefs = refs.slice(0, allowed).map((r: any) => ({
           repoSlug: String(r.repo_slug ?? ''),
           scope: String(r.scope ?? ''),
           slug: String(r.slug ?? ''),

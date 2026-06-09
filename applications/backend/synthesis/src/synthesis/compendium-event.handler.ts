@@ -2,6 +2,11 @@ import { Logger } from '@nestjs/common';
 import { createHash } from 'crypto';
 import Anthropic from '@anthropic-ai/sdk';
 import { StorageService } from '../storage/storage.service';
+import {
+  synthesizeCompendiumBundle,
+  parseTopicBodies,
+  COMPENDIUM_TOPIC_SLUGS,
+} from '@app/shared';
 
 const logger = new Logger('CompendiumEventHandler');
 
@@ -22,7 +27,7 @@ interface CompendiumJob {
   callbackToken: string;
 }
 
-const COMPENDIUM_SYSTEM_PROMPT = `You are a technical documentation synthesizer for the Fabrick platform.
+const PATCH_SYSTEM_PROMPT = `You are a technical documentation synthesizer for the Fabrick platform.
 Your task is to produce high-quality compendium documentation from cross-repository dossier content.
 The compendium covers four topics: system overview, data flows, transport graph, and infrastructure.
 Each topic should be structured with YAML frontmatter followed by Markdown content.`;
@@ -77,7 +82,7 @@ export async function handleCompendiumEvent(
       system: [
         {
           type: 'text',
-          text: COMPENDIUM_SYSTEM_PROMPT,
+          text: PATCH_SYSTEM_PROMPT,
           cache_control: { type: 'ephemeral' },
         },
       ],
@@ -104,55 +109,36 @@ export async function handleCompendiumEvent(
     return;
   }
 
-  // Step 4: Sonnet regen-compute call
-  const topicSlugs = ['system', 'data-flows', 'transport-graph', 'infra'];
+  // Step 4: Sonnet regen-compute — uses shared helper, all 5 slugs including 'index'
+  const topicSlugs = COMPENDIUM_TOPIC_SLUGS; // ['system', 'data-flows', 'transport-graph', 'infra', 'index']
+  // Only the four core topic slugs are used for the Haiku description diff (index is omitted to avoid noise).
+  const descriptionSlugs = ['system', 'data-flows', 'transport-graph', 'infra'];
+
   let regenBodies: Record<string, string> = {};
   let regenMeta = { model: 'claude-sonnet-4-5', inputTokens: 0, outputTokens: 0, costUsd: 0 };
   try {
-    const regenResp = await client.messages.create({
-      model: 'claude-sonnet-4-5',
-      max_tokens: 8192,
-      system: [
-        {
-          type: 'text',
-          text: COMPENDIUM_SYSTEM_PROMPT,
-          cache_control: { type: 'ephemeral' },
-        },
-      ],
-      messages: [
-        {
-          role: 'user',
-          content: `Generate fresh compendium content for four topics: ${topicSlugs.join(', ')}.
-For each topic, output a section starting with "## TOPIC: <slug>" followed by the YAML frontmatter (between --- delimiters) and Markdown content.
-Apply these patch instructions:\n${patchInstructions}\n\nBased on this context:\n${userInputText}`,
-        },
-      ],
+    const regenResult = await synthesizeCompendiumBundle({
+      bundle,
+      patchInstructions,
+      anthropicApiKey,
     });
-    const regenText = regenResp.content
-      .filter((b) => b.type === 'text')
-      .map((b) => (b as any).text)
-      .join('\n');
-    regenBodies = parseTopicBodies(regenText, topicSlugs);
-    regenMeta = {
-      model: regenResp.model,
-      inputTokens: regenResp.usage.input_tokens,
-      outputTokens: regenResp.usage.output_tokens,
-      costUsd: estimateCost(regenResp.model, regenResp.usage.input_tokens, regenResp.usage.output_tokens),
-    };
+    regenBodies = regenResult.regenBodies;
+    regenMeta = regenResult.meta;
     logger.log(`[${jobId}] regen-compute done, ${regenMeta.outputTokens} output tokens`);
   } catch (err: any) {
     logger.error(`[${jobId}] regen-compute failed: ${err.message}`);
     return;
   }
 
-  // Step 5: Haiku description call
+  // Step 5: Haiku description call (only four topic slugs, no index)
   let descriptionTitle = 'Compendium updated';
   let descMeta = { model: 'claude-haiku-4-5', inputTokens: 0, outputTokens: 0, costUsd: 0 };
   try {
     const oldBodies = bundle.currentCompendium?.pages
       ? Object.fromEntries(bundle.currentCompendium.pages.map((p: any) => [p.slug, p.content]))
       : {};
-    const diffText = topicSlugs.map((slug) => {
+    // Use only the four core topic slugs for the description diff; exclude index.
+    const diffText = descriptionSlugs.map((slug) => {
       const oldContent = (oldBodies[slug] || '').slice(0, 500);
       const newContent = (regenBodies[slug] || '').slice(0, 500);
       return `### ${slug}\nOLD:\n${oldContent}\nNEW:\n${newContent}`;
@@ -187,7 +173,6 @@ Apply these patch instructions:\n${patchInstructions}\n\nBased on this context:\
   }
 
   // Step 6: Record token usage
-  const totalCostUsd = patchMeta.costUsd + regenMeta.costUsd + descMeta.costUsd;
   try {
     await fetch(`${apiBaseUrl}/v1/internal/synthesis/token-usage`, {
       method: 'POST',
@@ -204,7 +189,7 @@ Apply these patch instructions:\n${patchInstructions}\n\nBased on this context:\
     logger.warn(`[${jobId}] token-usage recording failed (non-fatal): ${err.message}`);
   }
 
-  // Assemble finalCompendium pages
+  // Assemble finalCompendium pages — all 5 slugs including index, each with sources: [], related: []
   const finalPages = topicSlugs.map((slug) => ({
     slug,
     title: extractTitle(regenBodies[slug] || '', slug),
@@ -261,32 +246,6 @@ Apply these patch instructions:\n${patchInstructions}\n\nBased on this context:\
   }
 }
 
-function parseTopicBodies(text: string, slugs: string[]): Record<string, string> {
-  const result: Record<string, string> = {};
-  for (let i = 0; i < slugs.length; i++) {
-    const slug = slugs[i];
-    const marker = `## TOPIC: ${slug}`;
-    const start = text.indexOf(marker);
-    if (start === -1) {
-      result[slug] = `---\ntitle: ${slug}\n---\n\nContent not generated.\n`;
-      continue;
-    }
-    const contentStart = start + marker.length;
-    // Find the next topic marker
-    let end = text.length;
-    for (let j = i + 1; j < slugs.length; j++) {
-      const nextMarker = `## TOPIC: ${slugs[j]}`;
-      const nextStart = text.indexOf(nextMarker, contentStart);
-      if (nextStart !== -1) {
-        end = nextStart;
-        break;
-      }
-    }
-    result[slug] = text.slice(contentStart, end).trim();
-  }
-  return result;
-}
-
 function extractTitle(content: string, fallback: string): string {
   if (content.startsWith('---')) {
     const end = content.indexOf('\n---', 3);
@@ -302,7 +261,6 @@ function extractTitle(content: string, fallback: string): string {
 }
 
 function estimateCost(model: string, inputTokens: number, outputTokens: number): number {
-  // Approximate costs per million tokens
   const costs: Record<string, { input: number; output: number }> = {
     'claude-sonnet-4-5': { input: 3, output: 15 },
     'claude-haiku-4-5': { input: 0.25, output: 1.25 },

@@ -8,14 +8,18 @@ module.exports = {
   moduleNameMapper: {
     '^@app/shared$': '<rootDir>/../shared/src',
     '^@app/shared/(.*)$': '<rootDir>/../shared/src/$1',
-    // Force @nestjs/core and @nestjs/cqrs to resolve from the same location
-    // to avoid dual-module issues (api/node_modules vs backend/node_modules).
-    // Both directories have @nestjs/core but as different file instances, which
-    // breaks ModuleRef identity checks in the DI container.
-    '^@nestjs/cqrs$': '<rootDir>/../node_modules/@nestjs/cqrs',
-    '^@nestjs/cqrs/(.*)$': '<rootDir>/../node_modules/@nestjs/cqrs/$1',
-    '^@nestjs/core$': '<rootDir>/node_modules/@nestjs/core',
-    '^@nestjs/core/(.*)$': '<rootDir>/node_modules/@nestjs/core/$1',
+    // Pin all @nestjs/* packages to the hoisted backend/node_modules copy so
+    // source code and test runtime share a single instance. Multiple copies
+    // (api/node_modules + backend/node_modules) produce distinct Symbol/class
+    // identities that break ModuleRef checks and Version() metadata reads.
+    '^@nestjs/([^/]+)$': '<rootDir>/../node_modules/@nestjs/$1',
+    '^@nestjs/([^/]+)/(.*)$': '<rootDir>/../node_modules/@nestjs/$1/$2',
+    '^typeorm$': '<rootDir>/../node_modules/typeorm',
+    '^typeorm/(.*)$': '<rootDir>/../node_modules/typeorm/$1',
+    '^class-transformer$': '<rootDir>/../node_modules/class-transformer',
+    '^class-transformer/(.*)$': '<rootDir>/../node_modules/class-transformer/$1',
+    '^class-validator$': '<rootDir>/../node_modules/class-validator',
+    '^class-validator/(.*)$': '<rootDir>/../node_modules/class-validator/$1',
   },
   modulePaths: ['<rootDir>/../node_modules'],
   transform: {

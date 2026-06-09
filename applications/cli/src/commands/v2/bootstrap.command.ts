@@ -1,11 +1,11 @@
 import { Command, CommandRunner } from 'nest-commander';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { ClaudeCodeService } from '../../pipeline/llm/claude-code.service';
 import { ConfigService } from '../../services/config.service';
 import { StateService } from '../../services/state.service';
 import { detectScopes } from '../../pipeline/scope/detect';
-import { estimateScopeSourceBytes, estimateFullscanTokens, dynamicThreshold } from '../../pipeline/threshold';
+import { estimateScopeSourceBytes, computeRebuildThresholds } from '../../pipeline/threshold';
 
 const SKILL_DIR = join(__dirname, '../../skills');
 const BOOTSTRAP_SKILL_NAME = 'bootstrap-routing';
@@ -25,18 +25,12 @@ export class BootstrapCommand extends CommandRunner {
     const config = this.configService.load();
     const scopes = detectScopes(cwd);
 
-    // Find bootstrap-routing skill
-    const skillSrcPath = existsSync(join(SKILL_DIR, BOOTSTRAP_SKILL_NAME, 'SKILL.md'))
-      ? join(SKILL_DIR, BOOTSTRAP_SKILL_NAME)
-      : null;
-
-    if (!skillSrcPath) {
-      // Try embedded in dist
-      const distSkill = join(__dirname, '..', '..', 'skills', BOOTSTRAP_SKILL_NAME);
-      if (!existsSync(distSkill)) {
-        console.error(`Bootstrap-routing skill not found. Expected at ${distSkill}`);
-        process.exit(1);
-      }
+    // Verify skill is available (dev or dist)
+    const hasDevSkill = existsSync(join(SKILL_DIR, BOOTSTRAP_SKILL_NAME, 'SKILL.md'));
+    const distSkill = join(__dirname, '..', '..', 'skills', BOOTSTRAP_SKILL_NAME);
+    if (!hasDevSkill && !existsSync(distSkill)) {
+      console.error(`Bootstrap-routing skill not found. Expected at ${distSkill}`);
+      process.exit(1);
     }
 
     console.log('Running bootstrap-routing...');
@@ -84,15 +78,7 @@ export class BootstrapCommand extends CommandRunner {
     console.log(`✓ Copied skill to .fabrick/skills/${BOOTSTRAP_SKILL_NAME}/`);
 
     // Compute thresholds
-    const rebuildThreshold: Record<string, number> = {};
-    for (const scope of scopes) {
-      const scopePath = join(cwd, scope.root);
-      const { bytes } = estimateScopeSourceBytes(scopePath);
-      const { totalTok } = estimateFullscanTokens(bytes);
-      rebuildThreshold[scope.root] = dynamicThreshold(totalTok);
-    }
-
-    config.scan.rebuildThreshold = rebuildThreshold;
+    config.scan.rebuildThreshold = computeRebuildThresholds(scopes, cwd);
     this.configService.save(config);
     console.log('✓ Updated config.scan.rebuildThreshold');
 

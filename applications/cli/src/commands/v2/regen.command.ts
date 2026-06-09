@@ -12,8 +12,9 @@ import { PatchLogService } from '../../pipeline/patch-log.service';
 import { FrontmatterService } from '../../pipeline/frontmatter.service';
 import { IndexService } from '../../pipeline/index.service';
 import { detectScopes } from '../../pipeline/scope/detect';
-import { estimateScopeSourceBytes, estimateFullscanTokens, dynamicThreshold } from '../../pipeline/threshold';
+import { computeRebuildThresholds } from '../../pipeline/threshold';
 import { generateAppScopePrompt, parseAppPagesOutput, APP_PAGE_SLUGS } from '../../pipeline/llm/prompts';
+import { readScopeSources } from '../../pipeline/read-scope-sources';
 import simpleGit from 'simple-git';
 
 interface RegenOptions {
@@ -69,14 +70,7 @@ export class RegenCommand extends CommandRunner {
     const results = await Promise.all(scopes.map((scope) => this.genesisScope(scope, cwd, config.repoName)));
 
     // Recompute thresholds
-    const rebuildThreshold: Record<string, number> = {};
-    for (const scope of scopes) {
-      const scopePath = join(cwd, scope.root);
-      const { bytes } = estimateScopeSourceBytes(scopePath);
-      const { totalTok } = estimateFullscanTokens(bytes);
-      rebuildThreshold[scope.root] = dynamicThreshold(totalTok);
-    }
-    config.scan.rebuildThreshold = rebuildThreshold;
+    config.scan.rebuildThreshold = computeRebuildThresholds(scopes, cwd);
     this.configService.save(config);
 
     // POST events
@@ -138,28 +132,3 @@ export class RegenCommand extends CommandRunner {
   }
 }
 
-async function readScopeSources(scopeRoot: string): Promise<Array<{ file: string; content: string }>> {
-  const { readdirSync, readFileSync, existsSync } = await import('fs');
-  const { join: pathJoin } = await import('path');
-  const SOURCE_EXT = /\.(tsx?|jsx?)$/i;
-  const SKIP_DIR = new Set(['node_modules', 'dist', 'build', 'coverage', '.git', '.fabrick']);
-  const MAX_FILES = 30;
-  const MAX_BYTES = 8000;
-  const out: Array<{ file: string; content: string }> = [];
-  function walk(dir: string, rel: string): void {
-    if (out.length >= MAX_FILES) return;
-    let entries;
-    try { entries = readdirSync(dir, { withFileTypes: true }); } catch { return; }
-    for (const e of entries) {
-      if (out.length >= MAX_FILES) return;
-      if (SKIP_DIR.has(e.name)) continue;
-      const full = pathJoin(dir, e.name);
-      const r = rel ? `${rel}/${e.name}` : e.name;
-      if (e.isDirectory()) { walk(full, r); continue; }
-      if (!e.isFile() || !SOURCE_EXT.test(e.name)) continue;
-      try { out.push({ file: r, content: readFileSync(full, 'utf8').slice(0, MAX_BYTES) }); } catch { /* skip */ }
-    }
-  }
-  if (existsSync(scopeRoot)) walk(scopeRoot, '');
-  return out;
-}

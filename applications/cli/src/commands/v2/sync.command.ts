@@ -1,5 +1,5 @@
 import { Command, CommandRunner, Option } from 'nest-commander';
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import simpleGit from 'simple-git';
 import { ApiService } from '../../api.service';
@@ -12,8 +12,9 @@ import { PatchLogService } from '../../pipeline/patch-log.service';
 import { FrontmatterService } from '../../pipeline/frontmatter.service';
 import { IndexService } from '../../pipeline/index.service';
 import { detectScopes, Scope } from '../../pipeline/scope/detect';
-import { estimateScopeSourceBytes, estimateFullscanTokens, estimatePatchTokens, dynamicThreshold } from '../../pipeline/threshold';
+import { estimateScopeSourceBytes, estimateFullscanTokens, estimatePatchTokens, computeRebuildThresholds } from '../../pipeline/threshold';
 import { generateAppScopePrompt, patchAppScopePrompt, parseAppPagesOutput, APP_PAGE_SLUGS } from '../../pipeline/llm/prompts';
+import { readScopeSources } from '../../pipeline/read-scope-sources';
 
 interface SyncOptions {
   dryRun?: boolean;
@@ -91,13 +92,12 @@ export class SyncCommand extends CommandRunner {
     }
 
     // Recompute thresholds and decide mode for current scopes
-    const rebuildThreshold: Record<string, number> = {};
+    const rebuildThreshold = computeRebuildThresholds(currentScopes, cwd);
     for (const scope of currentScopes) {
       const scopePath = join(cwd, scope.root);
       const { bytes } = estimateScopeSourceBytes(scopePath);
       const { totalTok: fullscanTotalTok } = estimateFullscanTokens(bytes);
-      const threshold = dynamicThreshold(fullscanTotalTok);
-      rebuildThreshold[scope.root] = threshold;
+      const threshold = rebuildThreshold[scope.root];
 
       const isNew = !prevScopeRoots.has(scope.root) || baseSha === null;
       if (isNew) {
@@ -264,33 +264,3 @@ function readExistingPagesBytes(cwd: string, scope: Scope): number {
   return Object.values(pages).reduce((sum, b) => sum + b.length, 0);
 }
 
-async function readScopeSources(scopeRoot: string): Promise<Array<{ file: string; content: string }>> {
-  const { readdirSync, statSync, readFileSync } = await import('fs');
-  const { join: pathJoin } = await import('path');
-  const SOURCE_EXT = /\.(tsx?|jsx?)$/i;
-  const SKIP_DIR = new Set(['node_modules', 'dist', 'build', 'coverage', '.git', '.fabrick']);
-  const MAX_FILES = 30;
-  const MAX_BYTES_PER_FILE = 8000;
-  const out: Array<{ file: string; content: string }> = [];
-
-  function walk(dir: string, relPrefix: string): void {
-    if (out.length >= MAX_FILES) return;
-    let entries;
-    try { entries = readdirSync(dir, { withFileTypes: true }); } catch { return; }
-    for (const e of entries) {
-      if (out.length >= MAX_FILES) return;
-      if (SKIP_DIR.has(e.name)) continue;
-      const full = pathJoin(dir, e.name);
-      const rel = relPrefix ? `${relPrefix}/${e.name}` : e.name;
-      if (e.isDirectory()) { walk(full, rel); continue; }
-      if (!e.isFile() || !SOURCE_EXT.test(e.name)) continue;
-      try {
-        const content = readFileSync(full, 'utf8').slice(0, MAX_BYTES_PER_FILE);
-        out.push({ file: rel, content });
-      } catch { /* skip */ }
-    }
-  }
-
-  if (existsSync(scopeRoot)) walk(scopeRoot, '');
-  return out;
-}

@@ -1,5 +1,6 @@
 import { readdirSync, statSync } from 'fs';
 import { join } from 'path';
+import type { Scope } from './scope/detect';
 
 const TOK_PER_BYTE = 0.25;
 function tokens(bytes: number): number { return Math.ceil(bytes * TOK_PER_BYTE); }
@@ -60,4 +61,14 @@ export function dynamicThreshold(fullscanTotalTok: number, opts: { base?: number
   const ratio  = Math.max(fullscanTotalTok / refTok, 0.01);
   const tr     = base + scale * Math.log10(ratio);
   return Math.max(min, Math.min(max, tr));
+}
+
+export function computeRebuildThresholds(scopes: Scope[], cwd: string): Record<string, number> {
+  const result: Record<string, number> = {};
+  for (const scope of scopes) {
+    const { bytes } = estimateScopeSourceBytes(join(cwd, scope.root));
+    const { totalTok } = estimateFullscanTokens(bytes);
+    result[scope.root] = dynamicThreshold(totalTok);
+  }
+  return result;
 }

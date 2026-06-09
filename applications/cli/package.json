@@ -1,7 +1,7 @@
 {
   "name": "@fabrick/cli",
-  "version": "0.13.0",
-  "description": "Fabrick CLI — bootstrap and push repository context",
+  "version": "0.14.0",
+  "description": "Fabrick CLI — v2 dossier sync",
   "bin": {
     "fabrick": "./bin/fabrick.js"
   },
@@ -19,21 +19,26 @@
     "build": "tsc",
     "start": "node bin/fabrick.js",
     "test": "jest",
-    "test:e2e": "jest --config jest.e2e.config.js"
+    "test:e2e": "jest --config jest.e2e.config.js",
+    "install:local": "npm run build && npm install -g ."
   },
   "dependencies": {
     "@nestjs/common": "^10.0.0",
     "@nestjs/core": "^10.0.0",
     "adm-zip": "^0.5.17",
-    "archiver": "^7.0.1",
+    "js-yaml": "^4.1.0",
     "nest-commander": "^3.12.0",
     "reflect-metadata": "^0.2.0",
+    "simple-git": "^3.27.0",
+    "tree-sitter": "^0.21.1",
+    "tree-sitter-typescript": "^0.21.2",
+    "tree-sitter-yaml": "^0.5.0",
     "yaml": "^2.5.1"
   },
   "devDependencies": {
     "@azure/storage-blob": "^12.24.0",
     "@types/adm-zip": "^0.5.8",
-    "@types/archiver": "^6.0.0",
+    "@types/js-yaml": "^4.0.9",
     "@types/jest": "^30.0.0",
     "@types/node": "^24.0.0",
     "jest": "^30.3.0",

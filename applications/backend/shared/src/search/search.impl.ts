@@ -1,8 +1,6 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import Anthropic from '@anthropic-ai/sdk';
 import type {
-  ContentBlock,
-  ContentBlockParam,
   Message,
   MessageParam,
   TextBlockParam,
@@ -12,6 +10,7 @@ import type {
 } from '@anthropic-ai/sdk/resources/messages/messages';
 import { WIKI_REPOSITORY, WikiRepository } from '../wiki-repository.interface';
 import { PROMPT_REPOSITORY, PromptRepository } from '../prompt-repository.interface';
+import { extractText, toContentBlockParams, truncate } from '../message-helpers';
 
 export interface SearchBudget {
   maxIters: number;
@@ -456,25 +455,6 @@ function errorResult(message: string): ToolDispatchResult {
   return { payload: { ok: false, error: message }, pageReadCount: 0, slugsRead: [] };
 }
 
-function extractText(content: ContentBlock[] | undefined): string | null {
-  if (!Array.isArray(content)) return null;
-  const parts: string[] = [];
-  for (const block of content) {
-    if (block.type === 'text' && typeof block.text === 'string') parts.push(block.text);
-  }
-  return parts.length ? parts.join('\n').trim() : null;
-}
-
-function toContentBlockParams(content: ContentBlock[]): ContentBlockParam[] {
-  return content.map((b) => {
-    if (b.type === 'text') return { type: 'text', text: b.text };
-    if (b.type === 'tool_use') return { type: 'tool_use', id: b.id, name: b.name, input: b.input };
-    if (b.type === 'thinking') return { type: 'thinking', thinking: b.thinking, signature: b.signature };
-    if (b.type === 'redacted_thinking') return { type: 'redacted_thinking', data: b.data };
-    return { type: 'text', text: '' };
-  });
-}
-
 export interface ParsedFinalAnswer {
   answer: string;
   reasoning?: string;
@@ -540,6 +520,3 @@ export function parseFinalAnswer(text: string): ParsedFinalAnswer {
   return result;
 }
 
-function truncate(s: string, n = 200): string {
-  return s.length > n ? `${s.slice(0, n)}…` : s;
-}

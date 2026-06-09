@@ -10,8 +10,6 @@ export class TypeOrmDossierSearchRepository implements DossierRepository {
   constructor(
     @InjectRepository(DossierPageEntity)
     private readonly dossierRepo: TypeOrmRepository<DossierPageEntity>,
-    @InjectRepository(RepositoryEntity)
-    private readonly repoRepo: TypeOrmRepository<RepositoryEntity>,
   ) {}
 
   async listScopes(projectId: string, repoSlug: string): Promise<Array<{ scope: string; pageCount: number }>> {
@@ -61,12 +59,10 @@ export class TypeOrmDossierSearchRepository implements DossierRepository {
 
   async findPages(projectId: string, refs: DossierPageRef[]): Promise<DossierPage[]> {
     if (refs.length === 0) return [];
-    const results: DossierPage[] = [];
-    for (const ref of refs) {
-      const page = await this.findPage(projectId, ref.repoSlug, ref.scope, ref.slug);
-      if (page) results.push(page);
-    }
-    return results;
+    const pages = await Promise.all(
+      refs.map((ref) => this.findPage(projectId, ref.repoSlug, ref.scope, ref.slug)),
+    );
+    return pages.filter((p): p is DossierPage => p !== null);
   }
 }
 

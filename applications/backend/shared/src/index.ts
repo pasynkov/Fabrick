@@ -1,4 +1,5 @@
 export { SharedModule } from './shared.module';
+export { extractText, toContentBlockParams, truncate } from './message-helpers';
 export { WIKI_REPOSITORY, WikiRepository, WikiPage, WikiPageMeta, extractOneLiner } from './wiki-repository.interface';
 export { PROMPT_REPOSITORY, PromptRepository, PromptRecord } from './prompt-repository.interface';
 export { WikiPageData, ExistingPage } from './wiki-page.types';

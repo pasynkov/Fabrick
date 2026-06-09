@@ -5,7 +5,6 @@ import { ApiKeysModule } from '../../api-keys/api-keys.module';
 import { AuthModule } from '../../auth/auth.module';
 import { OrgMember } from '../../entities/org-member.entity';
 import { Project } from '../../entities/project.entity';
-import { Repository as RepositoryEntity } from '../../entities/repository.entity';
 import { PromptsModule } from '../../prompts/prompts.module';
 import { DbPromptRepository } from '../../prompts/db-prompt.repository';
 import { CompendiumPage } from '../entities/compendium-page.entity';
@@ -18,7 +17,7 @@ import { TypeOrmDossierSearchRepository } from './typeorm-dossier-search.reposit
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Project, OrgMember, CompendiumPage, DossierPage, RepositoryEntity]),
+    TypeOrmModule.forFeature([Project, OrgMember, CompendiumPage, DossierPage]),
     ApiKeysModule,
     AuthModule,
     AnalyticsModule,

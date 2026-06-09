@@ -207,6 +207,7 @@ export class SyncCommand extends CommandRunner {
       costUsd = res.costUsd ?? 0;
       newPages = parseAppPagesOutput(res.content);
     } else if (mode === 'patch') {
+      // features: [] — patch mode passes no pre-computed feature list; the LLM receives the existing pages verbatim and is expected to infer changes from context
       const { system, user } = patchAppScopePrompt({ scopeName: scope.name, scopeKind: scope.kind, repoName, existingPages, features: [] });
       const res = await this.claude.call({ model: 'claude-sonnet-4-6', systemPrompt: system, userInput: user, cwd });
       costUsd = res.costUsd ?? 0;

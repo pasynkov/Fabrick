@@ -59,7 +59,7 @@ export class RegenCommand extends CommandRunner {
     // Reset state
     const state = this.stateService.load();
     state.baselineSha = null;
-    state.lastDossierUpdatedId = undefined as any;
+    state.lastDossierUpdatedId = null;
     this.stateService.save(state);
 
     const scopes = detectScopes(cwd);

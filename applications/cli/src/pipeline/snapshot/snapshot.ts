@@ -35,7 +35,7 @@ export function buildSnapshot(repoRoot: string, opts: { extensions?: Set<string>
     for (const s of symbols) allSymbols.push(s);
   }
 
-  (allSymbols as any[]).sort((a: any, b: any) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  allSymbols.sort((a: any, b: any) => (a?.id < b?.id ? -1 : a?.id > b?.id ? 1 : 0));
   return { version: SNAPSHOT_VERSION, files, symbols: allSymbols };
 }
 
